@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@layer base {
+  html {
+    @apply bg-sand-50 text-ink-800 antialiased;
+  }
+
+  body {
+    @apply font-body;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl border border-sand-200 p-6;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-sand-300 hover:shadow-sm;
+  }
+
+  .stat-value {
+    @apply font-display text-3xl tracking-tight;
+  }
+
+  .stat-label {
+    @apply text-sm font-medium text-ink-400 uppercase tracking-wider;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply badge bg-emerald-50 text-accent-green;
+  }
+
+  .badge-red {
+    @apply badge bg-red-50 text-accent-red;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg
+           bg-ink-800 text-white font-medium text-sm
+           transition-all duration-150
+           hover:bg-ink-700 active:bg-ink-900;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg
+           bg-white text-ink-700 font-medium text-sm
+           border border-sand-300
+           transition-all duration-150
+           hover:bg-sand-50 active:bg-sand-100;
+  }
+}
