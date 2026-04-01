@@ -5,7 +5,11 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(gh auth:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git -C /Users/corentinfabry/Documents/patrimoine commit --allow-empty -m \"fix committer identity\")",
+      "Bash(git -C /Users/corentinfabry/Documents/patrimoine push)",
+      "Bash(npx vercel:*)",
+      "Bash(git -C /Users/corentinfabry/Documents/patrimoine add .)"
     ]
   }
 }
