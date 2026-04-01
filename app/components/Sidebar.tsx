@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { createBrowserClient } from '@/app/lib/supabase';
 
 const navItems = [
   { href: '/accounts', label: 'Accounts', icon: '◉' },
@@ -48,9 +49,10 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Sync button */}
-      <div className="px-3 py-4 border-t border-sand-100">
+      {/* Bottom actions */}
+      <div className="px-3 py-4 border-t border-sand-100 space-y-2">
         <SyncButton />
+        <SignOutButton />
       </div>
     </aside>
   );
@@ -90,6 +92,23 @@ function SyncButton() {
       className="w-full btn-secondary text-xs justify-center"
     >
       ↻ Sync now
+    </button>
+  );
+}
+
+function SignOutButton() {
+  async function handleSignOut() {
+    const supabase = createBrowserClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }
+
+  return (
+    <button
+      onClick={handleSignOut}
+      className="w-full text-xs text-ink-400 hover:text-ink-600 transition-colors py-1.5 text-center"
+    >
+      Sign out
     </button>
   );
 }
