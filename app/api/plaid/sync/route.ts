@@ -7,7 +7,6 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
-  // Get the logged-in user from their session cookie
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,22 +15,18 @@ export async function POST(request: NextRequest) {
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: (toSet) =>
-          toSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
-          ),
+          toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)),
       },
     },
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const result = await syncAll(user.id);
     return NextResponse.json({ ok: true, timestamp: new Date().toISOString(), ...result });
-  } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }

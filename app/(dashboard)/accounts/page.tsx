@@ -133,8 +133,8 @@ export default async function AccountsPage() {
             No accounts yet
           </h3>
           <p className="text-ink-400 text-sm max-w-md mx-auto mb-6">
-            Connect your banks through SimpleFIN, then hit the sync button
-            in the sidebar to pull in your accounts and transactions.
+            Click "+ Connect bank" in the sidebar to link your accounts via
+            Plaid, then hit "Sync now" to pull in your transactions.
           </p>
         </div>
       )}

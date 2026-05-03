@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createBrowserClient } from '@/app/lib/supabase';
+import PlaidLinkButton from './PlaidLink';
 
 const navItems = [
   { href: '/accounts', label: 'Accounts', icon: '◉' },
@@ -51,6 +52,7 @@ export default function Sidebar() {
 
       {/* Bottom actions */}
       <div className="px-3 py-4 border-t border-sand-100 space-y-2">
+        <PlaidLinkButton />
         <SyncButton />
         <SignOutButton />
       </div>
@@ -64,7 +66,7 @@ function SyncButton() {
     if (btn) btn.textContent = 'Syncing…';
 
     try {
-      const res = await fetch('/api/simplefin/sync', { method: 'POST' });
+      const res = await fetch('/api/plaid/sync', { method: 'POST' });
       const data = await res.json();
 
       if (data.ok) {
