@@ -1,6 +1,42 @@
 import { createServiceClient } from './supabase';
 import { plaidClient, mapAccountType } from './plaid';
+import { fetchAccounts as fetchSimpleFINAccounts, inferAccountType, getInstitutionName } from './simplefin';
 import type { RemovedTransaction } from 'plaid';
+
+// Maps Plaid's personal_finance_category to our category names.
+// Returns null when we have no good match (autoCategorize handles the rest).
+function mapPlaidCategory(primary: string, detailed: string): string | null {
+  switch (detailed) {
+    case 'FOOD_AND_DRINK_GROCERIES': return 'Groceries';
+    case 'TRANSPORTATION_PUBLIC_TRANSIT': return 'Transport';
+    case 'TRANSPORTATION_TAXIS_AND_RIDE_SHARING': return 'Transport';
+    case 'TRANSPORTATION_GAS_STATIONS': return 'Transport';
+    case 'RENT_AND_UTILITIES_RENT': return 'Rent & Housing';
+    case 'RENT_AND_UTILITIES_UTILITIES': return 'Utilities';
+    case 'RENT_AND_UTILITIES_TELEPHONE_SERVICE_PROVIDERS': return 'Utilities';
+    case 'RENT_AND_UTILITIES_INTERNET_AND_CABLE': return 'Utilities';
+    case 'INCOME_WAGES': return 'Income - Salary';
+    case 'TRANSFER_IN_ACCOUNT_TRANSFER': return 'Transfer';
+    case 'TRANSFER_OUT_ACCOUNT_TRANSFER': return 'Transfer';
+  }
+  switch (primary) {
+    case 'FOOD_AND_DRINK': return 'Restaurants';
+    case 'TRANSPORTATION': return 'Transport';
+    case 'TRAVEL': return 'Travel';
+    case 'ENTERTAINMENT': return 'Entertainment';
+    case 'SUBSCRIPTION': return 'Subscriptions';
+    case 'GENERAL_MERCHANDISE': return 'Shopping';
+    case 'PERSONAL_CARE': return 'Personal Care';
+    case 'MEDICAL': return 'Health & Fitness';
+    case 'EDUCATION': return 'Education';
+    case 'INSURANCE': return 'Insurance';
+    case 'HOME_IMPROVEMENT': return 'Rent & Housing';
+    case 'INCOME': return 'Income - Other';
+    case 'TRANSFER_IN':
+    case 'TRANSFER_OUT': return 'Transfer';
+  }
+  return null;
+}
 
 interface SyncResult {
   accountsUpdated: number;
@@ -23,6 +59,13 @@ export async function syncAll(userId: string): Promise<SyncResult> {
   try {
     await seedDefaultCategories(supabase, userId);
 
+    // Build a name→id map for this user's categories (used for Plaid category mapping)
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('id, name')
+      .eq('user_id', userId);
+    const categoryIdByName = new Map((cats ?? []).map((c) => [c.name, c.id]));
+
     const { data: items, error: itemsError } = await supabase
       .from('plaid_items')
       .select('*')
@@ -30,12 +73,7 @@ export async function syncAll(userId: string): Promise<SyncResult> {
 
     if (itemsError) throw itemsError;
 
-    if (!items?.length) {
-      result.errors.push('No Plaid items connected. Use the "Connect bank" button first.');
-      return result;
-    }
-
-    for (const item of items) {
+    for (const item of (items ?? [])) {
       // Sync accounts
       const accountsRes = await plaidClient.accountsGet({ access_token: item.access_token });
 
@@ -69,18 +107,25 @@ export async function syncAll(userId: string): Promise<SyncResult> {
         });
         const { added, modified, removed, next_cursor, has_more } = txRes.data;
 
-        const toUpsert = [...added, ...modified].map((tx) => ({
-          id: tx.transaction_id,
-          user_id: userId,
-          account_id: tx.account_id,
-          // Plaid: positive amount = money leaving account; we store negative = expense
-          amount: -tx.amount,
-          description: tx.name,
-          payee: tx.merchant_name ?? tx.name,
-          memo: null as null,
-          posted_at: new Date(tx.date).toISOString(),
-          transacted_at: tx.authorized_date ? new Date(tx.authorized_date).toISOString() : null,
-        }));
+        const toUpsert = [...added, ...modified].map((tx) => {
+          const pfc = tx.personal_finance_category;
+          const catName = pfc
+            ? mapPlaidCategory(pfc.primary, pfc.detailed)
+            : null;
+          return {
+            id: tx.transaction_id,
+            user_id: userId,
+            account_id: tx.account_id,
+            // Plaid: positive amount = money leaving account; we store negative = expense
+            amount: -tx.amount,
+            description: tx.name,
+            payee: tx.merchant_name ?? tx.name,
+            memo: null as null,
+            posted_at: new Date(tx.date).toISOString(),
+            transacted_at: tx.authorized_date ? new Date(tx.authorized_date).toISOString() : null,
+            category_id: catName ? (categoryIdByName.get(catName) ?? null) : null,
+          };
+        });
 
         if (toUpsert.length) {
           const { data: upserted, error: txError } = await supabase
@@ -144,6 +189,98 @@ export async function syncAll(userId: string): Promise<SyncResult> {
         // Investments product not enabled for this item — skip
       }
     }
+
+    // --- SimpleFIN sync ---
+    const { data: sfItems } = await supabase
+      .from('simplefin_connections')
+      .select('*')
+      .eq('user_id', userId);
+
+    for (const sfItem of sfItems ?? []) {
+      try {
+        const startDate = Math.floor(Date.now() / 1000) - 90 * 24 * 60 * 60; // 90 days back
+        const sfData = await fetchSimpleFINAccounts(startDate, sfItem.access_url);
+
+        if (sfData.errors?.length) {
+          result.errors.push(`SimpleFIN: ${sfData.errors.join(', ')}`);
+        }
+
+        for (const account of sfData.accounts) {
+          const accountId = `sfin_${account.id}`;
+
+          const { error: accErr } = await supabase.from('accounts').upsert({
+            id: accountId,
+            user_id: userId,
+            name: account.name,
+            institution: getInstitutionName(account),
+            institution_domain: account.org.domain,
+            account_type: inferAccountType(account),
+            currency: account.currency,
+            balance: parseFloat(account.balance),
+            available_balance: account['available-balance']
+              ? parseFloat(account['available-balance'])
+              : null,
+            balance_date: new Date(account['balance-date'] * 1000).toISOString(),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'id' });
+
+          if (accErr) result.errors.push(`SimpleFIN account ${account.name}: ${accErr.message}`);
+          else result.accountsUpdated++;
+
+          // Upsert transactions
+          if (account.transactions.length) {
+            const txRows = account.transactions.map((tx) => ({
+              id: `sfin_${tx.id}`,
+              user_id: userId,
+              account_id: accountId,
+              amount: parseFloat(tx.amount),
+              description: tx.description,
+              payee: tx.payee || tx.description,
+              memo: tx.memo || null,
+              posted_at: new Date(tx.posted * 1000).toISOString(),
+              transacted_at: tx.transacted_at
+                ? new Date(tx.transacted_at * 1000).toISOString()
+                : null,
+            }));
+
+            const { error: txErr } = await supabase
+              .from('transactions')
+              .upsert(txRows, { onConflict: 'id', ignoreDuplicates: true });
+
+            if (txErr) result.errors.push(`SimpleFIN transactions: ${txErr.message}`);
+            else result.transactionsAdded += account.transactions.length;
+          }
+
+          // Upsert holdings
+          for (const h of account.holdings ?? []) {
+            const { error: hErr } = await supabase.from('holdings').upsert({
+              id: `sfin_${h.id}`,
+              user_id: userId,
+              account_id: accountId,
+              symbol: h.symbol || null,
+              description: h.description || null,
+              shares: parseFloat(h.shares),
+              cost_basis: h.cost_basis ? parseFloat(h.cost_basis) : null,
+              market_value: parseFloat(h.market_value),
+              purchase_price: h.purchase_price ? parseFloat(h.purchase_price) : null,
+              currency: h.currency,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'id' });
+
+            if (hErr) result.errors.push(`SimpleFIN holding: ${hErr.message}`);
+            else result.holdingsUpdated++;
+          }
+        }
+
+        await supabase
+          .from('simplefin_connections')
+          .update({ last_synced_at: new Date().toISOString() })
+          .eq('id', sfItem.id);
+      } catch (sfErr: any) {
+        result.errors.push(`SimpleFIN sync failed: ${sfErr.message}`);
+      }
+    }
+    // --- end SimpleFIN sync ---
 
     await autoCategorize(supabase, userId);
     await captureNetWorthSnapshot(supabase, userId);

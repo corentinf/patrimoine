@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createBrowserClient } from '@/app/lib/supabase';
 import PlaidLinkButton from './PlaidLink';
+import SimpleFINLinkButton from './SimpleFINLink';
 
 const navItems = [
   { href: '/accounts', label: 'Accounts', icon: '◉' },
@@ -53,6 +54,7 @@ export default function Sidebar() {
       {/* Bottom actions */}
       <div className="px-3 py-4 border-t border-sand-100 space-y-2">
         <PlaidLinkButton />
+        <SimpleFINLinkButton />
         <SyncButton />
         <SignOutButton />
       </div>

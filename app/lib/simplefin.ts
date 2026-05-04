@@ -64,19 +64,18 @@ export async function claimAccessUrl(setupToken: string): Promise<string> {
 
 /**
  * Fetch all accounts and transactions from SimpleFIN.
- * Uses the access URL stored in SIMPLEFIN_ACCESS_URL env var.
- * 
  * @param startDate - optional start date for transactions (unix timestamp)
+ * @param accessUrl - override; falls back to SIMPLEFIN_ACCESS_URL env var
  */
-export async function fetchAccounts(startDate?: number): Promise<SimpleFINResponse> {
-  const accessUrl = process.env.SIMPLEFIN_ACCESS_URL;
-  
-  if (!accessUrl) {
+export async function fetchAccounts(startDate?: number, accessUrl?: string): Promise<SimpleFINResponse> {
+  const url = accessUrl ?? process.env.SIMPLEFIN_ACCESS_URL;
+
+  if (!url) {
     throw new Error('SIMPLEFIN_ACCESS_URL is not configured');
   }
-  
+
   // Parse the access URL to extract credentials
-  const parsed = new URL(accessUrl + '/accounts');
+  const parsed = new URL(url + '/accounts');
   const auth = Buffer.from(`${parsed.username}:${parsed.password}`).toString('base64');
   parsed.username = '';
   parsed.password = '';
