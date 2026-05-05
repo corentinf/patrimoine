@@ -2,6 +2,7 @@ import { createServiceClient } from '@/app/lib/supabase';
 import { formatCurrency, formatCurrencyPrecise, formatDate, accountTypeConfig } from '@/app/lib/utils';
 import AccountCard from './AccountCard';
 import TransactionList from './TransactionList';
+import AddManualAccount from './AddManualAccount';
 
 export const revalidate = 300; // revalidate every 5 minutes
 
@@ -116,6 +117,9 @@ export default async function AccountsPage() {
           </div>
         );
       })}
+
+      {/* Manual account entry */}
+      <AddManualAccount />
 
       {/* Recent transactions */}
       <div>
