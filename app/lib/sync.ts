@@ -282,6 +282,7 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     }
     // --- end SimpleFIN sync ---
 
+    await deduplicateSimpleFINAccounts(supabase, userId);
     await autoCategorize(supabase, userId);
     await captureNetWorthSnapshot(supabase, userId);
     result.snapshotCreated = true;
@@ -423,4 +424,75 @@ async function captureNetWorthSnapshot(
     net_worth: totalAssets - totalLiabilities,
     breakdown,
   }, { onConflict: 'user_id,snapshot_date' });
+}
+
+// Extracts last 4 digits from account names like "(3060)" or "****3955"
+function extractLast4(name: string): string | null {
+  const paren = name.match(/\((\d{4})\)/);
+  if (paren) return paren[1];
+  const stars = name.match(/\*{3,4}(\d{4})/);
+  if (stars) return stars[1];
+  return null;
+}
+
+function normalizeInstitution(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+async function deduplicateSimpleFINAccounts(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+) {
+  const { data: plaidAccounts } = await supabase
+    .from('accounts')
+    .select('id, name, institution, account_type, balance')
+    .eq('user_id', userId)
+    .not('id', 'like', 'sfin_%');
+
+  const { data: sfinAccounts } = await supabase
+    .from('accounts')
+    .select('id, name, institution, account_type, balance')
+    .eq('user_id', userId)
+    .like('id', 'sfin_%');
+
+  if (!plaidAccounts?.length || !sfinAccounts?.length) return;
+
+  const duplicateIds: string[] = [];
+
+  for (const sfin of sfinAccounts) {
+    const sfinInstitution = normalizeInstitution(sfin.institution ?? '');
+    const sfinLast4 = extractLast4(sfin.name ?? '');
+    const sfinBalance = Math.abs(Number(sfin.balance));
+    const sfinType = sfin.account_type;
+
+    const isDuplicate = plaidAccounts.some((plaid) => {
+      if (normalizeInstitution(plaid.institution ?? '') !== sfinInstitution) return false;
+      if (plaid.account_type !== sfinType) return false;
+
+      const plaidLast4 = extractLast4(plaid.name ?? '');
+
+      // Strong signal: both have last 4 digits and they match
+      if (sfinLast4 && plaidLast4) return sfinLast4 === plaidLast4;
+
+      // Fallback: balance within 1% (handles slight timing differences)
+      const plaidBalance = Math.abs(Number(plaid.balance));
+      if (plaidBalance === 0 && sfinBalance === 0) return true;
+      if (plaidBalance > 0 && sfinBalance > 0) {
+        const diff = Math.abs(plaidBalance - sfinBalance) / Math.max(plaidBalance, sfinBalance);
+        return diff < 0.01;
+      }
+
+      return false;
+    });
+
+    if (isDuplicate) duplicateIds.push(sfin.id);
+  }
+
+  if (duplicateIds.length) {
+    await supabase
+      .from('accounts')
+      .update({ is_hidden: true })
+      .in('id', duplicateIds)
+      .eq('user_id', userId);
+  }
 }
