@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -46,6 +47,9 @@ export async function POST(request: NextRequest) {
   }, { onConflict: 'id' });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  revalidatePath('/accounts');
+  revalidatePath('/networth');
   return NextResponse.json({ ok: true, id });
 }
 
@@ -78,5 +82,8 @@ export async function DELETE(request: NextRequest) {
     .eq('user_id', user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  revalidatePath('/accounts');
+  revalidatePath('/networth');
   return NextResponse.json({ ok: true });
 }
