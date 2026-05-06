@@ -210,11 +210,7 @@ export default function SpendingTransactions({
               return (
                 <button
                   key={cat.name}
-                  onClick={() =>
-                    setFilterCategories((prev) =>
-                      active ? prev.filter((n) => n !== cat.name) : [...prev, cat.name],
-                    )
-                  }
+                  onClick={() => setFilterCategories(active ? [] : [cat.name])}
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                     active ? 'text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
                   }`}
