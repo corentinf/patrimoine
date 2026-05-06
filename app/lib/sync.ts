@@ -1,6 +1,7 @@
 import { createServiceClient } from './supabase';
 import { plaidClient, mapAccountType } from './plaid';
 import { fetchAccounts as fetchSimpleFINAccounts, inferAccountType, getInstitutionName } from './simplefin';
+import { llmCategorize } from './categorize';
 import type { RemovedTransaction } from 'plaid';
 
 // Maps Plaid's personal_finance_category to our category names.
@@ -42,7 +43,9 @@ interface SyncResult {
   accountsUpdated: number;
   transactionsAdded: number;
   holdingsUpdated: number;
+  categorized: number;
   snapshotCreated: boolean;
+  accountsSynced: string[];
   errors: string[];
 }
 
@@ -52,7 +55,9 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     accountsUpdated: 0,
     transactionsAdded: 0,
     holdingsUpdated: 0,
+    categorized: 0,
     snapshotCreated: false,
+    accountsSynced: [],
     errors: [],
   };
 
@@ -93,7 +98,7 @@ export async function syncAll(userId: string): Promise<SyncResult> {
         }, { onConflict: 'id' });
 
         if (error) result.errors.push(`Account ${account.name}: ${error.message}`);
-        else result.accountsUpdated++;
+        else { result.accountsUpdated++; result.accountsSynced.push(`${account.name} (${item.institution_name ?? 'Plaid'})`); }
       }
 
       // Sync transactions using cursor-based /transactions/sync
@@ -225,7 +230,7 @@ export async function syncAll(userId: string): Promise<SyncResult> {
           }, { onConflict: 'id' });
 
           if (accErr) result.errors.push(`SimpleFIN account ${account.name}: ${accErr.message}`);
-          else result.accountsUpdated++;
+          else { result.accountsUpdated++; result.accountsSynced.push(`${account.name} (${getInstitutionName(account)})`); }
 
           // Upsert transactions
           if (account.transactions.length) {
@@ -283,7 +288,7 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     // --- end SimpleFIN sync ---
 
     await deduplicateSimpleFINAccounts(supabase, userId);
-    await autoCategorize(supabase, userId);
+    result.categorized = await autoCategorize(supabase, userId);
     await captureNetWorthSnapshot(supabase, userId);
     result.snapshotCreated = true;
   } catch (err: any) {
@@ -360,36 +365,89 @@ async function seedDefaultCategories(
 async function autoCategorize(
   supabase: ReturnType<typeof createServiceClient>,
   userId: string,
-) {
+): Promise<number> {
+  let totalCategorized = 0;
+
   const { data: rules } = await supabase
     .from('category_rules')
     .select('*')
     .eq('user_id', userId)
     .order('priority', { ascending: false });
 
-  if (!rules?.length) return;
-
   const { data: uncategorized } = await supabase
     .from('transactions')
-    .select('id, payee, description, memo')
+    .select('id, payee, description, memo, amount')
     .eq('user_id', userId)
     .is('category_id', null);
 
-  if (!uncategorized?.length) return;
+  if (!uncategorized?.length) return 0;
 
-  for (const tx of uncategorized) {
-    for (const rule of rules) {
-      const field = tx[rule.match_field as keyof typeof tx] as string;
-      if (field && field.toLowerCase().includes(rule.match_pattern.toLowerCase())) {
-        await supabase
-          .from('transactions')
-          .update({ category_id: rule.category_id })
-          .eq('id', tx.id)
-          .eq('user_id', userId);
-        break;
+  // Rule-based pass
+  const stillUncategorized = new Set(uncategorized.map((tx) => tx.id));
+  if (rules?.length) {
+    for (const tx of uncategorized) {
+      for (const rule of rules) {
+        const field = tx[rule.match_field as keyof typeof tx] as string;
+        if (field && field.toLowerCase().includes(rule.match_pattern.toLowerCase())) {
+          await supabase
+            .from('transactions')
+            .update({ category_id: rule.category_id })
+            .eq('id', tx.id)
+            .eq('user_id', userId);
+          stillUncategorized.delete(tx.id);
+          totalCategorized++;
+          break;
+        }
       }
     }
   }
+
+  // LLM fallback for anything still uncategorized
+  const remaining = uncategorized.filter((tx) => stillUncategorized.has(tx.id));
+  if (!remaining.length) return totalCategorized;
+
+  const { data: categories } = await supabase
+    .from('categories')
+    .select('id, name')
+    .eq('user_id', userId);
+
+  if (!categories?.length) return totalCategorized;
+
+  const nameToId = new Map(categories.map((c) => [c.name, c.id]));
+  const categoryNames = categories.map((c) => c.name);
+
+  const llmResults = await llmCategorize(
+    remaining.map((tx) => ({
+      id: tx.id,
+      payee: tx.payee,
+      description: tx.description,
+      amount: Number(tx.amount),
+    })),
+    categoryNames,
+  );
+
+  // Group by category for batch updates
+  const byCategory = new Map<string, string[]>();
+  llmResults.forEach((categoryName, txId) => {
+    const catId = nameToId.get(categoryName);
+    if (!catId) return;
+    if (!byCategory.has(catId)) byCategory.set(catId, []);
+    byCategory.get(catId)!.push(txId);
+  });
+
+  const catIds = Array.from(byCategory.keys());
+  await Promise.all(
+    catIds.map((catId) =>
+      supabase
+        .from('transactions')
+        .update({ category_id: catId })
+        .in('id', byCategory.get(catId)!)
+        .eq('user_id', userId),
+    ),
+  );
+
+  totalCategorized += llmResults.size;
+  return totalCategorized;
 }
 
 async function captureNetWorthSnapshot(

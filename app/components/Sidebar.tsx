@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { createBrowserClient } from '@/app/lib/supabase';
 import PlaidLinkButton from './PlaidLink';
 import SimpleFINLinkButton from './SimpleFINLink';
@@ -62,41 +63,114 @@ export default function Sidebar() {
   );
 }
 
+type SyncPhase = 'idle' | 'syncing' | 'done' | 'error';
+
+interface SyncResult {
+  accountsUpdated: number;
+  transactionsAdded: number;
+  holdingsUpdated: number;
+  categorized: number;
+  accountsSynced: string[];
+  errors: string[];
+}
+
 function SyncButton() {
+  const [phase, setPhase] = useState<SyncPhase>('idle');
+  const [result, setResult] = useState<SyncResult | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
+
   const handleSync = async () => {
-    const btn = document.getElementById('sync-btn');
-    if (btn) btn.textContent = 'Syncing…';
+    setPhase('syncing');
+    setResult(null);
+    setErrorMsg('');
 
     try {
       const res = await fetch('/api/plaid/sync', { method: 'POST' });
       const data = await res.json();
 
       if (data.ok) {
-        if (btn) btn.textContent = '✓ Synced';
-        // Refresh the page to show new data
-        setTimeout(() => window.location.reload(), 800);
+        setResult(data);
+        setPhase('done');
+        setTimeout(() => window.location.reload(), 3000);
       } else {
-        if (btn) btn.textContent = 'Sync failed';
-        console.error(data.error);
+        setErrorMsg(data.error || 'Sync failed');
+        setPhase('error');
       }
-    } catch (err) {
-      if (btn) btn.textContent = 'Sync failed';
-      console.error(err);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Sync failed');
+      setPhase('error');
     }
-
-    setTimeout(() => {
-      if (btn) btn.textContent = '↻ Sync now';
-    }, 3000);
   };
 
+  const reset = () => { setPhase('idle'); setResult(null); setErrorMsg(''); };
+
+  if (phase === 'idle') {
+    return (
+      <button onClick={handleSync} className="w-full btn-secondary text-xs justify-center">
+        ↻ Sync now
+      </button>
+    );
+  }
+
+  if (phase === 'syncing') {
+    return (
+      <div className="rounded-lg border border-sand-200 bg-sand-50 p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-3 h-3 border-2 border-ink-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-medium text-ink-600">Syncing…</span>
+        </div>
+        <div className="space-y-1 text-xs text-ink-400">
+          <p>Fetching accounts & balances</p>
+          <p>Pulling new transactions</p>
+          <p>Running AI categorization</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'error') {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
+        <p className="text-xs font-medium text-red-600">Sync failed</p>
+        <p className="text-xs text-red-400">{errorMsg}</p>
+        <button onClick={reset} className="text-xs text-ink-400 hover:text-ink-600">Try again</button>
+      </div>
+    );
+  }
+
+  // done
   return (
-    <button
-      id="sync-btn"
-      onClick={handleSync}
-      className="w-full btn-secondary text-xs justify-center"
-    >
-      ↻ Sync now
-    </button>
+    <div className="rounded-lg border border-accent-green/30 bg-green-50 p-3 space-y-2">
+      <p className="text-xs font-medium text-green-700">Sync complete</p>
+      <ul className="space-y-1">
+        {result!.accountsSynced.map((name) => (
+          <li key={name} className="text-xs text-ink-500 flex items-center gap-1.5">
+            <span className="text-green-500">✓</span> {name}
+          </li>
+        ))}
+        {result!.transactionsAdded > 0 && (
+          <li className="text-xs text-ink-500 flex items-center gap-1.5">
+            <span className="text-green-500">✓</span> {result!.transactionsAdded} new transactions
+          </li>
+        )}
+        {result!.categorized > 0 && (
+          <li className="text-xs text-ink-500 flex items-center gap-1.5">
+            <span className="text-green-500">✓</span> {result!.categorized} transactions categorized
+          </li>
+        )}
+        {result!.holdingsUpdated > 0 && (
+          <li className="text-xs text-ink-500 flex items-center gap-1.5">
+            <span className="text-green-500">✓</span> {result!.holdingsUpdated} holdings updated
+          </li>
+        )}
+        {result!.errors.length > 0 && (
+          <li className="text-xs text-red-400 flex items-center gap-1.5">
+            <span>⚠</span> {result!.errors.length} error(s)
+          </li>
+        )}
+      </ul>
+      <p className="text-xs text-ink-300">Refreshing…</p>
+    </div>
   );
 }
 
