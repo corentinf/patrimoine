@@ -73,6 +73,7 @@ export default function TransactionRow({
   );
   const [showNameDropdown, setShowNameDropdown] = useState(false);
   const [savingVenmo, setSavingVenmo] = useState(false);
+  const [venmoError, setVenmoError] = useState('');
 
   const filteredNames = knownVenmoNames.filter((n) =>
     n.toLowerCase().includes(personInput.toLowerCase()),
@@ -104,21 +105,29 @@ export default function TransactionRow({
     e.stopPropagation();
     if (!personInput.trim()) return;
     setSavingVenmo(true);
-    const res = await fetch('/api/venmo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        transaction_id: tx.id,
-        person_name: personInput.trim(),
-        amount: parseFloat(amountInput) || Math.abs(tx.amount),
-      }),
-    });
-    const data = await res.json();
-    setSavingVenmo(false);
-    if (res.ok) {
-      setVenmo(data.request);
-      setShowVenmoForm(false);
-      setPersonInput('');
+    setVenmoError('');
+    try {
+      const res = await fetch('/api/venmo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_id: tx.id,
+          person_name: personInput.trim(),
+          amount: parseFloat(amountInput) || Math.abs(tx.amount),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setVenmo(data.request);
+        setShowVenmoForm(false);
+        setPersonInput('');
+      } else {
+        setVenmoError(data.error || 'Failed to save');
+      }
+    } catch (err: any) {
+      setVenmoError(err.message || 'Failed to save');
+    } finally {
+      setSavingVenmo(false);
     }
   }
 
@@ -310,6 +319,9 @@ export default function TransactionRow({
               className="w-full text-sm pl-7 pr-3 py-1.5 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
             />
           </div>
+          {venmoError && (
+            <p className="text-xs text-red-500 break-all">{venmoError}</p>
+          )}
           <div className="flex gap-2">
             <button
               onClick={handleVenmoSave}
