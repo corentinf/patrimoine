@@ -467,17 +467,41 @@ async function detectTransfers(
   }
 }
 
-// Extracts last 4 digits from account names like "(3060)" or "****3955"
+// Extracts last 4 digits from account names like "(3060)", "****3955", "...3060"
 function extractLast4(name: string): string | null {
-  const paren = name.match(/\((\d{4})\)/);
-  if (paren) return paren[1];
-  const stars = name.match(/\*{3,4}(\d{4})/);
-  if (stars) return stars[1];
-  return null;
+  const m = name.match(/(?:\(|\.{2,}|\*{2,})(\d{4})\)?$/);
+  return m ? m[1] : null;
 }
 
+// Canonical institution name — collapses known aliases so "JPMorgan Chase",
+// "Chase Bank", and "Chase" all map to "chase".
+const INSTITUTION_ALIASES: Record<string, string> = {
+  jpmorganchase: 'chase',
+  jpmorgan:      'chase',
+  chasebank:     'chase',
+  robinhoodmarkets: 'robinhood',
+  robinhoodinc:     'robinhood',
+  fidelityinvestments: 'fidelity',
+  fidelitybrokerage:   'fidelity',
+  thevanguardgroup: 'vanguard',
+  vanguardgroup:    'vanguard',
+  charlesschwab:    'schwab',
+  charlesschwaband: 'schwab',
+  tdameritrade:     'tdameritrade',
+  etradebank:       'etrade',
+  merrilledge:      'merrill',
+  merrilllynch:     'merrill',
+  bankofamerica:    'bofa',
+  bofa:             'bofa',
+  wellsfargo:       'wellsfargo',
+  wellsfargobank:   'wellsfargo',
+  citibank:         'citi',
+  citicards:        'citi',
+};
+
 function normalizeInstitution(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return INSTITUTION_ALIASES[key] ?? key;
 }
 
 async function deduplicateSimpleFINAccounts(
@@ -494,39 +518,110 @@ async function deduplicateSimpleFINAccounts(
     .from('accounts')
     .select('id, name, institution, account_type, balance')
     .eq('user_id', userId)
-    .like('id', 'sfin_%');
+    .like('id', 'sfin_%')
+    .eq('is_hidden', false); // only evaluate visible accounts
 
   if (!plaidAccounts?.length || !sfinAccounts?.length) return;
 
+  // Pre-load a sample of transactions per account for overlap detection
+  const allAccountIds = [
+    ...plaidAccounts.map((a) => a.id),
+    ...sfinAccounts.map((a) => a.id),
+  ];
+  const { data: recentTxs } = await supabase
+    .from('transactions')
+    .select('account_id, amount, posted_at')
+    .in('account_id', allAccountIds)
+    .gte('posted_at', new Date(Date.now() - 60 * 86_400_000).toISOString())
+    .order('posted_at', { ascending: false });
+
+  // Group transaction fingerprints by account
+  type TxFingerprint = string; // "amount|date"
+  const txsByAccount = new Map<string, Set<TxFingerprint>>();
+  for (const tx of recentTxs ?? []) {
+    const day = tx.posted_at.substring(0, 10);
+    const fp: TxFingerprint = `${Number(tx.amount).toFixed(2)}|${day}`;
+    if (!txsByAccount.has(tx.account_id)) txsByAccount.set(tx.account_id, new Set());
+    txsByAccount.get(tx.account_id)!.add(fp);
+  }
+
+  function txOverlap(idA: string, idB: string): number {
+    const a = txsByAccount.get(idA);
+    const b = txsByAccount.get(idB);
+    if (!a?.size || !b?.size) return 0;
+    let count = 0;
+    a.forEach((fp) => { if (b.has(fp)) count++; });
+    return count;
+  }
+
   const duplicateIds: string[] = [];
+  const hiddenByPlaid = new Set<string>(); // track which Plaid accounts absorbed a dupe
 
   for (const sfin of sfinAccounts) {
-    const sfinInstitution = normalizeInstitution(sfin.institution ?? '');
+    const sfinNorm  = normalizeInstitution(sfin.institution ?? '');
     const sfinLast4 = extractLast4(sfin.name ?? '');
-    const sfinBalance = Math.abs(Number(sfin.balance));
-    const sfinType = sfin.account_type;
+    const sfinBal   = Math.abs(Number(sfin.balance));
 
-    const isDuplicate = plaidAccounts.some((plaid) => {
-      if (normalizeInstitution(plaid.institution ?? '') !== sfinInstitution) return false;
-      if (plaid.account_type !== sfinType) return false;
+    let matchedPlaidId: string | null = null;
+
+    for (const plaid of plaidAccounts) {
+      // --- Signal 1: transaction overlap (strongest — same txs = same account) ---
+      const overlap = txOverlap(sfin.id, plaid.id);
+      if (overlap >= 3) { matchedPlaidId = plaid.id; break; }
+
+      // --- Signal 2: institution + last-4 match ---
+      const sameInstitution = normalizeInstitution(plaid.institution ?? '') === sfinNorm;
+      if (!sameInstitution) continue;
+
+      // Account types must be compatible (allow checking↔savings mix-ups)
+      const plaidType = plaid.account_type;
+      const sfinType  = sfin.account_type;
+      const compatibleType =
+        plaidType === sfinType ||
+        (new Set(['checking', 'savings']).has(plaidType) &&
+         new Set(['checking', 'savings']).has(sfinType));
+      if (!compatibleType) continue;
 
       const plaidLast4 = extractLast4(plaid.name ?? '');
-
-      // Strong signal: both have last 4 digits and they match
-      if (sfinLast4 && plaidLast4) return sfinLast4 === plaidLast4;
-
-      // Fallback: balance within 1% (handles slight timing differences)
-      const plaidBalance = Math.abs(Number(plaid.balance));
-      if (plaidBalance === 0 && sfinBalance === 0) return true;
-      if (plaidBalance > 0 && sfinBalance > 0) {
-        const diff = Math.abs(plaidBalance - sfinBalance) / Math.max(plaidBalance, sfinBalance);
-        return diff < 0.01;
+      if (sfinLast4 && plaidLast4) {
+        if (sfinLast4 === plaidLast4) { matchedPlaidId = plaid.id; break; }
+        else continue; // both have last-4 but they differ — definitely not the same
       }
 
-      return false;
-    });
+      // --- Signal 3: balance within 5% (investment accounts fluctuate) ---
+      const plaidBal = Math.abs(Number(plaid.balance));
+      if (plaidBal === 0 && sfinBal === 0) { matchedPlaidId = plaid.id; break; }
+      if (plaidBal > 0 && sfinBal > 0) {
+        const diff = Math.abs(plaidBal - sfinBal) / Math.max(plaidBal, sfinBal);
+        if (diff < 0.05) { matchedPlaidId = plaid.id; break; }
+      }
+    }
 
-    if (isDuplicate) duplicateIds.push(sfin.id);
+    if (matchedPlaidId) {
+      duplicateIds.push(sfin.id);
+      hiddenByPlaid.add(matchedPlaidId);
+    }
+  }
+
+  // Unhide any SimpleFIN accounts that were previously hidden but no longer
+  // have a Plaid counterpart (e.g. the Plaid connection was removed)
+  const { data: alreadyHidden } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('user_id', userId)
+    .like('id', 'sfin_%')
+    .eq('is_hidden', true);
+
+  const shouldBeVisible = (alreadyHidden ?? [])
+    .map((a) => a.id)
+    .filter((id) => !duplicateIds.includes(id));
+
+  if (shouldBeVisible.length) {
+    await supabase
+      .from('accounts')
+      .update({ is_hidden: false })
+      .in('id', shouldBeVisible)
+      .eq('user_id', userId);
   }
 
   if (duplicateIds.length) {
