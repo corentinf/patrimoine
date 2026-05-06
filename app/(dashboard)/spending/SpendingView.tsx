@@ -6,6 +6,7 @@ import SpendingCharts from './SpendingCharts';
 import SpendingTransactions from './SpendingTransactions';
 import CategoryManager, { type Category } from './CategoryManager';
 import AICategorizeButton from './AICategorizeButton';
+import VenmoImport from './VenmoImport';
 
 interface RawTransaction {
   id: string;
@@ -158,6 +159,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             </h3>
             <div className="flex items-center gap-2">
               <AICategorizeButton />
+              <VenmoImport />
               <button
                 onClick={() => setShowCategoryManager(true)}
                 className="inline-flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors"
