@@ -91,14 +91,13 @@ export async function POST(req: NextRequest) {
 
   const dataRows = rows.slice(headerIdx + 1).filter((r) => r[iDatetime]?.trim());
 
-  // Fetch all Venmo-related transactions for this user (last 2 years)
+  // Fetch all transactions — don't pre-filter by "venmo" since banks label these inconsistently
   const since = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString();
   const { data: txs } = await supabase
     .from('transactions')
     .select('id, amount, posted_at, payee, description')
     .eq('user_id', user.id)
-    .gte('posted_at', since)
-    .or('payee.ilike.%venmo%,description.ilike.%venmo%');
+    .gte('posted_at', since);
 
   if (!txs?.length) {
     return NextResponse.json({ matched: 0, updated: 0, unmatched: dataRows.length, skipped: 0 });
