@@ -1,7 +1,7 @@
 import { createServiceClient } from './supabase';
 import { plaidClient, mapAccountType } from './plaid';
 import { fetchAccounts as fetchSimpleFINAccounts, inferAccountType, getInstitutionName } from './simplefin';
-import { llmCategorize } from './categorize';
+import { categorizeAll } from './categorizeAll';
 import type { RemovedTransaction } from 'plaid';
 
 // Maps Plaid's personal_finance_category to our category names.
@@ -288,7 +288,8 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     // --- end SimpleFIN sync ---
 
     await deduplicateSimpleFINAccounts(supabase, userId);
-    result.categorized = await autoCategorize(supabase, userId);
+    const catResult = await categorizeAll(userId);
+    result.categorized = catResult.ruleMatched + catResult.llmCategorized;
     await captureNetWorthSnapshot(supabase, userId);
     result.snapshotCreated = true;
   } catch (err: any) {
@@ -362,134 +363,6 @@ async function seedDefaultCategories(
   }
 }
 
-async function autoCategorize(
-  supabase: ReturnType<typeof createServiceClient>,
-  userId: string,
-): Promise<number> {
-  let totalCategorized = 0;
-
-  const { data: rules } = await supabase
-    .from('category_rules')
-    .select('*')
-    .eq('user_id', userId)
-    .order('priority', { ascending: false });
-
-  // Find the "Uncategorized" placeholder category id
-  const { data: uncatCategory } = await supabase
-    .from('categories')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('name', 'Uncategorized')
-    .single();
-
-  // Pick up both truly null and explicitly "Uncategorized" transactions
-  let uncategorized: Array<{ id: string; payee: string | null; description: string | null; memo: string | null; amount: number }> = [];
-  const { data: nullCat } = await supabase
-    .from('transactions')
-    .select('id, payee, description, memo, amount')
-    .eq('user_id', userId)
-    .is('category_id', null);
-  uncategorized = nullCat ?? [];
-
-  if (uncatCategory?.id) {
-    const { data: explicitUncat } = await supabase
-      .from('transactions')
-      .select('id, payee, description, memo, amount')
-      .eq('user_id', userId)
-      .eq('category_id', uncatCategory.id);
-    uncategorized = [...uncategorized, ...(explicitUncat ?? [])];
-  }
-
-  if (!uncategorized.length) return 0;
-
-  // Rule-based pass
-  const stillUncategorized = new Set(uncategorized.map((tx) => tx.id));
-  if (rules?.length) {
-    for (const tx of uncategorized) {
-      for (const rule of rules) {
-        const field = tx[rule.match_field as keyof typeof tx] as string;
-        if (field && field.toLowerCase().includes(rule.match_pattern.toLowerCase())) {
-          await supabase
-            .from('transactions')
-            .update({ category_id: rule.category_id })
-            .eq('id', tx.id)
-            .eq('user_id', userId);
-          stillUncategorized.delete(tx.id);
-          totalCategorized++;
-          break;
-        }
-      }
-    }
-  }
-
-  // LLM fallback for anything still uncategorized
-  const remaining = uncategorized.filter((tx) => stillUncategorized.has(tx.id));
-  if (!remaining.length) return totalCategorized;
-
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('id, name')
-    .eq('user_id', userId);
-
-  if (!categories?.length) return totalCategorized;
-
-  const nameToId = new Map(categories.map((c) => [c.name, c.id]));
-  const categoryNames = categories.map((c) => c.name).filter((n) => n !== 'Uncategorized');
-
-  const llmResults = await llmCategorize(
-    remaining.map((tx) => ({
-      id: tx.id,
-      payee: tx.payee,
-      description: tx.description,
-      amount: Number(tx.amount),
-    })),
-    categoryNames,
-  );
-
-  // Create any new categories Claude invented
-  const newCategoryNames = new Set<string>();
-  llmResults.forEach((categoryName) => {
-    if (!nameToId.has(categoryName)) newCategoryNames.add(categoryName);
-  });
-
-  if (newCategoryNames.size > 0) {
-    const toInsert = Array.from(newCategoryNames).map((name) => ({
-      user_id: userId,
-      name,
-      color: '#6B7280',
-      is_income: false,
-      sort_order: 99,
-    }));
-    const { data: created } = await supabase
-      .from('categories')
-      .insert(toInsert)
-      .select('id, name');
-    for (const c of created ?? []) nameToId.set(c.name, c.id);
-  }
-
-  // Group by category id for batch updates
-  const byCategory = new Map<string, string[]>();
-  llmResults.forEach((categoryName, txId) => {
-    const catId = nameToId.get(categoryName);
-    if (!catId) return;
-    if (!byCategory.has(catId)) byCategory.set(catId, []);
-    byCategory.get(catId)!.push(txId);
-  });
-
-  const catIds = Array.from(byCategory.keys());
-  await Promise.all(
-    catIds.map((catId) =>
-      supabase
-        .from('transactions')
-        .update({ category_id: catId })
-        .in('id', byCategory.get(catId)!)
-        .eq('user_id', userId),
-    ),
-  );
-
-  totalCategorized += llmResults.size;
-  return totalCategorized;
-}
 
 async function captureNetWorthSnapshot(
   supabase: ReturnType<typeof createServiceClient>,

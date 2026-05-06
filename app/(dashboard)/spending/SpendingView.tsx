@@ -5,6 +5,7 @@ import { formatCurrency } from '@/app/lib/utils';
 import SpendingCharts from './SpendingCharts';
 import SpendingTransactions from './SpendingTransactions';
 import CategoryManager, { type Category } from './CategoryManager';
+import AICategorizeButton from './AICategorizeButton';
 
 interface RawTransaction {
   id: string;
@@ -154,15 +155,18 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
               Transactions
             </h3>
-            <button
-              onClick={() => setShowCategoryManager(true)}
-              className="inline-flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 12h.01M7 17h.01M11 7h6M11 12h6M11 17h6" />
-              </svg>
-              Manage categories
-            </button>
+            <div className="flex items-center gap-2">
+              <AICategorizeButton />
+              <button
+                onClick={() => setShowCategoryManager(true)}
+                className="inline-flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 12h.01M7 17h.01M11 7h6M11 12h6M11 17h6" />
+                </svg>
+                Manage categories
+              </button>
+            </div>
           </div>
           <SpendingTransactions
             transactions={filteredTransactions as any}
