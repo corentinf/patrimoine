@@ -11,7 +11,7 @@ async function getVisibleAccountIds(supabase: ReturnType<typeof createServiceCli
   return (data ?? []).map((a) => a.id);
 }
 
-async function getSpendingTransactions(months = 1) {
+async function getSpendingTransactions(months = 12) {
   const supabase = createServiceClient();
   const visibleIds = await getVisibleAccountIds(supabase);
   if (!visibleIds.length) return [];
