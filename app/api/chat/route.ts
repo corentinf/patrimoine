@@ -1,5 +1,5 @@
 import { anthropic } from '@ai-sdk/anthropic';
-import { streamText } from 'ai';
+import { streamText, convertToModelMessages } from 'ai';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
@@ -107,7 +107,7 @@ ${spendingSummary || 'No spending data yet.'}
   const result = streamText({
     model: anthropic('claude-haiku-4-5'),
     system: systemPrompt,
-    messages,
+    messages: await convertToModelMessages(messages),
   });
 
   return result.toUIMessageStreamResponse();
