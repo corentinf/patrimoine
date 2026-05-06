@@ -124,18 +124,22 @@ export async function POST(req: NextRequest) {
     const to   = row[iTo]?.trim() ?? '';
     const person = venmoAmount < 0 ? to : from;
 
-    // Find the best matching transaction: same sign, same amount (±$0.50), within ±3 days
-    const candidates = txs.filter((tx) => {
-      const dbAmt = Number(tx.amount);
-      if (Math.sign(dbAmt) !== Math.sign(venmoAmount)) return false;
-      if (Math.abs(Math.abs(dbAmt) - Math.abs(venmoAmount)) > 0.50) return false;
-      const daysDiff = Math.abs(new Date(tx.posted_at).getTime() - venmoDate.getTime()) / 86_400_000;
-      return daysDiff <= 3;
-    });
+    // Match by absolute amount (±$0.01) within ±7 days; pick closest date if multiple
+    const absVenmo = Math.abs(venmoAmount);
+    const candidates = txs
+      .map((tx) => {
+        const daysDiff = Math.abs(new Date(tx.posted_at).getTime() - venmoDate.getTime()) / 86_400_000;
+        return { tx, daysDiff };
+      })
+      .filter(({ tx, daysDiff }) => {
+        if (Math.abs(Math.abs(Number(tx.amount)) - absVenmo) > 0.01) return false;
+        return daysDiff <= 7;
+      })
+      .sort((a, b) => a.daysDiff - b.daysDiff);
 
-    if (candidates.length !== 1) { unmatched++; continue; }
+    if (candidates.length === 0) { unmatched++; continue; }
 
-    const tx = candidates[0];
+    const tx = candidates[0].tx;
     // Build a richer payee: "Note · Person" if person is known
     const newPayee = person ? `${note} · ${person}` : note;
 
