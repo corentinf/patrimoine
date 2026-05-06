@@ -36,11 +36,19 @@ export async function llmCategorize(
         system: [
           {
             type: 'text' as const,
-            text: `You are a financial transaction categorizer.\nCategories: ${categoryNames.join(', ')}\n\nReturn ONLY a JSON array: [{"id":"...","category":"..."}]\nUse exact category names. Use "Uncategorized" if nothing fits.`,
+            text: `You are a financial transaction categorizer.
+Existing categories: ${categoryNames.join(', ')}
+
+Return ONLY a JSON array: [{"id":"...","category":"..."}]
+
+Rules:
+- Use an exact existing category name whenever it fits.
+- If no existing category fits, invent a concise new category name (2-3 words, title case, e.g. "Pet Care", "Tax & Legal").
+- Never use "Uncategorized" — always pick or create a meaningful category.`,
             cache_control: { type: 'ephemeral' as const },
           },
         ],
-        messages: [{ role: 'user', content: `Categorize (id\\tpayee\\tamount):\n${lines}` }],
+        messages: [{ role: 'user', content: `Categorize (id\tpayee\tamount):\n${lines}` }],
       });
 
       const text = response.content

@@ -426,7 +426,28 @@ async function autoCategorize(
     categoryNames,
   );
 
-  // Group by category for batch updates
+  // Create any new categories Claude invented
+  const newCategoryNames = new Set<string>();
+  llmResults.forEach((categoryName) => {
+    if (!nameToId.has(categoryName)) newCategoryNames.add(categoryName);
+  });
+
+  if (newCategoryNames.size > 0) {
+    const toInsert = Array.from(newCategoryNames).map((name) => ({
+      user_id: userId,
+      name,
+      color: '#6B7280',
+      is_income: false,
+      sort_order: 99,
+    }));
+    const { data: created } = await supabase
+      .from('categories')
+      .insert(toInsert)
+      .select('id, name');
+    for (const c of created ?? []) nameToId.set(c.name, c.id);
+  }
+
+  // Group by category id for batch updates
   const byCategory = new Map<string, string[]>();
   llmResults.forEach((categoryName, txId) => {
     const catId = nameToId.get(categoryName);
