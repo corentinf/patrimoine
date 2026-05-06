@@ -12,6 +12,7 @@ interface CategorizeResult {
   newCategories: string[];
   errors: string[];
   noApiKey: boolean;
+  debug: string[];
 }
 
 export default function AICategorizeButton() {
@@ -19,6 +20,7 @@ export default function AICategorizeButton() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [result, setResult] = useState<CategorizeResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showDebug, setShowDebug] = useState(false);
 
   async function handleRun() {
     setPhase('running');
@@ -116,6 +118,22 @@ export default function AICategorizeButton() {
       {result?.errors.map((e, i) => (
         <p key={i} className="text-red-400">⚠ {e}</p>
       ))}
+
+      {result?.debug && result.debug.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowDebug((v) => !v)}
+            className="text-ink-300 hover:text-ink-500 text-xs"
+          >
+            {showDebug ? 'Hide' : 'Show'} debug trace ({result.debug.length} steps)
+          </button>
+          {showDebug && (
+            <pre className="mt-1 text-ink-400 whitespace-pre-wrap break-all text-[10px] leading-relaxed max-h-48 overflow-y-auto">
+              {result.debug.join('\n')}
+            </pre>
+          )}
+        </div>
+      )}
 
       <button onClick={() => setPhase('idle')} className="text-ink-400 hover:text-ink-600">Run again</button>
     </div>
