@@ -149,6 +149,7 @@ export async function categorizeAll(userId: string): Promise<CategorizeResult> {
     if (newCategoryNames.size > 0) {
       log(`creating ${newCategoryNames.size} new categories: ${Array.from(newCategoryNames).join(', ')}`);
       const toInsert = Array.from(newCategoryNames).map((name) => ({
+        user_id: userId,
         name,
         color: '#6B7280',
         is_income: false,
