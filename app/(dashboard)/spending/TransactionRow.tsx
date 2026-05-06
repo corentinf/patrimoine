@@ -20,10 +20,12 @@ const VENMO_STATUS_NEXT: Record<string, VenmoRequest['status']> = {
   settled: 'pending',
 };
 
-const VENMO_STATUS_STYLE: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-700',
-  requested: 'bg-blue-100 text-blue-600',
-  settled: 'bg-green-100 text-green-700',
+// CSS filters to tint the Venmo SVG (which is black by default)
+// Generated via https://isotropic.co/tool/hex-color-to-css-filter/
+const VENMO_STATUS_FILTER: Record<string, string> = {
+  pending:   'brightness(0) saturate(100%) invert(58%) sepia(93%) saturate(400%) hue-rotate(5deg) brightness(105%)',   // amber
+  requested: 'brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(500%) hue-rotate(195deg) brightness(100%)', // blue
+  settled:   'brightness(0) saturate(100%) invert(55%) sepia(60%) saturate(400%) hue-rotate(100deg) brightness(95%)',  // green
 };
 
 const VENMO_STATUS_LABEL: Record<string, string> = {
@@ -192,12 +194,15 @@ export default function TransactionRow({
               {/* Venmo icon */}
               <button
                 onClick={handleVenmoStatusCycle}
-                className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 transition-opacity"
-                style={{ backgroundColor: venmo.status === 'settled' ? '#9CA3AF' : '#008CFF' }}
+                className="w-6 h-6 flex items-center justify-center flex-shrink-0"
+                title="Click to advance status"
               >
-                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white">
-                  <path d="M5.7 3C6.3 4.1 6.6 5.2 6.6 6.6c0 4.5-3.8 10.3-5.6 13.4h5.8l3.4-8.5c-1-.8-1.6-2-1.6-3.3 0-1.6.7-2.8 1.8-2.8.9 0 1.4.6 1.4 1.7 0 1-.5 2.6-1.1 4.2l3.5-2.3C15.5 6.7 16.6 4 19.5 4c2.2 0 3.5 1.4 3.5 3.8 0 5.4-5.4 12.2-9.1 16.2H8.3C7 20.5 3.5 10.3 1.5 3H5.7z"/>
-                </svg>
+                <img
+                  src="/venmo.svg"
+                  alt="Venmo"
+                  className="w-5 h-5 transition-all duration-200"
+                  style={{ filter: VENMO_STATUS_FILTER[venmo.status] }}
+                />
               </button>
 
               {/* Hover tooltip */}
@@ -231,12 +236,15 @@ export default function TransactionRow({
           ) : (
             <button
               onClick={(e) => { e.stopPropagation(); setShowVenmoForm((v) => !v); setShowCatPicker(false); }}
-              className="w-6 h-6 rounded-md flex items-center justify-center text-ink-300 hover:text-white hover:bg-[#008CFF] transition-colors opacity-0 group-hover:opacity-100"
+              className="w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
               title="Request via Venmo"
             >
-              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
-                <path d="M5.7 3C6.3 4.1 6.6 5.2 6.6 6.6c0 4.5-3.8 10.3-5.6 13.4h5.8l3.4-8.5c-1-.8-1.6-2-1.6-3.3 0-1.6.7-2.8 1.8-2.8.9 0 1.4.6 1.4 1.7 0 1-.5 2.6-1.1 4.2l3.5-2.3C15.5 6.7 16.6 4 19.5 4c2.2 0 3.5 1.4 3.5 3.8 0 5.4-5.4 12.2-9.1 16.2H8.3C7 20.5 3.5 10.3 1.5 3H5.7z"/>
-              </svg>
+              <img
+                src="/venmo.svg"
+                alt="Venmo"
+                className="w-5 h-5 transition-all duration-200 hover:scale-110"
+                style={{ filter: 'brightness(0) saturate(100%) invert(80%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(90%)' }}
+              />
             </button>
           )}
         </div>
