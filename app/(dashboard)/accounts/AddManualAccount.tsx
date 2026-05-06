@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const ACCOUNT_TYPES = [
   { value: 'checking',   label: 'Checking' },
@@ -10,6 +11,7 @@ const ACCOUNT_TYPES = [
 ];
 
 export default function AddManualAccount() {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -44,7 +46,7 @@ export default function AddManualAccount() {
 
     setForm({ name: '', institution: '', account_type: 'investment', balance: '' });
     setExpanded(false);
-    window.location.reload();
+    router.refresh();
   };
 
   if (!expanded) {
