@@ -59,6 +59,7 @@ export default function Sidebar() {
           <PlaidLinkButton />
           <SimpleFINLinkButton />
           <SyncButton />
+          <ResetButton />
           <SignOutButton />
         </div>
       </aside>
@@ -229,6 +230,57 @@ function SyncButton() {
       </ul>
       <p className="text-xs text-ink-300">Refreshing…</p>
     </div>
+  );
+}
+
+function ResetButton() {
+  const [phase, setPhase] = useState<'idle' | 'confirm' | 'resetting'>('idle');
+
+  async function handleReset() {
+    setPhase('resetting');
+    await fetch('/api/reset', { method: 'POST' });
+    window.location.href = '/accounts';
+  }
+
+  if (phase === 'confirm') {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
+        <p className="text-xs font-medium text-red-600">Reset everything?</p>
+        <p className="text-xs text-red-400">All accounts, transactions, and connections will be deleted. Categories are kept.</p>
+        <div className="flex gap-2">
+          <button
+            onClick={handleReset}
+            className="flex-1 text-xs font-medium py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+          >
+            Yes, reset
+          </button>
+          <button
+            onClick={() => setPhase('idle')}
+            className="text-xs text-ink-400 hover:text-ink-600 px-2"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'resetting') {
+    return (
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <span className="inline-block w-3 h-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-red-400">Resetting…</span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setPhase('confirm')}
+      className="w-full text-xs text-ink-300 hover:text-red-400 transition-colors py-1 text-center"
+    >
+      Reset all data
+    </button>
   );
 }
 
