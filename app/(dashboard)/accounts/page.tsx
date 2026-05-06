@@ -21,6 +21,14 @@ async function getAccounts() {
 
 async function getRecentTransactions() {
   const supabase = createServiceClient();
+
+  const { data: visibleAccounts } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('is_hidden', false);
+  const visibleIds = (visibleAccounts ?? []).map((a) => a.id);
+  if (!visibleIds.length) return [];
+
   const { data, error } = await supabase
     .from('transactions')
     .select(`
@@ -28,6 +36,7 @@ async function getRecentTransactions() {
       account:accounts(name, institution),
       category:categories(name, color, icon)
     `)
+    .in('account_id', visibleIds)
     .order('posted_at', { ascending: false })
     .limit(20);
 
