@@ -307,7 +307,7 @@ export default function TransactionRow({
                 {filteredNames.map((name) => (
                   <button
                     key={name}
-                    onMouseDown={() => { setPersonInput(name); setShowNameDropdown(false); }}
+                    onMouseDown={(e) => { e.preventDefault(); setPersonInput(name); setShowNameDropdown(false); }}
                     className="w-full text-left px-3 py-1.5 text-sm text-ink-700 hover:bg-sand-50"
                   >
                     {name}
