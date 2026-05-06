@@ -8,11 +8,12 @@ interface TxRow {
 }
 
 const MODEL = 'claude-haiku-4-5';
-const BATCH_SIZE = 75;
+const BATCH_SIZE = 50;
 
 export async function llmCategorize(
   transactions: TxRow[],
   categoryNames: string[],
+  log?: (msg: string) => void,
 ): Promise<Map<string, string>> {
   if (!transactions.length || !categoryNames.length) return new Map();
   if (!process.env.ANTHROPIC_API_KEY) return new Map();
@@ -30,9 +31,10 @@ export async function llmCategorize(
       .join('\n');
 
     try {
+      log?.(`batch ${Math.floor(i / BATCH_SIZE) + 1}: sending ${batch.length} txs`);
       const response = await client.messages.create({
         model: MODEL,
-        max_tokens: 1024,
+        max_tokens: 4096,
         system: [
           {
             type: 'text' as const,
@@ -55,14 +57,22 @@ Rules:
         .filter((b) => b.type === 'text')
         .map((b) => (b as Anthropic.TextBlock).text)
         .join('');
+
+      log?.(`batch response preview: ${text.slice(0, 120)}`);
+
       const match = text.match(/\[[\s\S]*\]/);
-      if (!match) continue;
+      if (!match) {
+        log?.(`batch parse failed — no JSON array found in response`);
+        continue;
+      }
       const parsed: Array<{ id: string; category: string }> = JSON.parse(match[0]);
+      log?.(`batch parsed ${parsed.length} items`);
       for (const item of parsed) {
         if (item.id && item.category) results.set(item.id, item.category);
       }
-    } catch {
-      // skip batch on error
+    } catch (err: any) {
+      log?.(`batch error: ${err.message}`);
+      throw err;
     }
   }
 

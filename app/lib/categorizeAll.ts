@@ -130,6 +130,7 @@ export async function categorizeAll(userId: string): Promise<CategorizeResult> {
           amount: Number(tx.amount),
         })),
         categoryNames,
+        log,
       );
       log(`LLM returned ${llmResults.size} results`);
       llmResults.forEach((cat, txId) => log(`  tx=${txId.slice(0, 8)} → "${cat}"`));
