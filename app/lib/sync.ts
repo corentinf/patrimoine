@@ -374,13 +374,33 @@ async function autoCategorize(
     .eq('user_id', userId)
     .order('priority', { ascending: false });
 
-  const { data: uncategorized } = await supabase
+  // Find the "Uncategorized" placeholder category id
+  const { data: uncatCategory } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', 'Uncategorized')
+    .single();
+
+  // Pick up both truly null and explicitly "Uncategorized" transactions
+  let uncategorized: Array<{ id: string; payee: string | null; description: string | null; memo: string | null; amount: number }> = [];
+  const { data: nullCat } = await supabase
     .from('transactions')
     .select('id, payee, description, memo, amount')
     .eq('user_id', userId)
     .is('category_id', null);
+  uncategorized = nullCat ?? [];
 
-  if (!uncategorized?.length) return 0;
+  if (uncatCategory?.id) {
+    const { data: explicitUncat } = await supabase
+      .from('transactions')
+      .select('id, payee, description, memo, amount')
+      .eq('user_id', userId)
+      .eq('category_id', uncatCategory.id);
+    uncategorized = [...uncategorized, ...(explicitUncat ?? [])];
+  }
+
+  if (!uncategorized.length) return 0;
 
   // Rule-based pass
   const stillUncategorized = new Set(uncategorized.map((tx) => tx.id));
@@ -414,7 +434,7 @@ async function autoCategorize(
   if (!categories?.length) return totalCategorized;
 
   const nameToId = new Map(categories.map((c) => [c.name, c.id]));
-  const categoryNames = categories.map((c) => c.name);
+  const categoryNames = categories.map((c) => c.name).filter((n) => n !== 'Uncategorized');
 
   const llmResults = await llmCategorize(
     remaining.map((tx) => ({
