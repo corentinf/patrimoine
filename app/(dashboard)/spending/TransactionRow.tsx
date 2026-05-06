@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
 import { assignTransactionCategory } from './actions';
@@ -55,7 +55,6 @@ export default function TransactionRow({
 }: TransactionRowProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const rowRef = useRef<HTMLDivElement>(null);
 
   const effectiveCategory = localCategory ?? tx.category;
   const catIcon = effectiveCategory?.icon ?? '❓';
@@ -81,17 +80,7 @@ export default function TransactionRow({
     n.toLowerCase().includes(personInput.toLowerCase()),
   );
 
-  // Close pickers on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (rowRef.current && !rowRef.current.contains(e.target as Node)) {
-        setShowCatPicker(false);
-        setShowVenmoForm(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  const anyPickerOpen = showCatPicker || showVenmoForm;
 
   function handleCategorySelect(cat: Category, e: React.MouseEvent) {
     e.stopPropagation();
@@ -158,7 +147,14 @@ export default function TransactionRow({
   }
 
   return (
-    <div ref={rowRef} className="relative border-b border-sand-100 last:border-0">
+    <div className="relative border-b border-sand-100 last:border-0">
+      {/* Backdrop — closes any open picker when clicking outside */}
+      {anyPickerOpen && (
+        <div
+          className="fixed inset-0 z-20"
+          onClick={() => { setShowCatPicker(false); setShowVenmoForm(false); }}
+        />
+      )}
       {/* Main row */}
       <div
         className="flex items-center gap-3 px-5 py-3.5 hover:bg-sand-50 transition-colors cursor-pointer group"
@@ -261,7 +257,6 @@ export default function TransactionRow({
         <div
           className="absolute left-5 right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 max-h-56 overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
         >
           {allCategories.map((cat) => {
             const active = effectiveCategory?.id === cat.id;
@@ -290,7 +285,6 @@ export default function TransactionRow({
         <div
           className="absolute right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 p-3 w-64 space-y-2"
           onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
         >
           <p className="text-xs font-semibold text-ink-500">Request via Venmo</p>
           <div className="relative">
@@ -301,7 +295,6 @@ export default function TransactionRow({
               value={personInput}
               onChange={(e) => { setPersonInput(e.target.value); setShowNameDropdown(true); }}
               onFocus={() => setShowNameDropdown(true)}
-              onBlur={() => setTimeout(() => setShowNameDropdown(false), 150)}
               className="w-full text-sm px-3 py-1.5 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700 placeholder:text-ink-300"
             />
             {showNameDropdown && filteredNames.length > 0 && (
