@@ -401,6 +401,25 @@ async function detectTransfers(
   supabase: ReturnType<typeof createServiceClient>,
   userId: string,
 ) {
+  // Load accounts so we know which are credit vs checking/savings
+  const { data: accounts } = await supabase
+    .from('accounts')
+    .select('id, account_type')
+    .eq('user_id', userId);
+
+  if (!accounts?.length) return;
+
+  const accountType = new Map(accounts.map((a) => [a.id, a.account_type]));
+  const creditAccounts = new Set(
+    accounts.filter((a) => a.account_type === 'credit').map((a) => a.id),
+  );
+  const fundingAccounts = new Set(
+    accounts.filter((a) => ['checking', 'savings'].includes(a.account_type)).map((a) => a.id),
+  );
+
+  // Only bother if the user has both a credit card and a checking/savings account
+  if (creditAccounts.size === 0 || fundingAccounts.size === 0) return;
+
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
   const { data: txs } = await supabase
     .from('transactions')
@@ -416,11 +435,24 @@ async function detectTransfers(
     for (let j = i + 1; j < txs.length; j++) {
       const a = txs[i], b = txs[j];
       if (a.account_id === b.account_id) continue;
-      if (Math.abs(Number(a.amount) + Number(b.amount)) > 1.00) continue;
+
+      // Require one side to be a credit card and the other to be checking/savings.
+      // This prevents merchant refunds or coincidental same-amount charges from
+      // being flagged as transfers.
+      const aIsCredit  = creditAccounts.has(a.account_id);
+      const bIsCredit  = creditAccounts.has(b.account_id);
+      const aIsFunding = fundingAccounts.has(a.account_id);
+      const bIsFunding = fundingAccounts.has(b.account_id);
+      if (!((aIsCredit && bIsFunding) || (bIsCredit && aIsFunding))) continue;
+
+      // Amounts must cancel out exactly (credit card payment pulls exact amount)
+      if (Math.abs(Number(a.amount) + Number(b.amount)) > 0.01) continue;
+
       const daysDiff = Math.abs(
         new Date(a.posted_at).getTime() - new Date(b.posted_at).getTime()
       ) / 86_400_000;
       if (daysDiff > 5) continue;
+
       transferIds.add(a.id);
       transferIds.add(b.id);
     }
