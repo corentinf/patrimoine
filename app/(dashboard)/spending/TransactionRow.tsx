@@ -261,6 +261,7 @@ export default function TransactionRow({
         <div
           className="absolute left-5 right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 max-h-56 overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           {allCategories.map((cat) => {
             const active = effectiveCategory?.id === cat.id;
@@ -289,6 +290,7 @@ export default function TransactionRow({
         <div
           className="absolute right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 p-3 w-64 space-y-2"
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <p className="text-xs font-semibold text-ink-500">Request via Venmo</p>
           <div className="relative">
