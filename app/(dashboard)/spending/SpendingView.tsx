@@ -101,12 +101,12 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl text-ink-800">Spending</h2>
           <p className="text-sm text-ink-400 mt-1">Where your money goes</p>
         </div>
-        <div className="text-right">
+        <div className="sm:text-right">
           <p className="stat-label">This month</p>
           <p className="stat-value text-accent-red">{formatCurrency(totalSpending)}</p>
         </div>

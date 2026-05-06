@@ -73,7 +73,7 @@ export default function AddManualAccount() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-ink-400 block mb-1">Account name</label>
             <input
@@ -98,7 +98,7 @@ export default function AddManualAccount() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-ink-400 block mb-1">Type</label>
             <select

@@ -17,49 +17,98 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed top-0 left-0 h-screen w-56 bg-white border-r border-sand-200 flex flex-col z-10">
-      {/* Logo */}
-      <div className="px-6 py-6 border-b border-sand-100">
-        <h1 className="font-display text-xl text-ink-800 tracking-tight">
-          Patrimoine
-        </h1>
-        <p className="text-xs text-ink-300 mt-0.5 font-body">
-          personal finance
-        </p>
-      </div>
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex fixed top-0 left-0 h-screen w-56 bg-white border-r border-sand-200 flex-col z-10">
+        {/* Logo */}
+        <div className="px-6 py-6 border-b border-sand-100">
+          <h1 className="font-display text-xl text-ink-800 tracking-tight">
+            Patrimoine
+          </h1>
+          <p className="text-xs text-ink-300 mt-0.5 font-body">
+            personal finance
+          </p>
+        </div>
 
-      {/* Nav links */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+        {/* Nav links */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`
+                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                  transition-all duration-150
+                  ${isActive
+                    ? 'bg-sand-100 text-ink-800'
+                    : 'text-ink-400 hover:text-ink-600 hover:bg-sand-50'
+                  }
+                `}
+              >
+                <span className="text-base leading-none">{item.icon}</span>
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Bottom actions */}
+        <div className="px-3 py-4 border-t border-sand-100 space-y-2">
+          <PlaidLinkButton />
+          <SimpleFINLinkButton />
+          <SyncButton />
+          <SignOutButton />
+        </div>
+      </aside>
+
+      {/* Mobile bottom nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-sand-200 z-20 flex">
         {navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`
-                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                transition-all duration-150
-                ${isActive
-                  ? 'bg-sand-100 text-ink-800'
-                  : 'text-ink-400 hover:text-ink-600 hover:bg-sand-50'
-                }
-              `}
+              className={`flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors ${
+                isActive ? 'text-ink-800' : 'text-ink-400'
+              }`}
             >
-              <span className="text-base leading-none">{item.icon}</span>
-              {item.label}
+              <span className="text-lg leading-none">{item.icon}</span>
+              <span className="text-[10px] font-medium">{item.label}</span>
             </Link>
           );
         })}
+        <MobileSyncButton />
       </nav>
+    </>
+  );
+}
 
-      {/* Bottom actions */}
-      <div className="px-3 py-4 border-t border-sand-100 space-y-2">
-        <PlaidLinkButton />
-        <SimpleFINLinkButton />
-        <SyncButton />
-        <SignOutButton />
-      </div>
-    </aside>
+function MobileSyncButton() {
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/plaid/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) setTimeout(() => window.location.reload(), 500);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleSync}
+      disabled={syncing}
+      className="flex-1 flex flex-col items-center gap-1 py-2.5 text-ink-400 transition-colors disabled:opacity-40"
+    >
+      <span className={`text-lg leading-none ${syncing ? 'animate-spin' : ''}`}>↻</span>
+      <span className="text-[10px] font-medium">Sync</span>
+    </button>
   );
 }
 

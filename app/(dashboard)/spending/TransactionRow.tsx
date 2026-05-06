@@ -157,7 +157,7 @@ export default function TransactionRow({
       )}
       {/* Main row */}
       <div
-        className="flex items-center gap-3 px-5 py-3.5 hover:bg-sand-50 transition-colors cursor-pointer group"
+        className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3.5 hover:bg-sand-50 transition-colors cursor-pointer group"
         onClick={onRowClick}
       >
         {/* Category icon — click to change */}
@@ -222,7 +222,7 @@ export default function TransactionRow({
               {/* Delete button */}
               <button
                 onClick={handleVenmoDelete}
-                className="text-ink-200 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                className="text-ink-200 hover:text-red-400 transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -232,7 +232,7 @@ export default function TransactionRow({
           ) : (
             <button
               onClick={(e) => { e.stopPropagation(); setShowVenmoForm((v) => !v); setShowCatPicker(false); }}
-              className="w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              className="w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 active:opacity-100 transition-opacity"
               title="Request via Venmo"
             >
               <img

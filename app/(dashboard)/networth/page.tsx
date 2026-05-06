@@ -61,7 +61,7 @@ export default async function NetWorthPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl text-ink-800">Net worth</h2>
           <p className="text-sm text-ink-400 mt-1">
@@ -69,7 +69,7 @@ export default async function NetWorthPage() {
           </p>
         </div>
         {latest && (
-          <div className="text-right">
+          <div className="sm:text-right">
             <p className="stat-label">Current</p>
             <p className="stat-value">
               {formatCurrency(Number(latest.net_worth))}
@@ -126,15 +126,14 @@ export default async function NetWorthPage() {
             </span>
           </h3>
           <div className="card p-0">
-            {/* Header row */}
-            <div className="grid grid-cols-12 gap-2 px-5 py-2.5 border-b border-sand-100 text-xs text-ink-400 font-medium uppercase tracking-wider">
+            {/* Desktop header row */}
+            <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-2.5 border-b border-sand-100 text-xs text-ink-400 font-medium uppercase tracking-wider">
               <div className="col-span-4">Holding</div>
               <div className="col-span-2 text-right">Shares</div>
               <div className="col-span-2 text-right">Cost basis</div>
               <div className="col-span-2 text-right">Market value</div>
               <div className="col-span-2 text-right">Gain/Loss</div>
             </div>
-            {/* Rows */}
             {holdings.map((h) => {
               const gain = Number(h.market_value || 0) - Number(h.cost_basis || 0);
               const gainPct = Number(h.cost_basis) > 0
@@ -142,34 +141,33 @@ export default async function NetWorthPage() {
                 : 0;
 
               return (
-                <div
-                  key={h.id}
-                  className="grid grid-cols-12 gap-2 px-5 py-3 border-b border-sand-50 hover:bg-sand-50 transition-colors"
-                >
-                  <div className="col-span-4">
-                    <p className="text-sm font-medium text-ink-700">
-                      {h.symbol || h.description}
-                    </p>
-                    <p className="text-xs text-ink-300 truncate">
-                      {h.description}
-                    </p>
+                <div key={h.id} className="border-b border-sand-50 last:border-0 hover:bg-sand-50 transition-colors">
+                  {/* Desktop row */}
+                  <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-3">
+                    <div className="col-span-4">
+                      <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
+                      <p className="text-xs text-ink-300 truncate">{h.description}</p>
+                    </div>
+                    <div className="col-span-2 text-right font-mono text-sm text-ink-600">{Number(h.shares).toFixed(2)}</div>
+                    <div className="col-span-2 text-right font-mono text-sm text-ink-600">{formatCurrency(Number(h.cost_basis || 0))}</div>
+                    <div className="col-span-2 text-right font-mono text-sm font-medium text-ink-700">{formatCurrency(Number(h.market_value || 0))}</div>
+                    <div className={`col-span-2 text-right font-mono text-sm font-medium ${gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                      {gain >= 0 ? '+' : ''}{formatCurrency(gain)}
+                      <span className="text-xs ml-1 opacity-70">({gainPct >= 0 ? '+' : ''}{gainPct.toFixed(1)}%)</span>
+                    </div>
                   </div>
-                  <div className="col-span-2 text-right font-mono text-sm text-ink-600">
-                    {Number(h.shares).toFixed(2)}
-                  </div>
-                  <div className="col-span-2 text-right font-mono text-sm text-ink-600">
-                    {formatCurrency(Number(h.cost_basis || 0))}
-                  </div>
-                  <div className="col-span-2 text-right font-mono text-sm font-medium text-ink-700">
-                    {formatCurrency(Number(h.market_value || 0))}
-                  </div>
-                  <div className={`col-span-2 text-right font-mono text-sm font-medium ${
-                    gain >= 0 ? 'text-accent-green' : 'text-accent-red'
-                  }`}>
-                    {gain >= 0 ? '+' : ''}{formatCurrency(gain)}
-                    <span className="text-xs ml-1 opacity-70">
-                      ({gainPct >= 0 ? '+' : ''}{gainPct.toFixed(1)}%)
-                    </span>
+                  {/* Mobile card row */}
+                  <div className="sm:hidden px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
+                      <p className="text-xs text-ink-400">{Number(h.shares).toFixed(2)} shares · cost {formatCurrency(Number(h.cost_basis || 0))}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-mono text-sm font-medium text-ink-700">{formatCurrency(Number(h.market_value || 0))}</p>
+                      <p className={`font-mono text-xs font-medium ${gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                        {gain >= 0 ? '+' : ''}{formatCurrency(gain)} ({gainPct >= 0 ? '+' : ''}{gainPct.toFixed(1)}%)
+                      </p>
+                    </div>
                   </div>
                 </div>
               );

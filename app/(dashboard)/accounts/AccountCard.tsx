@@ -113,7 +113,7 @@ export default function AccountCard({ account }: AccountCardProps) {
               {formatCurrencyPrecise(Math.abs(currentDisplay))}
             </p>
             {isManual && (
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => { setBalanceInput(String(Math.abs(currentBalance))); setEditing(true); }}
                   className="text-xs text-ink-400 hover:text-ink-700"

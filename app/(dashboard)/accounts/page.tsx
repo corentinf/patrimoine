@@ -73,7 +73,7 @@ export default async function AccountsPage() {
       </div>
 
       {/* Net worth summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <div className="card">
           <p className="stat-label">Total assets</p>
           <p className="stat-value text-accent-green mt-1">
