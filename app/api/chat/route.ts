@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   let totalIncome = 0;
   let totalSpending = 0;
   for (const tx of transactions) {
-    const cat = tx.category as { name: string; is_income: boolean } | null;
+    const cat = tx.category as unknown as { name: string; is_income: boolean } | null;
     const amt = Math.abs(Number(tx.amount));
     if (cat?.is_income) {
       totalIncome += amt;

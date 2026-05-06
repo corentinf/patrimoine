@@ -1,6 +1,6 @@
 'use client';
 
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
 import { useEffect, useRef, useState } from 'react';
 
 export default function Chat() {
@@ -8,9 +8,7 @@ export default function Chat() {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { messages, sendMessage, status } = useChat({
-    api: '/api/chat',
-  });
+  const { messages, sendMessage, status } = useChat();
 
   const isLoading = status === 'streaming' || status === 'submitted';
 
@@ -90,7 +88,7 @@ export default function Chat() {
                 >
                   {m.parts?.map((part, i) =>
                     part.type === 'text' ? <span key={i}>{part.text}</span> : null,
-                  ) ?? m.content}
+                  )}
                 </div>
               </div>
             ))}
