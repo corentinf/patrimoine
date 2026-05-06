@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
-import { assignTransactionCategory } from './actions';
+import { assignTransactionCategory, toggleTransfer } from './actions';
 import type { Category } from './CategoryManager';
 import type { FullTransaction } from './TransactionDetail';
 
@@ -40,7 +40,9 @@ interface TransactionRowProps {
   initialVenmo: VenmoRequest | null;
   knownVenmoNames: string[];
   localCategory: Category | null;
+  localIsTransfer: boolean;
   onCategoryChange: (txId: string, cat: Category) => void;
+  onTransferChange: (txId: string, value: boolean) => void;
   onRowClick: () => void;
 }
 
@@ -50,7 +52,9 @@ export default function TransactionRow({
   initialVenmo,
   knownVenmoNames,
   localCategory,
+  localIsTransfer,
   onCategoryChange,
+  onTransferChange,
   onRowClick,
 }: TransactionRowProps) {
   const router = useRouter();
@@ -61,6 +65,7 @@ export default function TransactionRow({
   const catName = effectiveCategory?.name ?? 'Uncategorized';
   const catColor = effectiveCategory?.color ?? '#D1D5DB';
   const displayName = tx.payee ?? tx.description ?? 'Unknown';
+  const isTransfer = localIsTransfer;
 
   // Category picker
   const [showCatPicker, setShowCatPicker] = useState(false);
@@ -90,6 +95,13 @@ export default function TransactionRow({
       await assignTransactionCategory(tx.id, cat.id);
       router.refresh();
     });
+  }
+
+  function handleTransferToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    const next = !isTransfer;
+    onTransferChange(tx.id, next);
+    startTransition(() => toggleTransfer(tx.id, next));
   }
 
   async function handleVenmoSave(e: React.MouseEvent) {
@@ -157,7 +169,7 @@ export default function TransactionRow({
       )}
       {/* Main row */}
       <div
-        className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3.5 hover:bg-sand-50 transition-colors cursor-pointer group"
+        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3.5 transition-colors cursor-pointer group ${isTransfer ? 'bg-sand-50/60' : 'hover:bg-sand-50'}`}
         onClick={onRowClick}
       >
         {/* Category icon — click to change */}
@@ -171,15 +183,21 @@ export default function TransactionRow({
 
         {/* Name + category */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-ink-700 truncate">{displayName}</p>
+          <p className={`text-sm font-medium truncate ${isTransfer ? 'text-ink-400' : 'text-ink-700'}`}>{displayName}</p>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowCatPicker((v) => !v); setShowVenmoForm(false); }}
-              className="flex items-center gap-1.5 hover:opacity-70 transition-opacity"
-            >
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
-              <span className="text-xs text-ink-400">{catName}</span>
-            </button>
+            {isTransfer ? (
+              <span className="text-xs text-ink-300 flex items-center gap-1">
+                <span>↔</span> Transfer
+              </span>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowCatPicker((v) => !v); setShowVenmoForm(false); }}
+                className="flex items-center gap-1.5 hover:opacity-70 transition-opacity"
+              >
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
+                <span className="text-xs text-ink-400">{catName}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -245,9 +263,24 @@ export default function TransactionRow({
           )}
         </div>
 
+        {/* Transfer toggle */}
+        <button
+          onClick={handleTransferToggle}
+          title={isTransfer ? 'Mark as expense' : 'Mark as transfer'}
+          className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded transition-colors ${
+            isTransfer
+              ? 'text-ink-400 hover:text-ink-600'
+              : 'opacity-0 group-hover:opacity-100 active:opacity-100 text-ink-200 hover:text-ink-500 sm:opacity-0 sm:group-hover:opacity-100'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+        </button>
+
         {/* Amount + date */}
         <div className="text-right flex-shrink-0">
-          <p className="font-mono text-sm text-ink-700">{formatCurrencyPrecise(Math.abs(tx.amount))}</p>
+          <p className={`font-mono text-sm ${isTransfer ? 'text-ink-300 line-through' : 'text-ink-700'}`}>{formatCurrencyPrecise(Math.abs(tx.amount))}</p>
           <p className="text-xs text-ink-400 mt-0.5">{formatShortDate(tx.posted_at)}</p>
         </div>
       </div>

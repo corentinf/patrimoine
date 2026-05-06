@@ -287,6 +287,7 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     // --- end SimpleFIN sync ---
 
     await deduplicateSimpleFINAccounts(supabase, userId);
+    await detectTransfers(supabase, userId);
     const catResult = await categorizeAll(userId);
     result.categorized = catResult.ruleMatched + catResult.llmCategorized;
     await captureNetWorthSnapshot(supabase, userId);
@@ -394,6 +395,44 @@ async function captureNetWorthSnapshot(
     net_worth: totalAssets - totalLiabilities,
     breakdown,
   }, { onConflict: 'user_id,snapshot_date' });
+}
+
+async function detectTransfers(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+) {
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: txs } = await supabase
+    .from('transactions')
+    .select('id, amount, account_id, posted_at')
+    .eq('user_id', userId)
+    .gte('posted_at', since);
+
+  if (!txs?.length) return;
+
+  const transferIds = new Set<string>();
+
+  for (let i = 0; i < txs.length; i++) {
+    for (let j = i + 1; j < txs.length; j++) {
+      const a = txs[i], b = txs[j];
+      if (a.account_id === b.account_id) continue;
+      if (Math.abs(Number(a.amount) + Number(b.amount)) > 1.00) continue;
+      const daysDiff = Math.abs(
+        new Date(a.posted_at).getTime() - new Date(b.posted_at).getTime()
+      ) / 86_400_000;
+      if (daysDiff > 5) continue;
+      transferIds.add(a.id);
+      transferIds.add(b.id);
+    }
+  }
+
+  if (transferIds.size) {
+    await supabase
+      .from('transactions')
+      .update({ is_transfer: true })
+      .in('id', Array.from(transferIds))
+      .eq('user_id', userId);
+  }
 }
 
 // Extracts last 4 digits from account names like "(3060)" or "****3955"

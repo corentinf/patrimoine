@@ -45,6 +45,16 @@ export async function updateTransactionPayee(id: string, payee: string) {
   revalidatePath('/spending');
 }
 
+export async function toggleTransfer(id: string, value: boolean) {
+  const { supabase } = await getSupabaseAndUser();
+  const { error } = await supabase
+    .from('transactions')
+    .update({ is_transfer: value })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/spending');
+}
+
 export async function assignTransactionCategory(
   transactionId: string,
   categoryId: string,

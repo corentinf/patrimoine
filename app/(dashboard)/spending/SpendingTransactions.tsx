@@ -52,6 +52,7 @@ export default function SpendingTransactions({
   // Optimistic overrides
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, Category>>({});
   const [payeeOverrides, setPayeeOverrides] = useState<Record<string, string>>({});
+  const [transferOverrides, setTransferOverrides] = useState<Record<string, boolean>>({});
 
   // Detail panel
   const [detailTxId, setDetailTxId] = useState<string | null>(null);
@@ -263,6 +264,7 @@ export default function SpendingTransactions({
                 initialVenmo={venmoByTxId.get(tx.id) ?? null}
                 knownVenmoNames={knownVenmoNames}
                 localCategory={categoryOverrides[tx.id] ?? null}
+                localIsTransfer={transferOverrides[tx.id] ?? tx.is_transfer}
                 onCategoryChange={(txId, cat) => {
                   const source = transactions.find((t) => t.id === txId);
                   setCategoryOverrides((prev) => {
@@ -276,6 +278,9 @@ export default function SpendingTransactions({
                     return next;
                   });
                 }}
+                onTransferChange={(txId, value) =>
+                  setTransferOverrides((prev) => ({ ...prev, [txId]: value }))
+                }
                 onRowClick={() => setDetailTxId(tx.id)}
               />
             ))

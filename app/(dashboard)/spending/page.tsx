@@ -18,6 +18,7 @@ async function getSpendingTransactions(months = 1) {
       memo,
       posted_at,
       account_id,
+      is_transfer,
       account:accounts(id, name, institution),
       category:categories(id, name, color, icon, is_income)
     `)
@@ -38,6 +39,7 @@ async function getMonthlySpending() {
     .from('transactions')
     .select('amount, posted_at, account_id')
     .lt('amount', 0)
+    .eq('is_transfer', false)
     .gte('posted_at', startDate.toISOString())
     .order('posted_at');
 

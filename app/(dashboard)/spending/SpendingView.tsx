@@ -15,6 +15,7 @@ interface RawTransaction {
   memo: string | null;
   posted_at: string;
   account_id: string;
+  is_transfer: boolean;
   account: { id: string; name: string; institution: string } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }
@@ -69,7 +70,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     const totals: Record<string, { name: string; color: string; icon: string; total: number; count: number }> = {};
     for (const tx of filteredTransactions) {
       const cat = tx.category;
-      if (cat?.is_income) continue;
+      if (cat?.is_income || tx.is_transfer) continue;
       const key = cat?.name || 'Uncategorized';
       if (!totals[key]) {
         totals[key] = { name: key, color: cat?.color || '#D1D5DB', icon: cat?.icon || '❓', total: 0, count: 0 };
