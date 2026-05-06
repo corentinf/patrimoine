@@ -9,9 +9,16 @@ interface Transaction extends FullTransaction {
   account_id: string;
 }
 
+interface VenmoRequest {
+  transaction_id: string;
+  person_name: string;
+  status: string;
+}
+
 interface SpendingTransactionsProps {
   transactions: Transaction[];
   allCategories: Category[];
+  venmoRequests?: VenmoRequest[];
 }
 
 type SortField = 'date' | 'amount' | 'category';
@@ -20,7 +27,12 @@ type SortDir = 'asc' | 'desc';
 export default function SpendingTransactions({
   transactions,
   allCategories,
+  venmoRequests = [],
 }: SpendingTransactionsProps) {
+  const venmoByTxId = useMemo(
+    () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
+    [venmoRequests],
+  );
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -246,6 +258,8 @@ export default function SpendingTransactions({
               const catColor = cat?.color || '#D1D5DB';
               const catIcon = cat?.icon || '❓';
 
+              const venmo = venmoByTxId.get(tx.id);
+
               return (
                 <button
                   key={tx.id}
@@ -254,7 +268,16 @@ export default function SpendingTransactions({
                 >
                   <span className="text-lg w-8 text-center flex-shrink-0">{catIcon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-ink-700 truncate">{displayName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-ink-700 truncate">{displayName}</p>
+                      {venmo && (
+                        <span className={`flex-shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                          venmo.status === 'requested' ? 'bg-blue-100 text-blue-600' : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {venmo.status === 'requested' ? `↗ ${venmo.person_name}` : `$ ${venmo.person_name}`}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
                       <p className="text-xs text-ink-400 truncate">{catName}</p>

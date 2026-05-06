@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatDate } from '@/app/lib/utils';
 import { assignTransactionCategory, updateTransactionPayee } from './actions';
 import type { Category } from './CategoryManager';
+import VenmoSection from './VenmoSection';
 
 export interface FullTransaction {
   id: string;
@@ -168,6 +169,9 @@ export default function TransactionDetail({
               )}
             </p>
           </div>
+
+          {/* Venmo section */}
+          <VenmoSection transactionId={tx.id} transactionAmount={tx.amount} />
 
           {/* Category section */}
           <div className="px-5 py-4">

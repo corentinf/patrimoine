@@ -24,13 +24,20 @@ interface MonthlyRaw {
   account_id: string;
 }
 
+interface VenmoRequest {
+  transaction_id: string;
+  person_name: string;
+  status: string;
+}
+
 interface SpendingViewProps {
   transactions: RawTransaction[];
   monthlyRaw: MonthlyRaw[];
   allCategories: Category[];
+  venmoRequests: VenmoRequest[];
 }
 
-export default function SpendingView({ transactions, monthlyRaw, allCategories }: SpendingViewProps) {
+export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests }: SpendingViewProps) {
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
 
@@ -158,6 +165,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories }
           <SpendingTransactions
             transactions={filteredTransactions as any}
             allCategories={allCategories}
+            venmoRequests={venmoRequests}
           />
         </div>
       )}

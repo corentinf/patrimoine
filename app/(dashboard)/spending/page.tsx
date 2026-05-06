@@ -45,6 +45,15 @@ async function getMonthlySpending() {
   return data || [];
 }
 
+async function getVenmoRequests() {
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from('venmo_requests')
+    .select('transaction_id, person_name, status')
+    .neq('status', 'settled');
+  return data || [];
+}
+
 async function getAllCategories() {
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -58,10 +67,11 @@ async function getAllCategories() {
 }
 
 export default async function SpendingPage() {
-  const [transactions, monthlyRaw, allCategories] = await Promise.all([
+  const [transactions, monthlyRaw, allCategories, venmoRequests] = await Promise.all([
     getSpendingTransactions(1),
     getMonthlySpending(),
     getAllCategories(),
+    getVenmoRequests(),
   ]);
 
   return (
@@ -69,6 +79,7 @@ export default async function SpendingPage() {
       transactions={transactions as any}
       monthlyRaw={monthlyRaw}
       allCategories={allCategories}
+      venmoRequests={venmoRequests}
     />
   );
 }
