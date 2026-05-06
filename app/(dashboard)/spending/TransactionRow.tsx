@@ -178,15 +178,38 @@ export default function TransactionRow({
 
         {/* Venmo controls */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {venmo && venmo.status !== 'settled' ? (
-            <div className="flex items-center gap-1">
+          {venmo ? (
+            <div className="relative flex items-center gap-1 group/venmo">
+              {/* Venmo icon */}
               <button
                 onClick={handleVenmoStatusCycle}
-                className={`text-xs font-medium px-2 py-0.5 rounded-full transition-colors ${VENMO_STATUS_STYLE[venmo.status]}`}
-                title={`${venmo.person_name} · click to advance status`}
+                className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 transition-opacity"
+                style={{ backgroundColor: venmo.status === 'settled' ? '#9CA3AF' : '#008CFF' }}
               >
-                {VENMO_STATUS_LABEL[venmo.status]} · {venmo.person_name}
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white">
+                  <path d="M5.7 3C6.3 4.1 6.6 5.2 6.6 6.6c0 4.5-3.8 10.3-5.6 13.4h5.8l3.4-8.5c-1-.8-1.6-2-1.6-3.3 0-1.6.7-2.8 1.8-2.8.9 0 1.4.6 1.4 1.7 0 1-.5 2.6-1.1 4.2l3.5-2.3C15.5 6.7 16.6 4 19.5 4c2.2 0 3.5 1.4 3.5 3.8 0 5.4-5.4 12.2-9.1 16.2H8.3C7 20.5 3.5 10.3 1.5 3H5.7z"/>
+                </svg>
               </button>
+
+              {/* Hover tooltip */}
+              <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover/venmo:opacity-100 transition-opacity z-40 w-44">
+                <div className="bg-ink-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg space-y-1 relative">
+                  <p className="font-medium">{venmo.person_name}</p>
+                  <p className="text-white/70">{formatCurrencyPrecise(venmo.amount)}</p>
+                  <p className={`font-medium ${
+                    venmo.status === 'settled' ? 'text-green-300' :
+                    venmo.status === 'requested' ? 'text-blue-300' : 'text-yellow-300'
+                  }`}>
+                    {venmo.status === 'pending' ? 'Not yet requested' :
+                     venmo.status === 'requested' ? 'Request sent' : 'Settled'}
+                  </p>
+                  <p className="text-white/40 text-xs">Click to advance · hover ✕ to remove</p>
+                  {/* Arrow */}
+                  <div className="absolute right-[-5px] top-1/2 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-l-4 border-transparent border-l-ink-800" />
+                </div>
+              </div>
+
+              {/* Delete button */}
               <button
                 onClick={handleVenmoDelete}
                 className="text-ink-200 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
@@ -199,10 +222,12 @@ export default function TransactionRow({
           ) : (
             <button
               onClick={(e) => { e.stopPropagation(); setShowVenmoForm((v) => !v); setShowCatPicker(false); }}
-              className="text-xs text-ink-300 hover:text-ink-500 transition-colors opacity-0 group-hover:opacity-100 px-1"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-ink-300 hover:text-white hover:bg-[#008CFF] transition-colors opacity-0 group-hover:opacity-100"
               title="Request via Venmo"
             >
-              $
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
+                <path d="M5.7 3C6.3 4.1 6.6 5.2 6.6 6.6c0 4.5-3.8 10.3-5.6 13.4h5.8l3.4-8.5c-1-.8-1.6-2-1.6-3.3 0-1.6.7-2.8 1.8-2.8.9 0 1.4.6 1.4 1.7 0 1-.5 2.6-1.1 4.2l3.5-2.3C15.5 6.7 16.6 4 19.5 4c2.2 0 3.5 1.4 3.5 3.8 0 5.4-5.4 12.2-9.1 16.2H8.3C7 20.5 3.5 10.3 1.5 3H5.7z"/>
+              </svg>
             </button>
           )}
         </div>
