@@ -31,7 +31,6 @@ export async function categorizeAll(userId: string): Promise<CategorizeResult> {
     const { data: uncatCategory } = await supabase
       .from('categories')
       .select('id')
-      .eq('user_id', userId)
       .eq('name', 'Uncategorized')
       .single();
 
@@ -85,8 +84,7 @@ export async function categorizeAll(userId: string): Promise<CategorizeResult> {
 
     const { data: categories } = await supabase
       .from('categories')
-      .select('id, name')
-      .eq('user_id', userId);
+      .select('id, name');
 
     if (!categories?.length) return result;
 
@@ -111,7 +109,6 @@ export async function categorizeAll(userId: string): Promise<CategorizeResult> {
 
     if (newCategoryNames.size > 0) {
       const toInsert = Array.from(newCategoryNames).map((name) => ({
-        user_id: userId,
         name,
         color: '#6B7280',
         is_income: false,

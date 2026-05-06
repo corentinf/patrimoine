@@ -67,8 +67,7 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     // Build a name→id map for this user's categories (used for Plaid category mapping)
     const { data: cats } = await supabase
       .from('categories')
-      .select('id, name')
-      .eq('user_id', userId);
+      .select('id, name');
     const categoryIdByName = new Map((cats ?? []).map((c) => [c.name, c.id]));
 
     const { data: items, error: itemsError } = await supabase
@@ -305,8 +304,7 @@ async function seedDefaultCategories(
 ) {
   const { count } = await supabase
     .from('categories')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId);
+    .select('id', { count: 'exact', head: true });
 
   if ((count ?? 0) > 0) return;
 
@@ -333,7 +331,7 @@ async function seedDefaultCategories(
 
   const { data: inserted, error } = await supabase
     .from('categories')
-    .insert(defaults.map((c) => ({ ...c, user_id: userId })))
+    .insert(defaults)
     .select('id, name');
 
   if (error || !inserted) return;
