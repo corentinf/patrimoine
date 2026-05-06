@@ -86,7 +86,16 @@ function SyncButton() {
 
     try {
       const res = await fetch('/api/plaid/sync', { method: 'POST' });
-      const data = await res.json();
+      const text = await res.text();
+
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        setErrorMsg(`Server error (${res.status}):\n${text.slice(0, 800)}`);
+        setPhase('error');
+        return;
+      }
 
       if (data.ok) {
         setResult(data);
@@ -132,7 +141,7 @@ function SyncButton() {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
         <p className="text-xs font-medium text-red-600">Sync failed</p>
-        <p className="text-xs text-red-400">{errorMsg}</p>
+        <pre className="text-xs text-red-400 whitespace-pre-wrap break-all max-h-48 overflow-y-auto">{errorMsg}</pre>
         <button onClick={reset} className="text-xs text-ink-400 hover:text-ink-600">Try again</button>
       </div>
     );
