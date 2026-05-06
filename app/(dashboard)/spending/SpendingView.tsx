@@ -25,9 +25,11 @@ interface MonthlyRaw {
 }
 
 interface VenmoRequest {
+  id: string;
   transaction_id: string;
   person_name: string;
-  status: string;
+  amount: number;
+  status: 'pending' | 'requested' | 'settled';
 }
 
 interface SpendingViewProps {

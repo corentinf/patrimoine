@@ -49,7 +49,7 @@ async function getVenmoRequests() {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from('venmo_requests')
-    .select('transaction_id, person_name, status')
+    .select('id, transaction_id, person_name, amount, status')
     .neq('status', 'settled');
   return data || [];
 }

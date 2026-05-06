@@ -1,24 +1,27 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
 import TransactionDetail, { type FullTransaction } from './TransactionDetail';
+import TransactionRow from './TransactionRow';
 import type { Category } from './CategoryManager';
 
 interface Transaction extends FullTransaction {
   account_id: string;
 }
 
-interface VenmoRequest {
+interface VenmoRequestSummary {
   transaction_id: string;
   person_name: string;
-  status: string;
+  amount: number;
+  status: 'pending' | 'requested' | 'settled';
+  id: string;
 }
 
 interface SpendingTransactionsProps {
   transactions: Transaction[];
   allCategories: Category[];
-  venmoRequests?: VenmoRequest[];
+  venmoRequests?: VenmoRequestSummary[];
 }
 
 type SortField = 'date' | 'amount' | 'category';
@@ -33,6 +36,11 @@ export default function SpendingTransactions({
     () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
     [venmoRequests],
   );
+
+  const [knownVenmoNames, setKnownVenmoNames] = useState<string[]>([]);
+  useEffect(() => {
+    fetch('/api/venmo?names=1').then((r) => r.json()).then((d) => setKnownVenmoNames(d.names ?? []));
+  }, []);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -245,53 +253,36 @@ export default function SpendingTransactions({
         </div>
 
         {/* Transaction list */}
-        <div className="card p-0 divide-y divide-sand-100">
+        <div className="card p-0">
           {filtered.length === 0 ? (
             <div className="py-12 text-center text-ink-400 text-sm">
               No transactions match your search.
             </div>
           ) : (
-            filtered.map((tx) => {
-              const cat = getEffectiveCategory(tx);
-              const displayName = getEffectivePayee(tx);
-              const catName = cat?.name || 'Uncategorized';
-              const catColor = cat?.color || '#D1D5DB';
-              const catIcon = cat?.icon || '❓';
-
-              const venmo = venmoByTxId.get(tx.id);
-
-              return (
-                <button
-                  key={tx.id}
-                  onClick={() => setDetailTxId(tx.id)}
-                  className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-sand-50 transition-colors focus:outline-none"
-                >
-                  <span className="text-lg w-8 text-center flex-shrink-0">{catIcon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-ink-700 truncate">{displayName}</p>
-                      {venmo && (
-                        <span className={`flex-shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                          venmo.status === 'requested' ? 'bg-blue-100 text-blue-600' : 'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {venmo.status === 'requested' ? `↗ ${venmo.person_name}` : `$ ${venmo.person_name}`}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
-                      <p className="text-xs text-ink-400 truncate">{catName}</p>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-mono text-sm text-ink-700">
-                      {formatCurrencyPrecise(Math.abs(tx.amount))}
-                    </p>
-                    <p className="text-xs text-ink-400 mt-0.5">{formatShortDate(tx.posted_at)}</p>
-                  </div>
-                </button>
-              );
-            })
+            filtered.map((tx) => (
+              <TransactionRow
+                key={tx.id}
+                tx={{ ...tx, payee: getEffectivePayee(tx) }}
+                allCategories={allCategories}
+                initialVenmo={venmoByTxId.get(tx.id) ?? null}
+                knownVenmoNames={knownVenmoNames}
+                localCategory={categoryOverrides[tx.id] ?? null}
+                onCategoryChange={(txId, cat) => {
+                  const source = transactions.find((t) => t.id === txId);
+                  setCategoryOverrides((prev) => {
+                    const next = { ...prev };
+                    for (const t of transactions) {
+                      const matches = source?.payee
+                        ? t.payee === source.payee
+                        : t.description === source?.description;
+                      if (matches) next[t.id] = cat;
+                    }
+                    return next;
+                  });
+                }}
+                onRowClick={() => setDetailTxId(tx.id)}
+              />
+            ))
           )}
         </div>
 
