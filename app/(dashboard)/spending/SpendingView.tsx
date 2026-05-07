@@ -369,23 +369,39 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       await deleteBudget(categoryId);
       return;
     }
-    setBudgets((prev) => ({ ...prev, [categoryId]: val }));
+    const prev = budgets;
+    setBudgets((b) => ({ ...b, [categoryId]: val }));
     setEditingBudget(null);
-    await fetch('/api/budgets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category_id: categoryId, monthly_amount: val }),
-    });
+    try {
+      const res = await fetch('/api/budgets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category_id: categoryId, monthly_amount: val }),
+      });
+      if (!res.ok) {
+        console.error('Budget save failed:', await res.json().catch(() => ({})));
+        setBudgets(prev);
+      }
+    } catch (e) {
+      console.error('Budget save error:', e);
+      setBudgets(prev);
+    }
   };
 
   const deleteBudget = async (categoryId: string) => {
-    setBudgets((prev) => { const n = { ...prev }; delete n[categoryId]; return n; });
+    const prev = budgets;
+    setBudgets((b) => { const n = { ...b }; delete n[categoryId]; return n; });
     setEditingBudget(null);
-    await fetch('/api/budgets', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category_id: categoryId }),
-    });
+    try {
+      const res = await fetch('/api/budgets', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category_id: categoryId }),
+      });
+      if (!res.ok) setBudgets(prev);
+    } catch {
+      setBudgets(prev);
+    }
   };
 
   const periodLabel = dateFilter.mode === 'month'
