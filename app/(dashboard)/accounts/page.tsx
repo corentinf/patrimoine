@@ -1,7 +1,6 @@
 import { createServiceClient } from '@/app/lib/supabase';
 import { formatCurrency, formatCurrencyPrecise, formatDate, accountTypeConfig } from '@/app/lib/utils';
 import AccountCard from './AccountCard';
-import TransactionList from './TransactionList';
 import AddManualAccount from './AddManualAccount';
 
 export const revalidate = 300; // revalidate every 5 minutes
@@ -19,36 +18,8 @@ async function getAccounts() {
   return data || [];
 }
 
-async function getRecentTransactions() {
-  const supabase = createServiceClient();
-
-  const { data: visibleAccounts } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('is_hidden', false);
-  const visibleIds = (visibleAccounts ?? []).map((a) => a.id);
-  if (!visibleIds.length) return [];
-
-  const { data, error } = await supabase
-    .from('transactions')
-    .select(`
-      *,
-      account:accounts(name, institution),
-      category:categories(name, color, icon)
-    `)
-    .in('account_id', visibleIds)
-    .order('posted_at', { ascending: false })
-    .limit(20);
-
-  if (error) throw error;
-  return data || [];
-}
-
 export default async function AccountsPage() {
-  const [accounts, transactions] = await Promise.all([
-    getAccounts(),
-    getRecentTransactions(),
-  ]);
+  const accounts = await getAccounts();
 
   // Calculate totals
   const assets = accounts
@@ -129,14 +100,6 @@ export default async function AccountsPage() {
 
       {/* Manual account entry */}
       <AddManualAccount />
-
-      {/* Recent transactions */}
-      <div>
-        <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-3">
-          Recent transactions
-        </h3>
-        <TransactionList transactions={transactions} />
-      </div>
 
       {/* Empty state */}
       {accounts.length === 0 && (
