@@ -43,10 +43,16 @@ export default async function NetWorthPage() {
     ? Number(latest.net_worth) - Number(previous.net_worth)
     : 0;
 
-  const chartData = history.map((s) => ({
-    date: new Date(s.snapshot_date).toLocaleDateString('en-US', {
+  // Collapse daily snapshots to monthly — last snapshot in each month wins
+  const byMonth: Record<string, typeof history[0]> = {};
+  for (const s of history) {
+    const month = s.snapshot_date.substring(0, 7);
+    byMonth[month] = s;
+  }
+  const chartData = Object.values(byMonth).map((s) => ({
+    month: new Date(s.snapshot_date + 'T12:00:00').toLocaleDateString('en-US', {
       month: 'short',
-      day: 'numeric',
+      year: '2-digit',
     }),
     netWorth: Math.round(Number(s.net_worth)),
     assets: Math.round(Number(s.total_assets)),
