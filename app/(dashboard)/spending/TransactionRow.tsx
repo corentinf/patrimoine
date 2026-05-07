@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
+import { formatCurrencyPrecise, formatShortDate, amountColor } from '@/app/lib/utils';
 import { assignTransactionCategory, toggleTransfer } from './actions';
 import type { Category } from './CategoryManager';
 import type { FullTransaction } from './TransactionDetail';
@@ -169,10 +169,10 @@ export default function TransactionRow({
       )}
       {/* Main row */}
       <div
-        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3.5 transition-colors cursor-pointer group ${isTransfer ? 'bg-sand-50/60' : 'hover:bg-sand-50'}`}
+        className={`flex items-center gap-4 px-5 py-3.5 transition-colors cursor-pointer group ${isTransfer ? 'bg-sand-50/60' : 'hover:bg-sand-50'}`}
         onClick={onRowClick}
       >
-        {/* Category icon — click to change */}
+        {/* Category emoji — click to change */}
         <button
           onClick={(e) => { e.stopPropagation(); setShowCatPicker((v) => !v); setShowVenmoForm(false); }}
           className="text-lg w-8 text-center flex-shrink-0 hover:scale-110 transition-transform"
@@ -181,67 +181,62 @@ export default function TransactionRow({
           {catIcon}
         </button>
 
-        {/* Name + category */}
+        {/* Name + subtitle */}
         <div className="flex-1 min-w-0">
-          <p data-sensitive className={`text-sm font-medium truncate ${isTransfer ? 'text-ink-400' : 'text-ink-700'}`}>{displayName}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            {isTransfer ? (
-              <span className="text-xs text-ink-300 flex items-center gap-1">
-                <span>↔</span> Transfer
+          <p data-sensitive className={`text-sm font-medium truncate ${isTransfer ? 'text-ink-400' : 'text-ink-700'}`}>
+            {displayName}
+          </p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {tx.account && (
+              <span className="text-xs text-ink-300 truncate">
+                {tx.account.institution || tx.account.name}
+                {tx.account.institution && tx.account.name !== tx.account.institution && (
+                  <> · {tx.account.name}</>
+                )}
               </span>
+            )}
+            {isTransfer ? (
+              <span className="text-xs text-ink-300">↔ Transfer</span>
             ) : (
               <button
                 onClick={(e) => { e.stopPropagation(); setShowCatPicker((v) => !v); setShowVenmoForm(false); }}
-                className="flex items-center gap-1.5 hover:opacity-70 transition-opacity"
+                className="inline-block hover:opacity-70 transition-opacity"
               >
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: catColor }} />
-                <span className="text-xs text-ink-400">{catName}</span>
+                <span
+                  className="inline-block px-1.5 py-px rounded text-[10px] font-medium"
+                  style={{ backgroundColor: catColor + '20', color: catColor }}
+                >
+                  {catName}
+                </span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Venmo controls */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Hover actions */}
+        <div className="flex items-center gap-1.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Venmo */}
           {venmo ? (
             <div className="relative flex items-center gap-1 group/venmo">
-              {/* Venmo icon */}
               <button
                 onClick={handleVenmoStatusCycle}
-                className="w-6 h-6 flex items-center justify-center flex-shrink-0"
+                className="w-6 h-6 flex items-center justify-center"
                 title="Click to advance status"
               >
-                <img
-                  src="/venmo.svg"
-                  alt="Venmo"
-                  className="w-5 h-5 transition-all duration-200"
-                  style={{ filter: VENMO_STATUS_FILTER[venmo.status] }}
-                />
+                <img src="/venmo.svg" alt="Venmo" className="w-5 h-5"
+                  style={{ filter: VENMO_STATUS_FILTER[venmo.status] }} />
               </button>
-
-              {/* Hover tooltip */}
               <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover/venmo:opacity-100 transition-opacity z-40 w-44">
                 <div className="bg-ink-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg space-y-1 relative">
                   <p className="font-medium">{venmo.person_name}</p>
                   <p className="text-white/70">{formatCurrencyPrecise(venmo.amount)}</p>
-                  <p className={`font-medium ${
-                    venmo.status === 'settled' ? 'text-green-300' :
-                    venmo.status === 'requested' ? 'text-blue-300' : 'text-yellow-300'
-                  }`}>
-                    {venmo.status === 'pending' ? 'Not yet requested' :
-                     venmo.status === 'requested' ? 'Request sent' : 'Settled'}
+                  <p className={`font-medium ${venmo.status === 'settled' ? 'text-green-300' : venmo.status === 'requested' ? 'text-blue-300' : 'text-yellow-300'}`}>
+                    {venmo.status === 'pending' ? 'Not yet requested' : venmo.status === 'requested' ? 'Request sent' : 'Settled'}
                   </p>
-                  <p className="text-white/40 text-xs">Click to advance · hover ✕ to remove</p>
-                  {/* Arrow */}
                   <div className="absolute right-[-5px] top-1/2 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-l-4 border-transparent border-l-ink-800" />
                 </div>
               </div>
-
-              {/* Delete button */}
-              <button
-                onClick={handleVenmoDelete}
-                className="text-ink-200 hover:text-red-400 transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-              >
+              <button onClick={handleVenmoDelete} className="text-ink-200 hover:text-red-400 transition-colors">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -250,39 +245,34 @@ export default function TransactionRow({
           ) : (
             <button
               onClick={(e) => { e.stopPropagation(); setShowVenmoForm((v) => !v); setShowCatPicker(false); }}
-              className="w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 active:opacity-100 transition-opacity"
+              className="w-6 h-6 flex items-center justify-center"
               title="Request via Venmo"
             >
-              <img
-                src="/venmo.svg"
-                alt="Venmo"
-                className="w-5 h-5 transition-all duration-200 hover:scale-110"
-                style={{ filter: 'brightness(0) saturate(100%) invert(80%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(90%)' }}
-              />
+              <img src="/venmo.svg" alt="Venmo" className="w-5 h-5 hover:scale-110 transition-transform"
+                style={{ filter: 'brightness(0) saturate(100%) invert(80%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(90%)' }} />
             </button>
           )}
+          {/* Transfer toggle */}
+          <button
+            onClick={handleTransferToggle}
+            title={isTransfer ? 'Mark as expense' : 'Mark as transfer'}
+            className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${isTransfer ? 'text-ink-500' : 'text-ink-300 hover:text-ink-600'}`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </button>
         </div>
 
-        {/* Transfer toggle */}
-        <button
-          onClick={handleTransferToggle}
-          title={isTransfer ? 'Mark as expense' : 'Mark as transfer'}
-          className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded transition-colors ${
-            isTransfer
-              ? 'text-ink-400 hover:text-ink-600'
-              : 'opacity-0 group-hover:opacity-100 active:opacity-100 text-ink-200 hover:text-ink-500 sm:opacity-0 sm:group-hover:opacity-100'
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
-        </button>
+        {/* Date */}
+        <span className="text-xs text-ink-300 flex-shrink-0 hidden sm:block w-14 text-right">
+          {formatShortDate(tx.posted_at)}
+        </span>
 
-        {/* Amount + date */}
-        <div className="text-right flex-shrink-0">
-          <p className={`font-mono text-sm ${isTransfer ? 'text-ink-300 line-through' : 'text-ink-700'}`}>{formatCurrencyPrecise(Math.abs(tx.amount))}</p>
-          <p className="text-xs text-ink-400 mt-0.5">{formatShortDate(tx.posted_at)}</p>
-        </div>
+        {/* Amount */}
+        <span className={`font-mono text-sm font-medium flex-shrink-0 w-20 text-right ${isTransfer ? 'text-ink-300 line-through' : amountColor(tx.amount)}`}>
+          {formatCurrencyPrecise(Math.abs(tx.amount))}
+        </span>
       </div>
 
       {/* Category picker dropdown */}
