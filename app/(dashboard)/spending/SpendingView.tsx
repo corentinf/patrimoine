@@ -552,35 +552,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         periodDays={periodDays}
       />
 
-      {/* Account tab bar */}
-      {accounts.length > 1 && (
-        <div className="flex items-center gap-0 border-b border-sand-200 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          <button
-            onClick={() => setSelectedAccount(null)}
-            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
-              !selectedAccount
-                ? 'border-ink-800 text-ink-800'
-                : 'border-transparent text-ink-400 hover:text-ink-600'
-            }`}
-          >
-            All accounts
-          </button>
-          {accounts.map((account) => (
-            <button
-              key={account.id}
-              onClick={() => setSelectedAccount(selectedAccount === account.id ? null : account.id)}
-              className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
-                selectedAccount === account.id
-                  ? 'border-ink-800 text-ink-800'
-                  : 'border-transparent text-ink-400 hover:text-ink-600'
-              }`}
-            >
-              {account.institution || account.name}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Charts — always visible above tabs */}
       <SpendingCharts
         categories={sortedCategories}
@@ -802,6 +773,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               transactions={allTabTransactions as any}
               allCategories={allCategories}
               venmoRequests={venmoRequests}
+              accounts={accounts}
+              selectedAccount={selectedAccount}
+              onAccountChange={setSelectedAccount}
             />
           ) : (
             <div className="card text-center py-16">

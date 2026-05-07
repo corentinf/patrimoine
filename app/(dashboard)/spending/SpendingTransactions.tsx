@@ -1,7 +1,87 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
+
+function AccountDropdown({
+  accounts,
+  selectedAccount,
+  onChange,
+}: {
+  accounts: { id: string; name: string; institution: string }[];
+  selectedAccount: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const selected = accounts.find((a) => a.id === selectedAccount);
+  const label = selected ? (selected.institution || selected.name) : 'Account';
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+          selectedAccount
+            ? 'bg-ink-800 text-white'
+            : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+        }`}
+      >
+        {label}
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg overflow-hidden min-w-[160px]">
+          <button
+            onClick={() => { onChange(null); setOpen(false); }}
+            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left border-b border-sand-100 transition-colors ${
+              !selectedAccount ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
+            }`}
+          >
+            All accounts
+            {!selectedAccount && (
+              <svg className="w-3.5 h-3.5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+          {accounts.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => { onChange(a.id); setOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left border-b border-sand-50 last:border-0 transition-colors ${
+                selectedAccount === a.id ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
+              }`}
+            >
+              <span>
+                <span className="block text-ink-700">{a.institution || a.name}</span>
+                {a.institution && a.name !== a.institution && (
+                  <span className="text-xs text-ink-300">{a.name}</span>
+                )}
+              </span>
+              {selectedAccount === a.id && (
+                <svg className="w-3.5 h-3.5 text-ink-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 import TransactionDetail, { type FullTransaction } from './TransactionDetail';
 import TransactionRow from './TransactionRow';
 import type { Category } from './CategoryManager';
@@ -22,6 +102,9 @@ interface SpendingTransactionsProps {
   transactions: Transaction[];
   allCategories: Category[];
   venmoRequests?: VenmoRequestSummary[];
+  accounts?: { id: string; name: string; institution: string }[];
+  selectedAccount?: string | null;
+  onAccountChange?: (id: string | null) => void;
 }
 
 type SortField = 'date' | 'amount' | 'category';
@@ -31,6 +114,9 @@ export default function SpendingTransactions({
   transactions,
   allCategories,
   venmoRequests = [],
+  accounts = [],
+  selectedAccount = null,
+  onAccountChange,
 }: SpendingTransactionsProps) {
   const venmoByTxId = useMemo(
     () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
@@ -119,7 +205,7 @@ export default function SpendingTransactions({
     }
   }
 
-  const hasFilters = filterCategories.length > 0 || !!search.trim();
+  const hasFilters = filterCategories.length > 0 || !!search.trim() || !!selectedAccount;
   const detailTx = detailTxId ? transactions.find((t) => t.id === detailTxId) : null;
 
   return (
@@ -153,9 +239,9 @@ export default function SpendingTransactions({
           )}
         </div>
 
-        {/* Sort + clear */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5">
+        {/* Sort + account filter + clear */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs text-ink-400 mr-1">Sort:</span>
             {(['date', 'amount', 'category'] as SortField[]).map((field) => (
               <button
@@ -178,10 +264,18 @@ export default function SpendingTransactions({
                 )}
               </button>
             ))}
+            {/* Account filter dropdown */}
+            {accounts.length > 1 && (
+              <AccountDropdown
+                accounts={accounts}
+                selectedAccount={selectedAccount}
+                onChange={onAccountChange ?? (() => {})}
+              />
+            )}
           </div>
           {hasFilters && (
             <button
-              onClick={() => { setFilterCategories([]); setSearch(''); }}
+              onClick={() => { setFilterCategories([]); setSearch(''); onAccountChange?.(null); }}
               className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
             >
               Clear filters
