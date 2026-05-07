@@ -79,6 +79,35 @@ export default async function NetWorthPage() {
     0
   );
 
+  // Milestones — round-number targets around current net worth
+  const currentNetWorth = latest ? Number(latest.net_worth) : 0;
+  const milestoneTargets = [100_000, 250_000, 300_000, 400_000, 500_000, 750_000, 1_000_000]
+    .filter((t) => t > currentNetWorth * 0.5); // only show relevant range (passed + next 3–4 ahead)
+
+  // Monthly growth rate from last 3 monthly snapshots
+  const recentMonthly = monthlySnapshots.slice(-4);
+  let monthlyGrowthRate: number | null = null;
+  if (recentMonthly.length >= 2) {
+    const growthValues: number[] = [];
+    for (let i = 1; i < recentMonthly.length; i++) {
+      growthValues.push(Number(recentMonthly[i].net_worth) - Number(recentMonthly[i - 1].net_worth));
+    }
+    monthlyGrowthRate = growthValues.reduce((s, v) => s + v, 0) / growthValues.length;
+  }
+
+  const milestones = milestoneTargets.slice(0, 5).map((target) => {
+    const passed = currentNetWorth >= target;
+    const pct = passed ? 100 : Math.min((currentNetWorth / target) * 100, 100);
+    let eta: string | null = null;
+    if (!passed && monthlyGrowthRate !== null && monthlyGrowthRate > 0) {
+      const monthsNeeded = (target - currentNetWorth) / monthlyGrowthRate;
+      const etaDate = new Date();
+      etaDate.setMonth(etaDate.getMonth() + Math.ceil(monthsNeeded));
+      eta = etaDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+    return { target, passed, pct, eta };
+  });
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -137,6 +166,47 @@ export default async function NetWorthPage() {
                   </p>
                 </div>
               ))}
+          </div>
+        </div>
+      )}
+
+      {/* Milestones */}
+      {milestones.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-3">Milestones</h3>
+          <div className="card p-0 divide-y divide-sand-100">
+            {milestones.map(({ target, passed, pct, eta }) => (
+              <div key={target} className="px-5 py-3.5 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-sm font-medium ${passed ? 'text-ink-400 line-through' : 'text-ink-700'}`}>
+                      {formatCurrency(target)}
+                    </span>
+                    <span className="text-xs text-ink-300 font-mono">{pct.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${passed ? 'bg-accent-green' : 'bg-ink-400'}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="shrink-0 text-right w-28">
+                  {passed ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-accent-green font-medium">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Reached
+                    </span>
+                  ) : eta ? (
+                    <span className="text-xs text-ink-400">~{eta}</span>
+                  ) : (
+                    <span className="text-xs text-ink-300">—</span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
