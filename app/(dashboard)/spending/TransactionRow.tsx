@@ -187,14 +187,6 @@ export default function TransactionRow({
             {displayName}
           </p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {tx.account && (
-              <span className="text-xs text-ink-300 truncate">
-                {tx.account.institution || tx.account.name}
-                {tx.account.institution && tx.account.name !== tx.account.institution && (
-                  <> · {tx.account.name}</>
-                )}
-              </span>
-            )}
             {isTransfer ? (
               <span className="text-xs text-ink-300">↔ Transfer</span>
             ) : (
@@ -209,6 +201,14 @@ export default function TransactionRow({
                   {catName}
                 </span>
               </button>
+            )}
+            {tx.account && (
+              <span className="text-xs text-ink-300 truncate">
+                {tx.account.institution || tx.account.name}
+                {tx.account.institution && tx.account.name !== tx.account.institution && (
+                  <> · {tx.account.name}</>
+                )}
+              </span>
             )}
           </div>
         </div>
