@@ -2,6 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
+import { createServiceClient } from '@/app/lib/supabase';
+import { captureNetWorthSnapshot } from '@/app/lib/sync';
 
 export const runtime = 'nodejs';
 
@@ -11,7 +13,7 @@ function slugify(s: string) {
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
-  const supabase = createServerClient(
+  const authClient = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -23,7 +25,7 @@ export async function POST(request: NextRequest) {
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { name, institution, account_type, balance } = await request.json();
@@ -32,6 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const id = `manual_${slugify(institution)}_${slugify(name)}`;
+  const supabase = createServiceClient();
 
   const { error } = await supabase.from('accounts').upsert({
     id,
@@ -48,6 +51,7 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  await captureNetWorthSnapshot(supabase, user.id);
   revalidatePath('/accounts');
   revalidatePath('/networth');
   return NextResponse.json({ ok: true, id });
@@ -55,7 +59,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const cookieStore = await cookies();
-  const supabase = createServerClient(
+  const authClient = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -67,13 +71,15 @@ export async function DELETE(request: NextRequest) {
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await request.json();
   if (!id?.startsWith('manual_')) {
     return NextResponse.json({ error: 'Can only delete manual accounts' }, { status: 400 });
   }
+
+  const supabase = createServiceClient();
 
   const { error } = await supabase
     .from('accounts')
@@ -83,6 +89,7 @@ export async function DELETE(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  await captureNetWorthSnapshot(supabase, user.id);
   revalidatePath('/accounts');
   revalidatePath('/networth');
   return NextResponse.json({ ok: true });

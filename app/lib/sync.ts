@@ -363,7 +363,7 @@ async function seedDefaultCategories(
 }
 
 
-async function captureNetWorthSnapshot(
+export async function captureNetWorthSnapshot(
   supabase: ReturnType<typeof createServiceClient>,
   userId: string,
 ) {
