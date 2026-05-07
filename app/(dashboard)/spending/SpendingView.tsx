@@ -267,7 +267,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
-  const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('categories');
+  const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('transactions');
   const [budgets, setBudgets] = useState<Record<string, number>>(initialBudgets);
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
   const [budgetDraft, setBudgetDraft] = useState('');
@@ -566,7 +566,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
       {/* Section tabs */}
       <div className="flex items-center gap-0 border-b border-sand-200">
-        {(['categories', 'subscriptions', 'transactions'] as const).map((tab) => (
+        {(['transactions', 'categories', 'subscriptions'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
