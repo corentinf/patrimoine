@@ -67,6 +67,77 @@ function formatMonthLabel(year: number, month: number) {
   return new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
+function getPrevPeriodFilter(filter: DateFilter): DateFilter {
+  if (filter.mode === 'month') {
+    let { year, month } = filter;
+    month -= 1;
+    if (month < 0) { month = 11; year--; }
+    return { mode: 'month', year, month };
+  }
+  const startMs = new Date(filter.start).getTime();
+  const endMs = new Date(filter.end).getTime();
+  const duration = endMs - startMs;
+  const prevEnd = new Date(startMs - 86_400_000).toISOString().substring(0, 10);
+  const prevStart = new Date(startMs - 86_400_000 - duration).toISOString().substring(0, 10);
+  return { mode: 'custom', start: prevStart, end: prevEnd };
+}
+
+function sumByCategory(txs: RawTransaction[]): Map<string, { name: string; color: string; icon: string; total: number }> {
+  const map = new Map<string, { name: string; color: string; icon: string; total: number }>();
+  for (const tx of txs) {
+    if (tx.category?.is_income || tx.is_transfer) continue;
+    const key = tx.category?.id ?? '__uncategorized__';
+    if (!map.has(key)) {
+      map.set(key, {
+        name: tx.category?.name ?? 'Uncategorized',
+        color: tx.category?.color ?? '#D1D5DB',
+        icon: tx.category?.icon ?? '❓',
+        total: 0,
+      });
+    }
+    map.get(key)!.total += Math.abs(Number(tx.amount));
+  }
+  return map;
+}
+
+interface CategoryRow {
+  key: string;
+  name: string;
+  color: string;
+  icon: string;
+  current: number;
+  previous: number;
+  delta: number | null; // null = brand new category
+}
+
+function buildCategoryRows(
+  current: Map<string, { name: string; color: string; icon: string; total: number }>,
+  previous: Map<string, { name: string; color: string; icon: string; total: number }>,
+): CategoryRow[] {
+  const keys = Array.from(new Set([...Array.from(current.keys()), ...Array.from(previous.keys())]));
+  const rows: CategoryRow[] = [];
+  for (const key of keys) {
+    const cur = current.get(key);
+    const prev = previous.get(key);
+    const currentTotal = cur?.total ?? 0;
+    const previousTotal = prev?.total ?? 0;
+    const meta = cur ?? prev!;
+    const delta = previousTotal === 0
+      ? (currentTotal > 0 ? null : 0)
+      : ((currentTotal - previousTotal) / previousTotal) * 100;
+    rows.push({ key, name: meta.name, color: meta.color, icon: meta.icon, current: currentTotal, previous: previousTotal, delta });
+  }
+  // Sort: new categories first (null delta), then by delta descending
+  return rows
+    .filter((r) => r.current > 0 || r.previous > 0)
+    .sort((a, b) => {
+      if (a.delta === null && b.delta === null) return b.current - a.current;
+      if (a.delta === null) return -1;
+      if (b.delta === null) return 1;
+      return b.delta - a.delta;
+    });
+}
+
 function DateNav({ filter, onChange }: { filter: DateFilter; onChange: (f: DateFilter) => void }) {
   const [showCustom, setShowCustom] = useState(filter.mode === 'custom');
   const now = new Date();
@@ -209,6 +280,16 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return dateFiltered.filter((tx) => tx.account_id === selectedAccount);
   }, [dateFiltered, selectedAccount]);
 
+  const prevFiltered = useMemo(() => {
+    const prev = applyDateFilter(transactions, getPrevPeriodFilter(dateFilter));
+    if (!selectedAccount) return prev;
+    return prev.filter((tx) => tx.account_id === selectedAccount);
+  }, [transactions, dateFilter, selectedAccount]);
+
+  const categoryRows = useMemo(() =>
+    buildCategoryRows(sumByCategory(filteredTransactions), sumByCategory(prevFiltered)),
+  [filteredTransactions, prevFiltered]);
+
   const { sortedCategories, totalSpending } = useMemo(() => {
     const totals: Record<string, { name: string; color: string; icon: string; total: number; count: number }> = {};
     for (const tx of filteredTransactions) {
@@ -298,6 +379,52 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         monthlyData={monthlyChartData}
         totalSpending={totalSpending}
       />
+
+      {/* Category breakdown table */}
+      {categoryRows.length > 0 && (
+        <div className="card p-0">
+          <div className="px-5 py-3.5 border-b border-sand-100 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center">
+            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider">Category</span>
+            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-20">This period</span>
+            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-20 hidden sm:block">Last period</span>
+            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-16">Change</span>
+          </div>
+          {categoryRows.map((row) => {
+            const isNew = row.delta === null;
+            const isIncrease = !isNew && row.delta! > 0;
+            const isDecrease = !isNew && row.delta! < 0;
+            return (
+              <div
+                key={row.key}
+                className="px-5 py-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center border-b border-sand-50 last:border-0"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: row.color }}
+                  />
+                  <span className="text-sm text-ink-700 truncate">{row.icon} {row.name}</span>
+                </div>
+                <span className="font-mono text-sm text-ink-700 text-right w-20">
+                  {row.current > 0 ? formatCurrency(row.current) : <span className="text-ink-300">—</span>}
+                </span>
+                <span className="font-mono text-sm text-ink-400 text-right w-20 hidden sm:block">
+                  {row.previous > 0 ? formatCurrency(row.previous) : <span className="text-ink-300">—</span>}
+                </span>
+                <span className={`text-xs font-medium text-right w-16 ${
+                  isNew ? 'text-ink-400' : isIncrease ? 'text-accent-red' : isDecrease ? 'text-accent-green' : 'text-ink-300'
+                }`}>
+                  {isNew
+                    ? 'new'
+                    : row.delta === 0
+                    ? '—'
+                    : `${isIncrease ? '+' : ''}${row.delta!.toFixed(0)}%`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Transaction list */}
       {filteredTransactions.length > 0 && (
