@@ -113,9 +113,9 @@ export default function SavingsRateModule({ currentSpending, prevSpending, month
           <p className="text-xs text-ink-400">
             {income > 0 ? (
               <>
-                {formatCurrency(income)}/mo income ·{' '}
+                <span data-sensitive>{formatCurrency(income)}</span>/mo income ·{' '}
                 {currentRate !== null && currentSpending > 0 && (
-                  <>{formatCurrency(Math.max(0, periodIncome - currentSpending))} saved · </>
+                  <><span data-sensitive>{formatCurrency(Math.max(0, periodIncome - currentSpending))}</span> saved · </>
                 )}
               </>
             ) : (
