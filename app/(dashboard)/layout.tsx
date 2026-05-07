@@ -11,7 +11,7 @@ export default function DashboardLayout({
     <PrivacyProvider>
       <div className="flex min-h-screen">
         <Sidebar />
-        <main className="flex-1 md:ml-56 p-4 md:p-8 max-w-6xl pb-20 md:pb-8">
+        <main className="flex-1 min-w-0 w-full md:ml-56 p-4 md:p-8 max-w-6xl pb-28 md:pb-8 overflow-x-hidden">
           {children}
         </main>
         <Chat />

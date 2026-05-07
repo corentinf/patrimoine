@@ -9,6 +9,7 @@ import { usePrivacy } from '@/app/lib/privacy';
 
 interface SpendingChartsProps {
   categories: Array<{
+    id?: string;
     name: string;
     color: string;
     icon: string;
@@ -20,6 +21,8 @@ interface SpendingChartsProps {
     total: number;
   }>;
   totalSpending: number;
+  selectedCategoryKey?: string | null;
+  onCategoryClick?: (id: string) => void;
 }
 
 function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
@@ -35,6 +38,8 @@ export default function SpendingCharts({
   categories,
   monthlyData,
   totalSpending,
+  selectedCategoryKey,
+  onCategoryClick,
 }: SpendingChartsProps) {
   const { blurred } = usePrivacy();
   // Take top 8 categories for pie chart, group rest as "Other"
@@ -44,6 +49,7 @@ export default function SpendingCharts({
     const restTotal = rest.reduce((sum, c) => sum + c.total, 0);
 
     const data = top.map((c) => ({
+      id: c.id,
       name: c.name,
       value: Math.round(c.total),
       color: c.color,
@@ -118,25 +124,54 @@ export default function SpendingCharts({
                 outerRadius={100}
                 paddingAngle={2}
                 dataKey="value"
+                onClick={(_, index) => {
+                  const item = pieData[index];
+                  if (item?.id && onCategoryClick) onCategoryClick(item.id);
+                }}
+                style={{ cursor: onCategoryClick ? 'pointer' : 'default' }}
               >
-                {pieData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} stroke="white" strokeWidth={2} />
-                ))}
+                {pieData.map((entry, i) => {
+                  const isSelected = !!entry.id && entry.id === selectedCategoryKey;
+                  const hasSelection = !!selectedCategoryKey;
+                  return (
+                    <Cell
+                      key={i}
+                      fill={entry.color}
+                      stroke={isSelected ? entry.color : 'white'}
+                      strokeWidth={isSelected ? 3 : 2}
+                      fillOpacity={hasSelection && !isSelected ? 0.35 : 1}
+                    />
+                  );
+                })}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
           {/* Legend */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 justify-center">
-            {pieData.map((entry) => (
-              <div key={entry.name} className="flex items-center gap-1.5 text-xs text-ink-500">
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: entry.color }}
-                />
-                {entry.name}
-              </div>
-            ))}
+            {pieData.map((entry) => {
+              const isSelected = !!entry.id && entry.id === selectedCategoryKey;
+              const hasSelection = !!selectedCategoryKey;
+              return (
+                <button
+                  key={entry.name}
+                  onClick={() => entry.id && onCategoryClick?.(entry.id)}
+                  disabled={!entry.id}
+                  className={`flex items-center gap-1.5 text-xs transition-opacity ${
+                    hasSelection && !isSelected ? 'opacity-35' : 'opacity-100'
+                  } ${entry.id ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'} ${
+                    isSelected ? 'font-semibold' : 'text-ink-500'
+                  }`}
+                  style={isSelected ? { color: entry.color } : {}}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: entry.color }}
+                  />
+                  {entry.name}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

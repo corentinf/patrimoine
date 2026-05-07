@@ -345,13 +345,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   }, [dateFilter]);
 
   const { sortedCategories, totalSpending } = useMemo(() => {
-    const totals: Record<string, { name: string; color: string; icon: string; total: number; count: number }> = {};
+    const totals: Record<string, { id?: string; name: string; color: string; icon: string; total: number; count: number }> = {};
     for (const tx of filteredTransactions) {
       const cat = tx.category;
       if (isExcludedFromSpending(tx)) continue;
       const key = cat?.name || 'Uncategorized';
       if (!totals[key]) {
-        totals[key] = { name: key, color: cat?.color || '#D1D5DB', icon: cat?.icon || '❓', total: 0, count: 0 };
+        totals[key] = { id: cat?.id, name: key, color: cat?.color || '#D1D5DB', icon: cat?.icon || '❓', total: 0, count: 0 };
       }
       totals[key].total += Math.abs(Number(tx.amount));
       totals[key].count += 1;
@@ -498,6 +498,11 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         categories={sortedCategories}
         monthlyData={monthlyChartData}
         totalSpending={totalSpending}
+        selectedCategoryKey={selectedCategoryKey}
+        onCategoryClick={(id) => {
+          setSelectedCategoryKey((prev) => prev === id ? null : id);
+          setActiveTab('transactions');
+        }}
       />
 
       {/* Section tabs */}

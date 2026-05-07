@@ -126,6 +126,9 @@ insert into category_rules (category_id, match_field, match_pattern, priority) v
   ((select id from categories where name = 'Utilities'), 'payee', 'comcast', 10),
   ((select id from categories where name = 'Utilities'), 'payee', 'xfinity', 10);
 
+-- Migration: sub-category support
+alter table categories add column if not exists parent_id uuid references categories(id) on delete set null;
+
 -- RLS policies (since this is single-user, we keep it simple)
 -- Enable RLS on all tables
 alter table accounts enable row level security;

@@ -45,10 +45,7 @@ export default function SpendingTransactions({
   const [sortBy, setSortBy] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
-  const [chipsExpanded, setChipsExpanded] = useState(false);
   const [hoveredChip, setHoveredChip] = useState<string | null>(null);
-
-  const CHIPS_COLLAPSED = 8;
 
   // Optimistic overrides
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, Category>>({});
@@ -207,7 +204,7 @@ export default function SpendingTransactions({
             </button>
 
             {/* Category chips */}
-            {(chipsExpanded ? chipCategories : chipCategories.slice(0, CHIPS_COLLAPSED)).map((cat) => {
+            {chipCategories.map((cat) => {
               const active = filterCategories.includes(cat.name);
               const showAdd = filterCategories.length > 0 && !active && hoveredChip === cat.name;
               return (
@@ -251,29 +248,6 @@ export default function SpendingTransactions({
               );
             })}
 
-            {/* Expand / collapse toggle */}
-            {chipCategories.length > CHIPS_COLLAPSED && (
-              <button
-                onClick={() => setChipsExpanded((v) => !v)}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-white border border-sand-200 text-ink-500 hover:border-sand-300 transition-colors"
-              >
-                {chipsExpanded ? (
-                  <>
-                    Show less
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
-                  </>
-                ) : (
-                  <>
-                    +{chipCategories.length - CHIPS_COLLAPSED} more
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </>
-                )}
-              </button>
-            )}
           </div>
         </div>
 

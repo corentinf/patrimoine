@@ -63,7 +63,7 @@ export default function Sidebar() {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-sand-200 z-20 flex">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-sand-200 z-50 flex pb-4">
         {navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           return (
