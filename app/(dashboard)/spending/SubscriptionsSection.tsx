@@ -84,6 +84,35 @@ function detectSubscriptions(transactions: Tx[]): DetectedSubscription[] {
   return results.sort((a, b) => b.estimatedMonthlyCost - a.estimatedMonthlyCost);
 }
 
+function HighCostWarning() {
+  return (
+    <div className="relative group/warn shrink-0">
+      <svg
+        className="w-4 h-4 text-yellow-500"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-label="High cost — worth reviewing"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      </svg>
+      <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/warn:block z-10 pointer-events-none">
+        <div className="bg-ink-800 text-white text-xs rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+          High cost — worth reviewing
+          <div className="absolute top-full right-2 border-4 border-transparent border-t-ink-800" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function isHighCost(sub: DetectedSubscription): boolean {
+  if (sub.estimatedMonthlyCost <= 100) return false;
+  const lower = sub.merchantName.toLowerCase();
+  return !lower.includes('rent') && !lower.includes('mortgage');
+}
+
 interface Props {
   transactions: Tx[];
   initialOverrides: Record<string, 'confirmed' | 'dismissed'>;
@@ -166,6 +195,7 @@ export default function SubscriptionsSection({ transactions, initialOverrides }:
               {formatCurrency(sub.estimatedMonthlyCost)}
               <span className="text-ink-300 text-xs">/mo</span>
             </span>
+            {isHighCost(sub) && <HighCostWarning />}
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => handleAction(sub.merchantKey, 'confirmed')}
@@ -203,6 +233,7 @@ export default function SubscriptionsSection({ transactions, initialOverrides }:
               {formatCurrency(sub.estimatedMonthlyCost)}
               <span className="text-ink-300 text-xs">/mo</span>
             </span>
+            {isHighCost(sub) && <HighCostWarning />}
             <button
               onClick={() => handleAction(sub.merchantKey, null)}
               disabled={saving === sub.merchantKey}
