@@ -101,6 +101,7 @@ export default function SubscriptionsSection({ transactions, initialOverrides }:
   if (suggested.length === 0 && confirmed.length === 0) return null;
 
   const handleAction = async (merchantKey: string, status: 'confirmed' | 'dismissed' | null) => {
+    const prevOverrides = overrides;
     setOverrides((prev) => {
       if (status === null) {
         const next = { ...prev };
@@ -111,19 +112,25 @@ export default function SubscriptionsSection({ transactions, initialOverrides }:
     });
     setSaving(merchantKey);
     try {
-      if (status === null) {
-        await fetch('/api/subscriptions', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ merchant_key: merchantKey }),
-        });
-      } else {
-        await fetch('/api/subscriptions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ merchant_key: merchantKey, status }),
-        });
+      const res = status === null
+        ? await fetch('/api/subscriptions', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ merchant_key: merchantKey }),
+          })
+        : await fetch('/api/subscriptions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ merchant_key: merchantKey, status }),
+          });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('Subscription save failed:', err);
+        setOverrides(prevOverrides);
       }
+    } catch (e) {
+      console.error('Subscription save error:', e);
+      setOverrides(prevOverrides);
     } finally {
       setSaving(null);
     }
