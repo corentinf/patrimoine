@@ -266,6 +266,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [showCustom, setShowCustom] = useState(false);
   const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('categories');
   const [budgets, setBudgets] = useState<Record<string, number>>(initialBudgets);
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
@@ -432,16 +433,106 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return Math.round(dailyAvg * daysInMonth);
   }, [dateFilter, totalSpending, now]);
 
+  const goMonth = (delta: number) => {
+    if (dateFilter.mode !== 'month') return;
+    let { year, month } = dateFilter;
+    month += delta;
+    if (month < 0) { month = 11; year--; }
+    if (month > 11) { month = 0; year++; }
+    setDateFilter({ mode: 'month', year, month });
+  };
+
+  const isCurrentMonth =
+    dateFilter.mode === 'month' &&
+    dateFilter.year === now.getFullYear() &&
+    dateFilter.month === now.getMonth();
+
+  const activateCustom = () => {
+    setShowCustom(true);
+    const monthStart = dateFilter.mode === 'month'
+      ? new Date(dateFilter.year, dateFilter.month, 1).toISOString().substring(0, 10)
+      : (dateFilter as any).start;
+    const monthEnd = dateFilter.mode === 'month'
+      ? new Date(dateFilter.year, dateFilter.month + 1, 0).toISOString().substring(0, 10)
+      : (dateFilter as any).end;
+    setDateFilter({ mode: 'custom', start: monthStart, end: monthEnd });
+  };
+
+  const backToMonth = () => {
+    setShowCustom(false);
+    setDateFilter({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
+  };
+
   return (
     <div className="space-y-8">
-      {/* Header */}
+      {/* Header with integrated date navigation */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl text-ink-800">Spending</h2>
           <p className="text-sm text-ink-400 mt-1">Where your money goes</p>
         </div>
         <div className="sm:text-right">
-          <p className="stat-label">{periodLabel}</p>
+          {/* Period label with inline navigation */}
+          {showCustom && dateFilter.mode === 'custom' ? (
+            <div className="flex flex-wrap items-center gap-2 justify-end mb-1">
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-ink-400">From</label>
+                <input
+                  type="date"
+                  value={dateFilter.start}
+                  max={dateFilter.end}
+                  onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
+                  className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-ink-400">To</label>
+                <input
+                  type="date"
+                  value={dateFilter.end}
+                  min={dateFilter.start}
+                  max={now.toISOString().substring(0, 10)}
+                  onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
+                  className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
+                />
+              </div>
+              <button onClick={backToMonth} className="text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap">
+                ← Month view
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-0.5 justify-end mb-1">
+              <button
+                onClick={() => goMonth(-1)}
+                className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
+                aria-label="Previous month"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="stat-label px-1">{periodLabel}</span>
+              <button
+                onClick={() => goMonth(1)}
+                disabled={isCurrentMonth}
+                className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
+                aria-label="Next month"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <button
+                onClick={activateCustom}
+                className="ml-0.5 p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
+                title="Custom date range"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
+          )}
           <p className="stat-value text-accent-red">{formatCurrency(totalSpending)}</p>
           {pacedTotal !== null && (
             <p className="text-xs text-ink-400 mt-1">
@@ -452,9 +543,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           )}
         </div>
       </div>
-
-      {/* Date navigation */}
-      <DateNav filter={dateFilter} onChange={setDateFilter} />
 
       {/* Savings rate */}
       <SavingsRateModule
