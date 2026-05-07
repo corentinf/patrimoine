@@ -7,6 +7,7 @@ import SpendingTransactions from './SpendingTransactions';
 import CategoryManager, { type Category } from './CategoryManager';
 import AICategorizeButton from './AICategorizeButton';
 import VenmoImport from './VenmoImport';
+import SubscriptionsSection from './SubscriptionsSection';
 
 interface RawTransaction {
   id: string;
@@ -40,6 +41,7 @@ interface SpendingViewProps {
   monthlyRaw: MonthlyRaw[];
   allCategories: Category[];
   venmoRequests: VenmoRequest[];
+  subscriptionOverrides: Record<string, 'confirmed' | 'dismissed'>;
 }
 
 type DateFilter =
@@ -247,7 +249,7 @@ function DateNav({ filter, onChange }: { filter: DateFilter; onChange: (f: DateF
   );
 }
 
-export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests }: SpendingViewProps) {
+export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides }: SpendingViewProps) {
   const now = new Date();
   const [dateFilter, setDateFilter] = useState<DateFilter>({
     mode: 'month',
@@ -450,6 +452,12 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           })}
         </div>
       )}
+
+      {/* Subscriptions */}
+      <SubscriptionsSection
+        transactions={transactions}
+        initialOverrides={subscriptionOverrides}
+      />
 
       {/* Transaction list */}
       {filteredTransactions.length > 0 && (

@@ -63,6 +63,20 @@ async function getMonthlySpending() {
   return data || [];
 }
 
+async function getSubscriptionOverrides(): Promise<Record<string, 'confirmed' | 'dismissed'>> {
+  try {
+    const supabase = createServiceClient();
+    const { data } = await supabase
+      .from('subscription_overrides')
+      .select('merchant_key, status');
+    const result: Record<string, 'confirmed' | 'dismissed'> = {};
+    for (const row of data ?? []) result[row.merchant_key] = row.status;
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 async function getVenmoRequests() {
   const supabase = createServiceClient();
   const { data } = await supabase
@@ -85,11 +99,12 @@ async function getAllCategories() {
 }
 
 export default async function SpendingPage() {
-  const [transactions, monthlyRaw, allCategories, venmoRequests] = await Promise.all([
-    getSpendingTransactions(1),
+  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides] = await Promise.all([
+    getSpendingTransactions(12),
     getMonthlySpending(),
     getAllCategories(),
     getVenmoRequests(),
+    getSubscriptionOverrides(),
   ]);
 
   return (
@@ -98,6 +113,7 @@ export default async function SpendingPage() {
       monthlyRaw={monthlyRaw}
       allCategories={allCategories}
       venmoRequests={venmoRequests}
+      subscriptionOverrides={subscriptionOverrides}
     />
   );
 }
