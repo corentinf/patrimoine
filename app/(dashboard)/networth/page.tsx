@@ -92,7 +92,7 @@ export default async function NetWorthPage() {
       </div>
 
       {/* Net worth chart */}
-      {chartData.length > 1 && (
+      {chartData.length > 0 && (
         <NetWorthChart data={chartData} />
       )}
 

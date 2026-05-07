@@ -31,6 +31,19 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export default function NetWorthChart({ data }: NetWorthChartProps) {
+  if (data.length < 2) {
+    return (
+      <div className="card">
+        <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
+          Net worth over time
+        </h4>
+        <div className="h-[260px] flex flex-col items-center justify-center gap-2">
+          <p className="text-ink-400 text-sm">First snapshot captured — sync again next month to see your trend.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
