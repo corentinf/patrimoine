@@ -86,10 +86,14 @@ function getPrevPeriodFilter(filter: DateFilter): DateFilter {
   return { mode: 'custom', start: prevStart, end: prevEnd };
 }
 
+function isExcludedFromSpending(tx: RawTransaction): boolean {
+  return tx.is_transfer || !!tx.category?.is_income || tx.category?.name === 'Transfer';
+}
+
 function sumByCategory(txs: RawTransaction[]): Map<string, { name: string; color: string; icon: string; total: number }> {
   const map = new Map<string, { name: string; color: string; icon: string; total: number }>();
   for (const tx of txs) {
-    if (tx.category?.is_income || tx.is_transfer) continue;
+    if (isExcludedFromSpending(tx)) continue;
     const key = tx.category?.id ?? '__uncategorized__';
     if (!map.has(key)) {
       map.set(key, {
@@ -309,7 +313,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
   const prevTotalSpending = useMemo(() =>
     prevFiltered.reduce((sum, tx) => {
-      if (tx.category?.is_income || tx.is_transfer) return sum;
+      if (isExcludedFromSpending(tx)) return sum;
       return sum + Math.abs(Number(tx.amount));
     }, 0),
   [prevFiltered]);
@@ -326,7 +330,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     const totals: Record<string, { name: string; color: string; icon: string; total: number; count: number }> = {};
     for (const tx of filteredTransactions) {
       const cat = tx.category;
-      if (cat?.is_income || tx.is_transfer) continue;
+      if (isExcludedFromSpending(tx)) continue;
       const key = cat?.name || 'Uncategorized';
       if (!totals[key]) {
         totals[key] = { name: key, color: cat?.color || '#D1D5DB', icon: cat?.icon || '❓', total: 0, count: 0 };
