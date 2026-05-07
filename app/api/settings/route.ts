@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createServiceClient } from '@/app/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -51,5 +52,6 @@ export async function PATCH(req: NextRequest) {
     .upsert({ user_id: user.id, monthly_income, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  revalidatePath('/spending');
   return NextResponse.json({ ok: true });
 }
