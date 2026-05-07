@@ -62,12 +62,12 @@ export default function AccountCard({ account }: AccountCardProps) {
     <div className="card-hover flex items-center justify-between group">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-ink-700 truncate">{account.name}</p>
+          <p data-sensitive className="text-sm font-medium text-ink-700 truncate">{account.name}</p>
           {isManual && (
             <span className="text-xs text-ink-300 shrink-0">manual</span>
           )}
         </div>
-        <p className="text-xs text-ink-300 mt-0.5">
+        <p data-sensitive className="text-xs text-ink-300 mt-0.5">
           {account.institution}
           {account.balance_date && (
             <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -58,3 +58,20 @@
            hover:bg-sand-50 active:bg-sand-100;
   }
 }
+
+/* Privacy / blur mode */
+.privacy-mode .font-mono,
+.privacy-mode .stat-value,
+.privacy-mode .tabular-nums,
+.privacy-mode [data-sensitive] {
+  filter: blur(6px);
+  user-select: none;
+  transition: filter 0.2s ease;
+}
+
+.privacy-mode .font-mono:hover,
+.privacy-mode .stat-value:hover,
+.privacy-mode .tabular-nums:hover,
+.privacy-mode [data-sensitive]:hover {
+  filter: blur(6px);
+}

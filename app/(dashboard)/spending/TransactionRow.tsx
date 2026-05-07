@@ -183,7 +183,7 @@ export default function TransactionRow({
 
         {/* Name + category */}
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate ${isTransfer ? 'text-ink-400' : 'text-ink-700'}`}>{displayName}</p>
+          <p data-sensitive className={`text-sm font-medium truncate ${isTransfer ? 'text-ink-400' : 'text-ink-700'}`}>{displayName}</p>
           <div className="flex items-center gap-1.5 mt-0.5">
             {isTransfer ? (
               <span className="text-xs text-ink-300 flex items-center gap-1">
