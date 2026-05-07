@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createServiceClient } from '@/app/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
   );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  revalidatePath('/spending');
   return NextResponse.json({ ok: true });
 }
 
@@ -56,5 +58,6 @@ export async function DELETE(req: NextRequest) {
     .eq('merchant_key', merchant_key);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  revalidatePath('/spending');
   return NextResponse.json({ ok: true });
 }
