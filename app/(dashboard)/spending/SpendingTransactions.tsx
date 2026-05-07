@@ -46,6 +46,7 @@ export default function SpendingTransactions({
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [hoveredChip, setHoveredChip] = useState<string | null>(null);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   // Optimistic overrides
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, Category>>({});
@@ -188,10 +189,78 @@ export default function SpendingTransactions({
           )}
         </div>
 
-        {/* Category filter chips — wrapping, collapsible, multi-select */}
+        {/* Category filter — dropdown on mobile, pills on desktop */}
         <div>
-          <div className="flex flex-wrap gap-2">
-            {/* All chip */}
+          {/* Mobile: dropdown */}
+          <div className="md:hidden relative">
+            {showCategoryDropdown && (
+              <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
+            )}
+            <button
+              onClick={() => setShowCategoryDropdown((v) => !v)}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                filterCategories.length > 0
+                  ? 'bg-ink-800 text-white border-ink-800'
+                  : 'bg-white border-sand-200 text-ink-600'
+              }`}
+            >
+              {filterCategories.length === 0
+                ? 'All categories'
+                : filterCategories.length === 1
+                  ? `${chipCategories.find((c) => c.name === filterCategories[0])?.icon ?? ''} ${filterCategories[0]}`
+                  : `${filterCategories.length} categories`}
+              <svg
+                className={`w-3 h-3 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showCategoryDropdown && (
+              <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg overflow-hidden w-56 max-h-72 overflow-y-auto">
+                <button
+                  onClick={() => { setFilterCategories([]); setShowCategoryDropdown(false); }}
+                  className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors border-b border-sand-100 ${
+                    filterCategories.length === 0 ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
+                  }`}
+                >
+                  All categories
+                  {filterCategories.length === 0 && (
+                    <svg className="ml-auto w-3.5 h-3.5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+                {chipCategories.map((cat) => {
+                  const active = filterCategories.includes(cat.name);
+                  return (
+                    <button
+                      key={cat.name}
+                      onClick={() => {
+                        setFilterCategories(active ? filterCategories.filter((n) => n !== cat.name) : [cat.name]);
+                        setShowCategoryDropdown(false);
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors border-b border-sand-50 last:border-0 ${
+                        active ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
+                      }`}
+                    >
+                      <span>{cat.icon}</span>
+                      <span className="flex-1">{cat.name}</span>
+                      {active && (
+                        <svg className="w-3.5 h-3.5 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop: pills */}
+          <div className="hidden md:flex flex-wrap gap-2">
             <button
               onClick={() => setFilterCategories([])}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -203,7 +272,6 @@ export default function SpendingTransactions({
               All
             </button>
 
-            {/* Category chips */}
             {chipCategories.map((cat) => {
               const active = filterCategories.includes(cat.name);
               const showAdd = filterCategories.length > 0 && !active && hoveredChip === cat.name;
@@ -247,7 +315,6 @@ export default function SpendingTransactions({
                 </div>
               );
             })}
-
           </div>
         </div>
 
