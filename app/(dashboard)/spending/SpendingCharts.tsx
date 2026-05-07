@@ -56,7 +56,7 @@ export default function SpendingCharts({
     }));
 
     if (restTotal > 0) {
-      data.push({ name: 'Other', value: Math.round(restTotal), color: '#D1D5DB' });
+      data.push({ id: undefined, name: 'Other', value: Math.round(restTotal), color: '#D1D5DB' });
     }
 
     return data;
