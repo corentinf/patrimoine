@@ -37,11 +37,6 @@ export default async function NetWorthPage() {
   ]);
 
   const latest = history[history.length - 1];
-  const previous = history[history.length - 2];
-
-  const change = latest && previous
-    ? Number(latest.net_worth) - Number(previous.net_worth)
-    : 0;
 
   // Collapse daily snapshots to monthly — last snapshot in each month wins
   const byMonth: Record<string, typeof history[0]> = {};
@@ -49,7 +44,27 @@ export default async function NetWorthPage() {
     const month = s.snapshot_date.substring(0, 7);
     byMonth[month] = s;
   }
-  const chartData = Object.values(byMonth).map((s) => ({
+  const monthlySnapshots = Object.values(byMonth).sort((a, b) =>
+    a.snapshot_date.localeCompare(b.snapshot_date),
+  );
+
+  // Only show a delta once we have ≥2 monthly snapshots at least 20 days apart
+  const hasReliableDelta =
+    monthlySnapshots.length >= 2 &&
+    (new Date(monthlySnapshots[monthlySnapshots.length - 1].snapshot_date).getTime() -
+      new Date(monthlySnapshots[0].snapshot_date).getTime()) /
+      86_400_000 >= 20;
+
+  const previousMonthly = hasReliableDelta ? monthlySnapshots[monthlySnapshots.length - 2] : null;
+  const change = hasReliableDelta && latest && previousMonthly
+    ? Number(latest.net_worth) - Number(previousMonthly.net_worth)
+    : null;
+
+  const trackingStartDate = history.length > 0
+    ? new Date(history[0].snapshot_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+
+  const chartData = monthlySnapshots.map((s) => ({
     month: new Date(s.snapshot_date + 'T12:00:00').toLocaleDateString('en-US', {
       month: 'short',
       year: '2-digit',
@@ -80,11 +95,15 @@ export default async function NetWorthPage() {
             <p className="stat-value">
               {formatCurrency(Number(latest.net_worth))}
             </p>
-            {change !== 0 && (
+            {change !== null ? (
               <p className={`text-xs font-mono mt-1 ${
-                change > 0 ? 'text-accent-green' : 'text-accent-red'
+                change > 0 ? 'text-accent-green' : change < 0 ? 'text-accent-red' : 'text-ink-300'
               }`}>
-                {change > 0 ? '+' : ''}{formatCurrency(change)} since last snapshot
+                {change > 0 ? '+' : ''}{formatCurrency(change)} since last month
+              </p>
+            ) : trackingStartDate && (
+              <p className="text-xs text-ink-300 mt-1">
+                Tracking started {trackingStartDate}
               </p>
             )}
           </div>
