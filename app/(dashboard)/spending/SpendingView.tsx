@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { formatCurrency } from '@/app/lib/utils';
 import SpendingCharts from './SpendingCharts';
 import SpendingTransactions from './SpendingTransactions';
@@ -255,7 +255,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     month: now.getMonth(),
   });
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const txListRef = useRef<HTMLDivElement>(null);
 
   const accounts = useMemo(() => {
     const map = new Map<string, { id: string; name: string; institution: string }>();
@@ -273,12 +275,23 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     );
   }, [transactions]);
 
-  const dateFiltered = useMemo(() => applyDateFilter(transactions, dateFilter), [transactions, dateFilter]);
+  const dateFiltered = useMemo(() => {
+    setSelectedCategoryKey(null);
+    return applyDateFilter(transactions, dateFilter);
+  }, [transactions, dateFilter]);
 
   const filteredTransactions = useMemo(() => {
     if (!selectedAccount) return dateFiltered;
     return dateFiltered.filter((tx) => tx.account_id === selectedAccount);
   }, [dateFiltered, selectedAccount]);
+
+  const visibleTransactions = useMemo(() => {
+    if (!selectedCategoryKey) return filteredTransactions;
+    if (selectedCategoryKey === '__uncategorized__') {
+      return filteredTransactions.filter((tx) => !tx.category);
+    }
+    return filteredTransactions.filter((tx) => tx.category?.id === selectedCategoryKey);
+  }, [filteredTransactions, selectedCategoryKey]);
 
   const prevFiltered = useMemo(() => {
     const prev = applyDateFilter(transactions, getPrevPeriodFilter(dateFilter));
@@ -393,17 +406,29 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             const isNew = row.delta === null;
             const isIncrease = !isNew && row.delta! > 0;
             const isDecrease = !isNew && row.delta! < 0;
+            const isSelected = selectedCategoryKey === row.key;
             return (
-              <div
+              <button
                 key={row.key}
-                className="px-5 py-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center border-b border-sand-50 last:border-0"
+                onClick={() => {
+                  const next = isSelected ? null : row.key;
+                  setSelectedCategoryKey(next);
+                  if (next) {
+                    setTimeout(() => txListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+                  }
+                }}
+                className={`w-full px-5 py-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center border-b border-sand-50 last:border-0 text-left transition-colors ${
+                  isSelected ? 'bg-sand-100' : 'hover:bg-sand-50'
+                }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span
                     className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{ backgroundColor: row.color }}
                   />
-                  <span className="text-sm text-ink-700 truncate">{row.icon} {row.name}</span>
+                  <span className={`text-sm truncate ${isSelected ? 'font-semibold text-ink-800' : 'text-ink-700'}`}>
+                    {row.icon} {row.name}
+                  </span>
                 </div>
                 <span className="font-mono text-sm text-ink-700 text-right w-20">
                   {row.current > 0 ? formatCurrency(row.current) : <span className="text-ink-300">—</span>}
@@ -420,7 +445,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                     ? '—'
                     : `${isIncrease ? '+' : ''}${row.delta!.toFixed(0)}%`}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -428,11 +453,26 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
       {/* Transaction list */}
       {filteredTransactions.length > 0 && (
-        <div>
+        <div ref={txListRef}>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
-              Transactions
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
+                Transactions
+              </h3>
+              {selectedCategoryKey && (() => {
+                const row = categoryRows.find((r) => r.key === selectedCategoryKey);
+                return row ? (
+                  <button
+                    onClick={() => setSelectedCategoryKey(null)}
+                    className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-sand-200 bg-sand-100 text-ink-600 hover:bg-sand-200 transition-colors"
+                  >
+                    <span style={{ color: row.color }}>{row.icon}</span>
+                    {row.name}
+                    <span className="ml-0.5 text-ink-400">✕</span>
+                  </button>
+                ) : null;
+              })()}
+            </div>
             <div className="flex items-center gap-2">
               <AICategorizeButton />
               <VenmoImport />
@@ -448,7 +488,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             </div>
           </div>
           <SpendingTransactions
-            transactions={filteredTransactions as any}
+            transactions={visibleTransactions as any}
             allCategories={allCategories}
             venmoRequests={venmoRequests}
           />
