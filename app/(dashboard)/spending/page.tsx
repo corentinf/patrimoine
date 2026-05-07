@@ -63,6 +63,20 @@ async function getMonthlySpending() {
   return data || [];
 }
 
+async function getMonthlyIncome(): Promise<number> {
+  try {
+    const supabase = createServiceClient();
+    const { data } = await supabase
+      .from('user_settings')
+      .select('monthly_income')
+      .limit(1)
+      .single();
+    return Number(data?.monthly_income ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 async function getSubscriptionOverrides(): Promise<Record<string, 'confirmed' | 'dismissed'>> {
   try {
     const supabase = createServiceClient();
@@ -99,12 +113,13 @@ async function getAllCategories() {
 }
 
 export default async function SpendingPage() {
-  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides] = await Promise.all([
+  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome] = await Promise.all([
     getSpendingTransactions(12),
     getMonthlySpending(),
     getAllCategories(),
     getVenmoRequests(),
     getSubscriptionOverrides(),
+    getMonthlyIncome(),
   ]);
 
   return (
@@ -114,6 +129,7 @@ export default async function SpendingPage() {
       allCategories={allCategories}
       venmoRequests={venmoRequests}
       subscriptionOverrides={subscriptionOverrides}
+      monthlyIncome={monthlyIncome}
     />
   );
 }

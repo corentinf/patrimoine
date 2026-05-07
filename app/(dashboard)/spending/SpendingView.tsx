@@ -8,6 +8,7 @@ import CategoryManager, { type Category } from './CategoryManager';
 import AICategorizeButton from './AICategorizeButton';
 import VenmoImport from './VenmoImport';
 import SubscriptionsSection from './SubscriptionsSection';
+import SavingsRateModule from './SavingsRateModule';
 
 interface RawTransaction {
   id: string;
@@ -42,6 +43,7 @@ interface SpendingViewProps {
   allCategories: Category[];
   venmoRequests: VenmoRequest[];
   subscriptionOverrides: Record<string, 'confirmed' | 'dismissed'>;
+  monthlyIncome: number;
 }
 
 type DateFilter =
@@ -249,7 +251,7 @@ function DateNav({ filter, onChange }: { filter: DateFilter; onChange: (f: DateF
   );
 }
 
-export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides }: SpendingViewProps) {
+export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome }: SpendingViewProps) {
   const now = new Date();
   const [dateFilter, setDateFilter] = useState<DateFilter>({
     mode: 'month',
@@ -305,6 +307,21 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     buildCategoryRows(sumByCategory(filteredTransactions), sumByCategory(prevFiltered)),
   [filteredTransactions, prevFiltered]);
 
+  const prevTotalSpending = useMemo(() =>
+    prevFiltered.reduce((sum, tx) => {
+      if (tx.category?.is_income || tx.is_transfer) return sum;
+      return sum + Math.abs(Number(tx.amount));
+    }, 0),
+  [prevFiltered]);
+
+  const periodDays = useMemo(() => {
+    if (dateFilter.mode === 'month') {
+      return new Date(dateFilter.year, dateFilter.month + 1, 0).getDate();
+    }
+    const ms = new Date(dateFilter.end).getTime() - new Date(dateFilter.start).getTime();
+    return Math.max(1, Math.round(ms / 86_400_000) + 1);
+  }, [dateFilter]);
+
   const { sortedCategories, totalSpending } = useMemo(() => {
     const totals: Record<string, { name: string; color: string; icon: string; total: number; count: number }> = {};
     for (const tx of filteredTransactions) {
@@ -358,6 +375,14 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
       {/* Date navigation */}
       <DateNav filter={dateFilter} onChange={setDateFilter} />
+
+      {/* Savings rate */}
+      <SavingsRateModule
+        currentSpending={totalSpending}
+        prevSpending={prevTotalSpending}
+        monthlyIncome={monthlyIncome}
+        periodDays={periodDays}
+      />
 
       {/* Account tab bar */}
       {accounts.length > 1 && (
