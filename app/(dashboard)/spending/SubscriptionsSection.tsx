@@ -116,11 +116,13 @@ function isHighCost(sub: DetectedSubscription): boolean {
 interface Props {
   transactions: Tx[];
   initialOverrides: Record<string, 'confirmed' | 'dismissed'>;
+  monthlyIncome?: number;
 }
 
-export default function SubscriptionsSection({ transactions, initialOverrides }: Props) {
+export default function SubscriptionsSection({ transactions, initialOverrides, monthlyIncome = 0 }: Props) {
   const [overrides, setOverrides] = useState<Record<string, 'confirmed' | 'dismissed'>>(initialOverrides);
   const [saving, setSaving] = useState<string | null>(null);
+  const [view, setView] = useState<'monthly' | 'annual'>('monthly');
 
   const detected = useMemo(() => detectSubscriptions(transactions), [transactions]);
 
@@ -165,7 +167,12 @@ export default function SubscriptionsSection({ transactions, initialOverrides }:
     }
   };
 
-  const confirmedTotal = confirmed.reduce((s, sub) => s + sub.estimatedMonthlyCost, 0);
+  const confirmedMonthlyTotal = confirmed.reduce((s, sub) => s + sub.estimatedMonthlyCost, 0);
+  const displayCost = (monthly: number) => view === 'annual' ? monthly * 12 : monthly;
+  const suffix = view === 'annual' ? '/yr' : '/mo';
+  const incomePct = monthlyIncome > 0 && confirmedMonthlyTotal > 0
+    ? (confirmedMonthlyTotal / monthlyIncome) * 100
+    : null;
 
   return (
     <div>
@@ -173,12 +180,49 @@ export default function SubscriptionsSection({ transactions, initialOverrides }:
         <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
           Subscriptions
         </h3>
-        {confirmedTotal > 0 && (
-          <span className="text-xs text-ink-400 font-mono">
-            {formatCurrency(confirmedTotal)}<span className="text-ink-300">/mo confirmed</span>
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {confirmedMonthlyTotal > 0 && (
+            <span className="text-xs text-ink-400 font-mono">
+              {formatCurrency(displayCost(confirmedMonthlyTotal))}
+              <span className="text-ink-300">{suffix} confirmed</span>
+              {incomePct !== null && view === 'monthly' && (
+                <span className="text-ink-300"> · {incomePct.toFixed(1)}% of income</span>
+              )}
+            </span>
+          )}
+          {/* Monthly / Annual toggle */}
+          <div className="flex items-center rounded-lg border border-sand-200 overflow-hidden text-xs">
+            <button
+              onClick={() => setView('monthly')}
+              className={`px-2.5 py-1 transition-colors ${view === 'monthly' ? 'bg-ink-800 text-white' : 'text-ink-400 hover:text-ink-600'}`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setView('annual')}
+              className={`px-2.5 py-1 transition-colors ${view === 'annual' ? 'bg-ink-800 text-white' : 'text-ink-400 hover:text-ink-600'}`}
+            >
+              Annual
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Annual summary bar */}
+      {view === 'annual' && confirmedMonthlyTotal > 0 && (
+        <div className="card mb-3 flex items-center justify-between py-3 px-5">
+          <div>
+            <p className="text-xs text-ink-400 uppercase tracking-wider font-semibold">Annual subscription cost</p>
+            <p className="font-mono text-xl font-semibold text-ink-800 mt-0.5">{formatCurrency(confirmedMonthlyTotal * 12)}</p>
+          </div>
+          {incomePct !== null && (
+            <div className="text-right">
+              <p className="text-xs text-ink-400 uppercase tracking-wider font-semibold">% of monthly income</p>
+              <p className="font-mono text-xl font-semibold text-ink-800 mt-0.5">{incomePct.toFixed(1)}%</p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card p-0 divide-y divide-sand-100">
         {/* Suggested — need review */}
@@ -192,8 +236,8 @@ export default function SubscriptionsSection({ transactions, initialOverrides }:
               </p>
             </div>
             <span className="font-mono text-sm text-ink-600 shrink-0">
-              {formatCurrency(sub.estimatedMonthlyCost)}
-              <span className="text-ink-300 text-xs">/mo</span>
+              {formatCurrency(displayCost(sub.estimatedMonthlyCost))}
+              <span className="text-ink-300 text-xs">{suffix}</span>
             </span>
             {isHighCost(sub) && <HighCostWarning />}
             <div className="flex items-center gap-2 shrink-0">
@@ -230,8 +274,8 @@ export default function SubscriptionsSection({ transactions, initialOverrides }:
               </p>
             </div>
             <span className="font-mono text-sm text-ink-700 shrink-0">
-              {formatCurrency(sub.estimatedMonthlyCost)}
-              <span className="text-ink-300 text-xs">/mo</span>
+              {formatCurrency(displayCost(sub.estimatedMonthlyCost))}
+              <span className="text-ink-300 text-xs">{suffix}</span>
             </span>
             {isHighCost(sub) && <HighCostWarning />}
             <button

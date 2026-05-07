@@ -636,6 +636,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         <SubscriptionsSection
           transactions={transactions}
           initialOverrides={subscriptionOverrides}
+          monthlyIncome={monthlyIncome}
         />
       )}
 
