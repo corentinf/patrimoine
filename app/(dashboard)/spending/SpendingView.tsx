@@ -462,6 +462,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         </div>
       )}
 
+      {/* Charts — always visible above tabs */}
+      <SpendingCharts
+        categories={sortedCategories}
+        monthlyData={monthlyChartData}
+        totalSpending={totalSpending}
+      />
+
       {/* Section tabs */}
       <div className="flex items-center gap-0 border-b border-sand-200">
         {(['categories', 'subscriptions', 'transactions'] as const).map((tab) => (
@@ -487,12 +494,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       {/* Tab: Categories */}
       {activeTab === 'categories' && (
         <div className="space-y-6">
-          <SpendingCharts
-            categories={sortedCategories}
-            monthlyData={monthlyChartData}
-            totalSpending={totalSpending}
-          />
-
           {categoryRows.length > 0 && (
             <div className="card p-0">
               <div className="px-5 py-3.5 border-b border-sand-100 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center">
