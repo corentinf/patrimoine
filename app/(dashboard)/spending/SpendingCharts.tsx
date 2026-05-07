@@ -5,6 +5,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer,
 } from 'recharts';
 import { formatCurrency } from '@/app/lib/utils';
+import { usePrivacy } from '@/app/lib/privacy';
 
 interface SpendingChartsProps {
   categories: Array<{
@@ -21,11 +22,21 @@ interface SpendingChartsProps {
   totalSpending: number;
 }
 
+function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
+  return (
+    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end"
+      style={blurred ? { filter: 'blur(5px)', userSelect: 'none' } : {}}>
+      {formatter(payload.value)}
+    </text>
+  );
+}
+
 export default function SpendingCharts({
   categories,
   monthlyData,
   totalSpending,
 }: SpendingChartsProps) {
+  const { blurred } = usePrivacy();
   // Take top 8 categories for pie chart, group rest as "Other"
   const pieData = (() => {
     const top = categories.slice(0, 8);
@@ -75,10 +86,9 @@ export default function SpendingCharts({
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 11, fill: '#8F897E' }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                tick={(props) => <BlurredYTick {...props} formatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} blurred={blurred} />}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: '#FAF7F2' }} />
               <Bar

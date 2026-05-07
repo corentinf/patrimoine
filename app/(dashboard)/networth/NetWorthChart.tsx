@@ -5,6 +5,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { formatCurrency } from '@/app/lib/utils';
+import { usePrivacy } from '@/app/lib/privacy';
 
 interface NetWorthChartProps {
   data: Array<{
@@ -30,7 +31,17 @@ function CustomTooltip({ active, payload, label }: any) {
   );
 }
 
+function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
+  return (
+    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end"
+      style={blurred ? { filter: 'blur(5px)', userSelect: 'none' } : {}}>
+      {formatter(payload.value)}
+    </text>
+  );
+}
+
 export default function NetWorthChart({ data }: NetWorthChartProps) {
+  const { blurred } = usePrivacy();
   if (data.length < 2) {
     return (
       <div className="card">
@@ -60,10 +71,9 @@ export default function NetWorthChart({ data }: NetWorthChartProps) {
             interval="preserveStartEnd"
           />
           <YAxis
-            tick={{ fontSize: 11, fill: '#8F897E' }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+            tick={(props) => <BlurredYTick {...props} formatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} blurred={blurred} />}
           />
           <Tooltip content={<CustomTooltip />} />
           <Line
