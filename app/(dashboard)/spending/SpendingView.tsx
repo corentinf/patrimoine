@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { formatCurrency } from '@/app/lib/utils';
 import SpendingCharts from './SpendingCharts';
 import SpendingTransactions from './SpendingTransactions';
@@ -265,7 +265,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
-  const txListRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('categories');
 
   const accounts = useMemo(() => {
     const map = new Map<string, { id: string; name: string; institution: string }>();
@@ -417,85 +417,107 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         </div>
       )}
 
-      {/* Charts */}
-      <SpendingCharts
-        categories={sortedCategories}
-        monthlyData={monthlyChartData}
-        totalSpending={totalSpending}
-      />
+      {/* Section tabs */}
+      <div className="flex items-center gap-0 border-b border-sand-200">
+        {(['categories', 'subscriptions', 'transactions'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2.5 text-sm font-medium capitalize whitespace-nowrap transition-colors border-b-2 -mb-px ${
+              activeTab === tab
+                ? 'border-ink-800 text-ink-800'
+                : 'border-transparent text-ink-400 hover:text-ink-600'
+            }`}
+          >
+            {tab === 'transactions' && selectedCategoryKey ? (
+              <span className="flex items-center gap-1.5">
+                Transactions
+                <span className="w-1.5 h-1.5 rounded-full bg-ink-600 inline-block" />
+              </span>
+            ) : tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </div>
 
-      {/* Category breakdown table */}
-      {categoryRows.length > 0 && (
-        <div className="card p-0">
-          <div className="px-5 py-3.5 border-b border-sand-100 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center">
-            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider">Category</span>
-            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-20">This period</span>
-            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-20 hidden sm:block">Last period</span>
-            <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-16">Change</span>
-          </div>
-          {categoryRows.map((row) => {
-            const isNew = row.delta === null;
-            const isIncrease = !isNew && row.delta! > 0;
-            const isDecrease = !isNew && row.delta! < 0;
-            const isSelected = selectedCategoryKey === row.key;
-            return (
-              <button
-                key={row.key}
-                onClick={() => {
-                  const next = isSelected ? null : row.key;
-                  setSelectedCategoryKey(next);
-                  if (next) {
-                    setTimeout(() => txListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-                  }
-                }}
-                className={`w-full px-5 py-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center border-b border-sand-50 last:border-0 text-left transition-colors ${
-                  isSelected ? 'bg-sand-100' : 'hover:bg-sand-50'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: row.color }}
-                  />
-                  <span className={`text-sm truncate ${isSelected ? 'font-semibold text-ink-800' : 'text-ink-700'}`}>
-                    {row.icon} {row.name}
-                  </span>
-                </div>
-                <span className="font-mono text-sm text-ink-700 text-right w-20">
-                  {row.current > 0 ? formatCurrency(row.current) : <span className="text-ink-300">—</span>}
-                </span>
-                <span className="font-mono text-sm text-ink-400 text-right w-20 hidden sm:block">
-                  {row.previous > 0 ? formatCurrency(row.previous) : <span className="text-ink-300">—</span>}
-                </span>
-                <span className={`text-xs font-medium text-right w-16 ${
-                  isNew ? 'text-ink-400' : isIncrease ? 'text-accent-red' : isDecrease ? 'text-accent-green' : 'text-ink-300'
-                }`}>
-                  {isNew
-                    ? 'new'
-                    : row.delta === 0
-                    ? '—'
-                    : `${isIncrease ? '+' : ''}${row.delta!.toFixed(0)}%`}
-                </span>
-              </button>
-            );
-          })}
+      {/* Tab: Categories */}
+      {activeTab === 'categories' && (
+        <div className="space-y-6">
+          <SpendingCharts
+            categories={sortedCategories}
+            monthlyData={monthlyChartData}
+            totalSpending={totalSpending}
+          />
+
+          {categoryRows.length > 0 && (
+            <div className="card p-0">
+              <div className="px-5 py-3.5 border-b border-sand-100 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center">
+                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider">Category</span>
+                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-20">This period</span>
+                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-20 hidden sm:block">Last period</span>
+                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-16">Change</span>
+              </div>
+              {categoryRows.map((row) => {
+                const isNew = row.delta === null;
+                const isIncrease = !isNew && row.delta! > 0;
+                const isDecrease = !isNew && row.delta! < 0;
+                const isSelected = selectedCategoryKey === row.key;
+                return (
+                  <button
+                    key={row.key}
+                    onClick={() => {
+                      setSelectedCategoryKey(isSelected ? null : row.key);
+                      setActiveTab('transactions');
+                    }}
+                    className={`w-full px-5 py-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center border-b border-sand-50 last:border-0 text-left transition-colors ${
+                      isSelected ? 'bg-sand-100' : 'hover:bg-sand-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.color }} />
+                      <span className={`text-sm truncate ${isSelected ? 'font-semibold text-ink-800' : 'text-ink-700'}`}>
+                        {row.icon} {row.name}
+                      </span>
+                    </div>
+                    <span className="font-mono text-sm text-ink-700 text-right w-20">
+                      {row.current > 0 ? formatCurrency(row.current) : <span className="text-ink-300">—</span>}
+                    </span>
+                    <span className="font-mono text-sm text-ink-400 text-right w-20 hidden sm:block">
+                      {row.previous > 0 ? formatCurrency(row.previous) : <span className="text-ink-300">—</span>}
+                    </span>
+                    <span className={`text-xs font-medium text-right w-16 ${
+                      isNew ? 'text-ink-400' : isIncrease ? 'text-accent-red' : isDecrease ? 'text-accent-green' : 'text-ink-300'
+                    }`}>
+                      {isNew ? 'new' : row.delta === 0 ? '—' : `${isIncrease ? '+' : ''}${row.delta!.toFixed(0)}%`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {filteredTransactions.length === 0 && (
+            <div className="card text-center py-16">
+              <p className="text-4xl mb-4">📊</p>
+              <h3 className="font-display text-xl text-ink-700 mb-2">No transactions</h3>
+              <p className="text-ink-400 text-sm">No spending found for this period.</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Subscriptions */}
-      <SubscriptionsSection
-        transactions={transactions}
-        initialOverrides={subscriptionOverrides}
-      />
+      {/* Tab: Subscriptions */}
+      {activeTab === 'subscriptions' && (
+        <SubscriptionsSection
+          transactions={transactions}
+          initialOverrides={subscriptionOverrides}
+        />
+      )}
 
-      {/* Transaction list */}
-      {filteredTransactions.length > 0 && (
-        <div ref={txListRef}>
+      {/* Tab: Transactions */}
+      {activeTab === 'transactions' && (
+        <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
-                Transactions
-              </h3>
               {selectedCategoryKey && (() => {
                 const row = categoryRows.find((r) => r.key === selectedCategoryKey);
                 return row ? (
@@ -524,22 +546,19 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               </button>
             </div>
           </div>
-          <SpendingTransactions
-            transactions={visibleTransactions as any}
-            allCategories={allCategories}
-            venmoRequests={venmoRequests}
-          />
-        </div>
-      )}
-
-      {/* Empty state */}
-      {filteredTransactions.length === 0 && (
-        <div className="card text-center py-16">
-          <p className="text-4xl mb-4">📊</p>
-          <h3 className="font-display text-xl text-ink-700 mb-2">No transactions</h3>
-          <p className="text-ink-400 text-sm">
-            No spending found for this period.
-          </p>
+          {filteredTransactions.length > 0 ? (
+            <SpendingTransactions
+              transactions={visibleTransactions as any}
+              allCategories={allCategories}
+              venmoRequests={venmoRequests}
+            />
+          ) : (
+            <div className="card text-center py-16">
+              <p className="text-4xl mb-4">📊</p>
+              <h3 className="font-display text-xl text-ink-700 mb-2">No transactions</h3>
+              <p className="text-ink-400 text-sm">No spending found for this period.</p>
+            </div>
+          )}
         </div>
       )}
 
