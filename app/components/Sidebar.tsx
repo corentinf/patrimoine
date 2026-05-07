@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createBrowserClient } from '@/app/lib/supabase';
 import PlaidLinkButton from './PlaidLink';
 import SimpleFINLinkButton from './SimpleFINLink';
@@ -56,11 +56,8 @@ export default function Sidebar() {
 
         {/* Bottom actions */}
         <div className="px-3 py-4 border-t border-sand-100 space-y-2">
-          <PlaidLinkButton />
-          <SimpleFINLinkButton />
           <SyncButton />
-          <ResetButton />
-          <SignOutButton />
+          <ProfileMenu />
         </div>
       </aside>
 
@@ -82,8 +79,127 @@ export default function Sidebar() {
           );
         })}
         <MobileSyncButton />
+        <MobileProfileMenu />
       </nav>
     </>
+  );
+}
+
+function ProfileMenu() {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const initial = email ? email[0].toUpperCase() : '?';
+
+  async function handleSignOut() {
+    const supabase = createBrowserClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-500 hover:bg-sand-50 hover:text-ink-700 transition-colors"
+      >
+        <span className="w-6 h-6 rounded-full bg-sand-200 text-ink-600 text-xs font-semibold flex items-center justify-center flex-shrink-0">
+          {initial}
+        </span>
+        <span className="flex-1 text-left truncate text-xs">{email ?? 'Profile'}</span>
+        <svg className={`w-3.5 h-3.5 text-ink-300 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-sand-200 rounded-xl shadow-lg py-1.5 z-50">
+          <div className="px-3 py-1.5 border-b border-sand-100 mb-1">
+            <p className="text-xs font-semibold text-ink-500 uppercase tracking-wider">Connections</p>
+          </div>
+          <div className="px-2 space-y-1">
+            <PlaidLinkButton />
+            <SimpleFINLinkButton />
+          </div>
+          <div className="border-t border-sand-100 mt-1.5 pt-1.5 px-2 space-y-0.5">
+            <ResetButton onClose={() => setOpen(false)} />
+            <button
+              onClick={handleSignOut}
+              className="w-full text-left text-xs text-ink-400 hover:text-ink-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-sand-50"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileProfileMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  async function handleSignOut() {
+    const supabase = createBrowserClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }
+
+  return (
+    <div ref={ref} className="relative flex-1 flex items-center justify-center">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex flex-col items-center gap-1 py-2.5 text-ink-400"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        <span className="text-[10px] font-medium">Profile</span>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full right-0 mb-1 w-52 bg-white border border-sand-200 rounded-xl shadow-lg py-1.5 z-50">
+          <div className="px-3 py-1.5 border-b border-sand-100 mb-1">
+            <p className="text-xs font-semibold text-ink-500 uppercase tracking-wider">Connections</p>
+          </div>
+          <div className="px-2 space-y-1">
+            <PlaidLinkButton />
+            <SimpleFINLinkButton />
+          </div>
+          <div className="border-t border-sand-100 mt-1.5 pt-1.5 px-2">
+            <button
+              onClick={handleSignOut}
+              className="w-full text-left text-xs text-ink-400 hover:text-ink-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-sand-50"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -197,7 +313,6 @@ function SyncButton() {
     );
   }
 
-  // done
   return (
     <div className="rounded-lg border border-accent-green/30 bg-green-50 p-3 space-y-2">
       <p className="text-xs font-medium text-green-700">Sync complete</p>
@@ -233,7 +348,7 @@ function SyncButton() {
   );
 }
 
-function ResetButton() {
+function ResetButton({ onClose }: { onClose: () => void }) {
   const [phase, setPhase] = useState<'idle' | 'confirm' | 'resetting'>('idle');
 
   async function handleReset() {
@@ -244,9 +359,9 @@ function ResetButton() {
 
   if (phase === 'confirm') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
+      <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2 mx-1 mb-1">
         <p className="text-xs font-medium text-red-600">Reset everything?</p>
-        <p className="text-xs text-red-400">All accounts, transactions, and connections will be deleted. Categories are kept.</p>
+        <p className="text-xs text-red-400">All accounts, transactions, and connections will be deleted.</p>
         <div className="flex gap-2">
           <button
             onClick={handleReset}
@@ -254,10 +369,7 @@ function ResetButton() {
           >
             Yes, reset
           </button>
-          <button
-            onClick={() => setPhase('idle')}
-            className="text-xs text-ink-400 hover:text-ink-600 px-2"
-          >
+          <button onClick={() => { setPhase('idle'); onClose(); }} className="text-xs text-ink-400 hover:text-ink-600 px-2">
             Cancel
           </button>
         </div>
@@ -267,7 +379,7 @@ function ResetButton() {
 
   if (phase === 'resetting') {
     return (
-      <div className="flex items-center gap-2 px-2 py-1.5">
+      <div className="flex items-center gap-2 px-3 py-1.5">
         <span className="inline-block w-3 h-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
         <span className="text-xs text-red-400">Resetting…</span>
       </div>
@@ -277,26 +389,9 @@ function ResetButton() {
   return (
     <button
       onClick={() => setPhase('confirm')}
-      className="w-full text-xs text-ink-300 hover:text-red-400 transition-colors py-1 text-center"
+      className="w-full text-left text-xs text-ink-300 hover:text-red-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-sand-50"
     >
       Reset all data
-    </button>
-  );
-}
-
-function SignOutButton() {
-  async function handleSignOut() {
-    const supabase = createBrowserClient();
-    await supabase.auth.signOut();
-    window.location.href = '/login';
-  }
-
-  return (
-    <button
-      onClick={handleSignOut}
-      className="w-full text-xs text-ink-400 hover:text-ink-600 transition-colors py-1.5 text-center"
-    >
-      Sign out
     </button>
   );
 }
