@@ -44,6 +44,7 @@ interface SpendingViewProps {
   venmoRequests: VenmoRequest[];
   subscriptionOverrides: Record<string, 'confirmed' | 'dismissed'>;
   monthlyIncome: number;
+  budgets: Record<string, number>;
 }
 
 type DateFilter =
@@ -255,7 +256,7 @@ function DateNav({ filter, onChange }: { filter: DateFilter; onChange: (f: DateF
   );
 }
 
-export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome }: SpendingViewProps) {
+export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets }: SpendingViewProps) {
   const now = new Date();
   const [dateFilter, setDateFilter] = useState<DateFilter>({
     mode: 'month',
@@ -266,6 +267,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('categories');
+  const [budgets, setBudgets] = useState<Record<string, number>>(initialBudgets);
+  const [editingBudget, setEditingBudget] = useState<string | null>(null);
+  const [budgetDraft, setBudgetDraft] = useState('');
 
   const accounts = useMemo(() => {
     const map = new Map<string, { id: string; name: string; institution: string }>();
@@ -358,6 +362,31 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         total: Math.round(total),
       }));
   }, [monthlyRaw, selectedAccount]);
+
+  const saveBudget = async (categoryId: string) => {
+    const val = parseFloat(budgetDraft);
+    if (isNaN(val) || val <= 0) {
+      await deleteBudget(categoryId);
+      return;
+    }
+    setBudgets((prev) => ({ ...prev, [categoryId]: val }));
+    setEditingBudget(null);
+    await fetch('/api/budgets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category_id: categoryId, monthly_amount: val }),
+    });
+  };
+
+  const deleteBudget = async (categoryId: string) => {
+    setBudgets((prev) => { const n = { ...prev }; delete n[categoryId]; return n; });
+    setEditingBudget(null);
+    await fetch('/api/budgets', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category_id: categoryId }),
+    });
+  };
 
   const periodLabel = dateFilter.mode === 'month'
     ? formatMonthLabel(dateFilter.year, dateFilter.month)
@@ -461,35 +490,115 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                 const isIncrease = !isNew && row.delta! > 0;
                 const isDecrease = !isNew && row.delta! < 0;
                 const isSelected = selectedCategoryKey === row.key;
+                const budget = row.key !== '__uncategorized__' ? budgets[row.key] : undefined;
+                const isEditingBudget = editingBudget === row.key;
+                const pct = budget ? Math.min((row.current / budget) * 100, 100) : 0;
+                const overBudget = budget ? row.current > budget : false;
+                const barColor = !budget ? '' : overBudget ? 'bg-accent-red' : pct >= 80 ? 'bg-yellow-400' : 'bg-accent-green';
                 return (
-                  <button
+                  <div
                     key={row.key}
-                    onClick={() => {
-                      setSelectedCategoryKey(isSelected ? null : row.key);
-                      setActiveTab('transactions');
-                    }}
-                    className={`w-full px-5 py-3 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center border-b border-sand-50 last:border-0 text-left transition-colors ${
-                      isSelected ? 'bg-sand-100' : 'hover:bg-sand-50'
-                    }`}
+                    className={`border-b border-sand-50 last:border-0 transition-colors ${isSelected ? 'bg-sand-100' : 'hover:bg-sand-50'}`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.color }} />
-                      <span className={`text-sm truncate ${isSelected ? 'font-semibold text-ink-800' : 'text-ink-700'}`}>
-                        {row.icon} {row.name}
+                    {/* Main row */}
+                    <button
+                      onClick={() => {
+                        setSelectedCategoryKey(isSelected ? null : row.key);
+                        setActiveTab('transactions');
+                      }}
+                      className="w-full px-5 pt-3 pb-1 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center text-left"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.color }} />
+                        <span className={`text-sm truncate ${isSelected ? 'font-semibold text-ink-800' : 'text-ink-700'}`}>
+                          {row.icon} {row.name}
+                        </span>
+                      </div>
+                      <span className="font-mono text-sm text-ink-700 text-right w-20">
+                        {row.current > 0 ? formatCurrency(row.current) : <span className="text-ink-300">—</span>}
                       </span>
-                    </div>
-                    <span className="font-mono text-sm text-ink-700 text-right w-20">
-                      {row.current > 0 ? formatCurrency(row.current) : <span className="text-ink-300">—</span>}
-                    </span>
-                    <span className="font-mono text-sm text-ink-400 text-right w-20 hidden sm:block">
-                      {row.previous > 0 ? formatCurrency(row.previous) : <span className="text-ink-300">—</span>}
-                    </span>
-                    <span className={`text-xs font-medium text-right w-16 ${
-                      isNew ? 'text-ink-400' : isIncrease ? 'text-accent-red' : isDecrease ? 'text-accent-green' : 'text-ink-300'
-                    }`}>
-                      {isNew ? 'new' : row.delta === 0 ? '—' : `${isIncrease ? '+' : ''}${row.delta!.toFixed(0)}%`}
-                    </span>
-                  </button>
+                      <span className="font-mono text-sm text-ink-400 text-right w-20 hidden sm:block">
+                        {row.previous > 0 ? formatCurrency(row.previous) : <span className="text-ink-300">—</span>}
+                      </span>
+                      <span className={`text-xs font-medium text-right w-16 ${
+                        isNew ? 'text-ink-400' : isIncrease ? 'text-accent-red' : isDecrease ? 'text-accent-green' : 'text-ink-300'
+                      }`}>
+                        {isNew ? 'new' : row.delta === 0 ? '—' : `${isIncrease ? '+' : ''}${row.delta!.toFixed(0)}%`}
+                      </span>
+                    </button>
+
+                    {/* Budget row */}
+                    {row.key !== '__uncategorized__' && (
+                      <div className="px-5 pb-2.5">
+                        {isEditingBudget ? (
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <div className="relative">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-ink-400">$</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="50"
+                                value={budgetDraft}
+                                onChange={(e) => setBudgetDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveBudget(row.key);
+                                  if (e.key === 'Escape') setEditingBudget(null);
+                                }}
+                                autoFocus
+                                placeholder="0"
+                                className="pl-5 pr-2 py-0.5 text-xs border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700 w-24"
+                              />
+                            </div>
+                            <span className="text-xs text-ink-400">/mo budget</span>
+                            <button
+                              onClick={() => saveBudget(row.key)}
+                              className="text-xs px-2 py-0.5 rounded-md bg-ink-800 text-white hover:bg-ink-700 transition-colors"
+                            >
+                              Save
+                            </button>
+                            {budget && (
+                              <button
+                                onClick={() => deleteBudget(row.key)}
+                                className="text-xs text-ink-300 hover:text-accent-red transition-colors"
+                              >
+                                Remove
+                              </button>
+                            )}
+                            <button onClick={() => setEditingBudget(null)} className="text-xs text-ink-300 hover:text-ink-500">
+                              Cancel
+                            </button>
+                          </div>
+                        ) : budget ? (
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex-1 h-1.5 bg-sand-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${barColor}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className={`text-xs tabular-nums shrink-0 ${overBudget ? 'text-accent-red font-medium' : 'text-ink-300'}`}>
+                              {overBudget
+                                ? `${formatCurrency(row.current - budget)} over`
+                                : `${formatCurrency(budget - row.current)} left`}
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setBudgetDraft(String(budget)); setEditingBudget(row.key); }}
+                              className="text-xs text-ink-300 hover:text-ink-500 transition-colors shrink-0"
+                            >
+                              {formatCurrency(budget)}/mo
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setBudgetDraft(''); setEditingBudget(row.key); }}
+                            className="text-xs text-ink-300 hover:text-ink-500 transition-colors mt-0.5"
+                          >
+                            + Set budget
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
