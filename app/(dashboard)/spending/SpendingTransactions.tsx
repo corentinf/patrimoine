@@ -46,6 +46,7 @@ export default function SpendingTransactions({
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [chipsExpanded, setChipsExpanded] = useState(false);
+  const [hoveredChip, setHoveredChip] = useState<string | null>(null);
 
   const CHIPS_COLLAPSED = 8;
 
@@ -208,18 +209,45 @@ export default function SpendingTransactions({
             {/* Category chips */}
             {(chipsExpanded ? chipCategories : chipCategories.slice(0, CHIPS_COLLAPSED)).map((cat) => {
               const active = filterCategories.includes(cat.name);
+              const showAdd = filterCategories.length > 0 && !active && hoveredChip === cat.name;
               return (
-                <button
+                <div
                   key={cat.name}
-                  onClick={() => setFilterCategories(active ? [] : [cat.name])}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                    active ? 'text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-                  }`}
-                  style={active ? { backgroundColor: cat.color } : {}}
+                  className="relative"
+                  onMouseEnter={() => setHoveredChip(cat.name)}
+                  onMouseLeave={() => setHoveredChip(null)}
                 >
-                  <span>{cat.icon}</span>
-                  {cat.name}
-                </button>
+                  <button
+                    onClick={() => {
+                      if (active) {
+                        setFilterCategories(filterCategories.filter((n) => n !== cat.name));
+                      } else {
+                        setFilterCategories([cat.name]);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      active ? 'text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                    }`}
+                    style={active ? { backgroundColor: cat.color } : {}}
+                  >
+                    <span>{cat.icon}</span>
+                    {cat.name}
+                  </button>
+                  {showAdd && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFilterCategories([...filterCategories, cat.name]);
+                      }}
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-ink-800 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-ink-600 transition-colors"
+                      title={`Add ${cat.name} to filter`}
+                    >
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               );
             })}
 
