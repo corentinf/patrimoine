@@ -305,6 +305,20 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return filteredTransactions.filter((tx) => tx.category?.id === selectedCategoryKey);
   }, [filteredTransactions, selectedCategoryKey]);
 
+  // Transactions tab uses full dataset (all 12 months), only account + category filtered
+  const allAccountFiltered = useMemo(() => {
+    if (!selectedAccount) return transactions;
+    return transactions.filter((tx) => tx.account_id === selectedAccount);
+  }, [transactions, selectedAccount]);
+
+  const allTabTransactions = useMemo(() => {
+    if (!selectedCategoryKey) return allAccountFiltered;
+    if (selectedCategoryKey === '__uncategorized__') {
+      return allAccountFiltered.filter((tx) => !tx.category);
+    }
+    return allAccountFiltered.filter((tx) => tx.category?.id === selectedCategoryKey);
+  }, [allAccountFiltered, selectedCategoryKey]);
+
   const prevFiltered = useMemo(() => {
     const prev = applyDateFilter(transactions, getPrevPeriodFilter(dateFilter));
     if (!selectedAccount) return prev;
@@ -690,9 +704,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               </button>
             </div>
           </div>
-          {filteredTransactions.length > 0 ? (
+          {allTabTransactions.length > 0 ? (
             <SpendingTransactions
-              transactions={visibleTransactions as any}
+              transactions={allTabTransactions as any}
               allCategories={allCategories}
               venmoRequests={venmoRequests}
             />
