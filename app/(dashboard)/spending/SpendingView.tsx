@@ -408,6 +408,16 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     ? formatMonthLabel(dateFilter.year, dateFilter.month)
     : `${dateFilter.start} – ${dateFilter.end}`;
 
+  const pacedTotal = useMemo(() => {
+    if (dateFilter.mode !== 'month') return null;
+    if (dateFilter.year !== now.getFullYear() || dateFilter.month !== now.getMonth()) return null;
+    const dayOfMonth = now.getDate();
+    const daysInMonth = new Date(dateFilter.year, dateFilter.month + 1, 0).getDate();
+    if (dayOfMonth >= daysInMonth - 1) return null; // month nearly over, not useful
+    const dailyAvg = totalSpending / dayOfMonth;
+    return Math.round(dailyAvg * daysInMonth);
+  }, [dateFilter, totalSpending, now]);
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -419,6 +429,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         <div className="sm:text-right">
           <p className="stat-label">{periodLabel}</p>
           <p className="stat-value text-accent-red">{formatCurrency(totalSpending)}</p>
+          {pacedTotal !== null && (
+            <p className="text-xs text-ink-400 mt-1">
+              on pace for{' '}
+              <span className="font-mono text-ink-600">{formatCurrency(pacedTotal)}</span>
+              {' '}by end of month
+            </p>
+          )}
         </div>
       </div>
 
