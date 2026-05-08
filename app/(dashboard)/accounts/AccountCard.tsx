@@ -8,8 +8,10 @@ interface AccountCardProps {
     id: string;
     name: string;
     institution: string;
+    institution_domain: string | null;
     account_type: string;
     balance: number;
+    available_balance: number | null;
     balance_date: string;
   };
 }
@@ -17,7 +19,6 @@ interface AccountCardProps {
 export default function AccountCard({ account }: AccountCardProps) {
   const isManual = account.id.startsWith('manual_');
   const isCredit = account.account_type === 'credit';
-  const displayBalance = isCredit ? -Number(account.balance) : Number(account.balance);
 
   const [editing, setEditing] = useState(false);
   const [balanceInput, setBalanceInput] = useState(String(Math.abs(Number(account.balance))));
@@ -58,8 +59,25 @@ export default function AccountCard({ account }: AccountCardProps) {
 
   const currentDisplay = isCredit ? -currentBalance : currentBalance;
 
+  const institutionUrl = !isManual && account.institution_domain
+    ? `https://${account.institution_domain}`
+    : null;
+
+  const availableBalance = account.available_balance != null ? Number(account.available_balance) : null;
+  const creditLimit = isCredit && availableBalance != null
+    ? Math.abs(Number(account.balance)) + availableBalance
+    : null;
+
+  const Wrapper = institutionUrl ? 'a' : 'div';
+  const wrapperProps = institutionUrl
+    ? { href: institutionUrl, target: '_blank', rel: 'noopener noreferrer' }
+    : {};
+
   return (
-    <div className="card-hover flex items-center justify-between group">
+    <Wrapper
+      {...wrapperProps}
+      className="card-hover flex items-center justify-between group"
+    >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p data-sensitive className="text-sm font-medium text-ink-700 truncate">{account.name}</p>
@@ -69,6 +87,11 @@ export default function AccountCard({ account }: AccountCardProps) {
         </div>
         <p data-sensitive className="text-xs text-ink-300 mt-0.5">
           {account.institution}
+          {isCredit && creditLimit != null && (
+            <span className="ml-2">
+              · {formatCurrencyPrecise(availableBalance!)} available of {formatCurrencyPrecise(creditLimit)}
+            </span>
+          )}
           {account.balance_date && (
             <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
               · updated {formatDate(account.balance_date)}
@@ -134,6 +157,6 @@ export default function AccountCard({ account }: AccountCardProps) {
           </>
         )}
       </div>
-    </div>
+    </Wrapper>
   );
 }
