@@ -9,6 +9,7 @@ interface AccountCardProps {
     name: string;
     institution: string;
     institution_domain: string | null;
+    custom_url: string | null;
     account_type: string;
     balance: number;
     available_balance: number | null;
@@ -25,6 +26,11 @@ export default function AccountCard({ account }: AccountCardProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [currentBalance, setCurrentBalance] = useState(Number(account.balance));
+
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [urlInput, setUrlInput] = useState(account.custom_url ?? '');
+  const [savingUrl, setSavingUrl] = useState(false);
+  const [customUrl, setCustomUrl] = useState(account.custom_url);
 
   const handleSave = async () => {
     setSaving(true);
@@ -57,20 +63,37 @@ export default function AccountCard({ account }: AccountCardProps) {
     window.location.reload();
   };
 
+  const handleSaveUrl = async () => {
+    setSavingUrl(true);
+    const normalized = urlInput.trim()
+      ? urlInput.trim().startsWith('http') ? urlInput.trim() : `https://${urlInput.trim()}`
+      : '';
+    const res = await fetch('/api/accounts/link', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: account.id, custom_url: normalized || null }),
+    });
+    setSavingUrl(false);
+    if (res.ok) {
+      setCustomUrl(normalized || null);
+      setUrlInput(normalized);
+      setEditingUrl(false);
+    }
+  };
+
   const currentDisplay = isCredit ? -currentBalance : currentBalance;
 
-  const institutionUrl = !isManual && account.institution_domain
-    ? `https://${account.institution_domain}`
-    : null;
+  const resolvedUrl = customUrl
+    ?? (account.institution_domain ? `https://${account.institution_domain}` : null);
 
   const availableBalance = account.available_balance != null ? Number(account.available_balance) : null;
   const creditLimit = isCredit && availableBalance != null
     ? Math.abs(Number(account.balance)) + availableBalance
     : null;
 
-  const Wrapper = institutionUrl ? 'a' : 'div';
-  const wrapperProps = institutionUrl
-    ? { href: institutionUrl, target: '_blank', rel: 'noopener noreferrer' }
+  const Wrapper = resolvedUrl && !editingUrl ? 'a' : 'div';
+  const wrapperProps = resolvedUrl && !editingUrl
+    ? { href: resolvedUrl, target: '_blank', rel: 'noopener noreferrer' }
     : {};
 
   return (
@@ -98,6 +121,38 @@ export default function AccountCard({ account }: AccountCardProps) {
             </span>
           )}
         </p>
+        {editingUrl && (
+          <div
+            className="mt-1.5 flex items-center gap-1.5"
+            onClick={(e) => e.preventDefault()}
+          >
+            <input
+              type="url"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveUrl();
+                if (e.key === 'Escape') setEditingUrl(false);
+              }}
+              placeholder="https://chase.com"
+              className="w-48 text-xs border border-sand-200 rounded px-2 py-0.5 focus:outline-none focus:border-ink-400"
+              autoFocus
+            />
+            <button
+              onClick={handleSaveUrl}
+              disabled={savingUrl}
+              className="text-xs text-ink-600 hover:text-ink-900 font-medium"
+            >
+              {savingUrl ? '…' : 'Save'}
+            </button>
+            <button
+              onClick={() => setEditingUrl(false)}
+              className="text-xs text-ink-400 hover:text-ink-600"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="text-right flex-shrink-0 ml-4 flex items-center gap-2">
@@ -135,25 +190,37 @@ export default function AccountCard({ account }: AccountCardProps) {
               {isCredit && currentDisplay > 0 ? '-' : ''}
               {formatCurrencyPrecise(Math.abs(currentDisplay))}
             </p>
-            {isManual && (
-              <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => { setBalanceInput(String(Math.abs(currentBalance))); setEditing(true); }}
-                  className="text-xs text-ink-400 hover:text-ink-700"
-                  title="Edit balance"
-                >
-                  ✎
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="text-xs text-ink-300 hover:text-red-500"
-                  title="Remove account"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+            <div
+              className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+              onClick={(e) => e.preventDefault()}
+            >
+              <button
+                onClick={() => { setUrlInput(customUrl ?? ''); setEditingUrl(true); }}
+                className="text-xs text-ink-300 hover:text-ink-600"
+                title={resolvedUrl ? `Link: ${resolvedUrl}` : 'Set link'}
+              >
+                {resolvedUrl ? '🔗' : '＋'}
+              </button>
+              {isManual && (
+                <>
+                  <button
+                    onClick={() => { setBalanceInput(String(Math.abs(currentBalance))); setEditing(true); }}
+                    className="text-xs text-ink-400 hover:text-ink-700"
+                    title="Edit balance"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="text-xs text-ink-300 hover:text-red-500"
+                    title="Remove account"
+                  >
+                    ✕
+                  </button>
+                </>
+              )}
+            </div>
           </>
         )}
       </div>
