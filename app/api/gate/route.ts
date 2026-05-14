@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 const GATE_PASSWORD = '8991';
-export const GATE_COOKIE = 'gate_passed';
+const GATE_COOKIE = 'gate_passed';
 
 export async function POST(request: Request) {
   const { password } = await request.json();
