@@ -26,11 +26,21 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isPublic = pathname.startsWith('/login') || pathname.startsWith('/auth');
+  const isGate = pathname.startsWith('/gate') || pathname.startsWith('/api/gate');
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
+  }
+
+  if (user && !isPublic && !isGate) {
+    const passed = request.cookies.get('gate_passed')?.value === '1';
+    if (!passed) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/gate';
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;
