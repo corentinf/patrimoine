@@ -274,10 +274,6 @@ interface SpendingTransactionsProps {
   accounts?: { id: string; name: string; institution: string }[];
   selectedAccount?: string | null;
   onAccountChange?: (id: string | null) => void;
-  dateFilter?: DateFilter;
-  dateFilterActive?: boolean;
-  onDateFilterChange?: (f: DateFilter) => void;
-  onClearDateFilter?: () => void;
 }
 
 type SortField = 'date' | 'amount' | 'category';
@@ -290,11 +286,18 @@ export default function SpendingTransactions({
   accounts = [],
   selectedAccount = null,
   onAccountChange,
-  dateFilter,
-  dateFilterActive = false,
-  onDateFilterChange,
-  onClearDateFilter,
 }: SpendingTransactionsProps) {
+  // Local date filter — affects only the transactions list, not the page-level charts.
+  const [dateFilter, setDateFilter] = useState<DateFilter>(() => {
+    const n = new Date();
+    return { mode: 'month', year: n.getFullYear(), month: n.getMonth() };
+  });
+  const [dateFilterActive, setDateFilterActive] = useState(false);
+  const handleDateFilterChange = (f: DateFilter) => {
+    setDateFilterActive(true);
+    setDateFilter(f);
+  };
+  const clearDateFilter = () => setDateFilterActive(false);
   const venmoByTxId = useMemo(
     () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
     [venmoRequests],
@@ -341,6 +344,18 @@ export default function SpendingTransactions({
   const filtered = useMemo(() => {
     let result = transactions;
 
+    if (dateFilterActive) {
+      let start: string, end: string;
+      if (dateFilter.mode === 'month') {
+        start = new Date(dateFilter.year, dateFilter.month, 1).toISOString();
+        end = new Date(dateFilter.year, dateFilter.month + 1, 0, 23, 59, 59, 999).toISOString();
+      } else {
+        start = dateFilter.start + 'T00:00:00.000Z';
+        end = dateFilter.end + 'T23:59:59.999Z';
+      }
+      result = result.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
+    }
+
     if (filterCategories.length > 0) {
       result = result.filter((tx) =>
         filterCategories.includes(getEffectiveCategory(tx)?.name || 'Uncategorized'),
@@ -371,7 +386,7 @@ export default function SpendingTransactions({
       return sortDir === 'desc' ? -cmp : cmp;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, filterCategories, search, sortBy, sortDir, categoryOverrides, payeeOverrides]);
+  }, [transactions, dateFilter, dateFilterActive, filterCategories, search, sortBy, sortDir, categoryOverrides, payeeOverrides]);
 
   function toggleSort(field: SortField) {
     if (sortBy === field) {
@@ -453,15 +468,13 @@ export default function SpendingTransactions({
                 onChange={onAccountChange ?? (() => {})}
               />
             )}
-            {/* Date filter dropdown */}
-            {dateFilter && onDateFilterChange && onClearDateFilter && (
-              <DateDropdown
-                filter={dateFilter}
-                active={dateFilterActive}
-                onChange={onDateFilterChange}
-                onClear={onClearDateFilter}
-              />
-            )}
+            {/* Date filter dropdown — affects only the transactions list */}
+            <DateDropdown
+              filter={dateFilter}
+              active={dateFilterActive}
+              onChange={handleDateFilterChange}
+              onClear={clearDateFilter}
+            />
           </div>
           {hasFilters && (
             <button
@@ -469,7 +482,7 @@ export default function SpendingTransactions({
                 setFilterCategories([]);
                 setSearch('');
                 onAccountChange?.(null);
-                onClearDateFilter?.();
+                clearDateFilter();
               }}
               className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
             >
