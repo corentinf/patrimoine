@@ -47,7 +47,7 @@ interface SpendingViewProps {
   budgets: Record<string, number>;
 }
 
-type DateFilter =
+export type DateFilter =
   | { mode: 'month'; year: number; month: number }
   | { mode: 'custom'; start: string; end: string };
 
@@ -786,12 +786,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               accounts={accounts}
               selectedAccount={selectedAccount}
               onAccountChange={setSelectedAccount}
+              dateFilter={dateFilter}
               dateFilterActive={dateFilterTouched}
-              dateFilterLabel={
-                dateFilter.mode === 'month'
-                  ? formatMonthLabel(dateFilter.year, dateFilter.month)
-                  : `${dateFilter.start} → ${dateFilter.end}`
-              }
+              onDateFilterChange={setDateFilter}
               onClearDateFilter={() => setDateFilterTouched(false)}
             />
           ) : (

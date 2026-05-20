@@ -2,6 +2,175 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
+import type { DateFilter } from './SpendingView';
+
+function DateDropdown({
+  filter,
+  active,
+  onChange,
+  onClear,
+}: {
+  filter: DateFilter;
+  active: boolean;
+  onChange: (f: DateFilter) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showCustom, setShowCustom] = useState(filter.mode === 'custom');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const monthLabel = filter.mode === 'month'
+    ? new Date(filter.year, filter.month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : null;
+
+  const buttonLabel = !active
+    ? 'All time'
+    : filter.mode === 'month'
+      ? monthLabel
+      : `${filter.start} → ${filter.end}`;
+
+  const goMonth = (delta: number) => {
+    if (filter.mode !== 'month') return;
+    let { year, month } = filter;
+    month += delta;
+    if (month < 0) { month = 11; year--; }
+    if (month > 11) { month = 0; year++; }
+    onChange({ mode: 'month', year, month });
+  };
+
+  const switchToMonth = () => {
+    setShowCustom(false);
+    const now = new Date();
+    onChange({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
+  };
+
+  const switchToCustom = () => {
+    setShowCustom(true);
+    const start = filter.mode === 'month'
+      ? new Date(filter.year, filter.month, 1).toISOString().substring(0, 10)
+      : filter.start;
+    const end = filter.mode === 'month'
+      ? new Date(filter.year, filter.month + 1, 0).toISOString().substring(0, 10)
+      : filter.end;
+    onChange({ mode: 'custom', start, end });
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+          active
+            ? 'bg-ink-800 text-white hover:bg-ink-700'
+            : 'bg-white border border-sand-200 text-ink-600 hover:border-sand-300'
+        }`}
+      >
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        {buttonLabel}
+        <svg
+          className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg p-3 w-64 space-y-3">
+          {!showCustom ? (
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => goMonth(-1)}
+                disabled={filter.mode !== 'month'}
+                className="p-1 text-ink-500 hover:text-ink-800 disabled:opacity-30"
+                aria-label="Previous month"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="text-sm font-medium text-ink-700">
+                {filter.mode === 'month' ? monthLabel : 'Custom'}
+              </span>
+              <button
+                onClick={() => goMonth(1)}
+                disabled={filter.mode !== 'month'}
+                className="p-1 text-ink-500 hover:text-ink-800 disabled:opacity-30"
+                aria-label="Next month"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            filter.mode === 'custom' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-xs">
+                  <label className="text-ink-400 w-10">From</label>
+                  <input
+                    type="date"
+                    value={filter.start}
+                    max={filter.end}
+                    onChange={(e) => onChange({ ...filter, start: e.target.value })}
+                    className="flex-1 px-2 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <label className="text-ink-400 w-10">To</label>
+                  <input
+                    type="date"
+                    value={filter.end}
+                    min={filter.start}
+                    onChange={(e) => onChange({ ...filter, end: e.target.value })}
+                    className="flex-1 px-2 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
+                  />
+                </div>
+              </div>
+            )
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t border-sand-100 text-xs">
+            {!showCustom ? (
+              <button
+                onClick={switchToCustom}
+                className="text-ink-500 hover:text-ink-800 transition-colors"
+              >
+                Custom range…
+              </button>
+            ) : (
+              <button
+                onClick={switchToMonth}
+                className="text-ink-500 hover:text-ink-800 transition-colors"
+              >
+                ← Month view
+              </button>
+            )}
+            {active && (
+              <button
+                onClick={() => { onClear(); setOpen(false); }}
+                className="text-ink-400 hover:text-ink-700 transition-colors"
+              >
+                Show all
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AccountDropdown({
   accounts,
@@ -105,8 +274,9 @@ interface SpendingTransactionsProps {
   accounts?: { id: string; name: string; institution: string }[];
   selectedAccount?: string | null;
   onAccountChange?: (id: string | null) => void;
+  dateFilter?: DateFilter;
   dateFilterActive?: boolean;
-  dateFilterLabel?: string;
+  onDateFilterChange?: (f: DateFilter) => void;
   onClearDateFilter?: () => void;
 }
 
@@ -120,8 +290,9 @@ export default function SpendingTransactions({
   accounts = [],
   selectedAccount = null,
   onAccountChange,
+  dateFilter,
   dateFilterActive = false,
-  dateFilterLabel,
+  onDateFilterChange,
   onClearDateFilter,
 }: SpendingTransactionsProps) {
   const venmoByTxId = useMemo(
@@ -282,20 +453,14 @@ export default function SpendingTransactions({
                 onChange={onAccountChange ?? (() => {})}
               />
             )}
-            {/* Active date filter chip */}
-            {dateFilterActive && dateFilterLabel && (
-              <button
-                onClick={onClearDateFilter}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-ink-800 text-white hover:bg-ink-700 transition-colors"
-                title="Clear date filter"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                {dateFilterLabel}
-                <span className="ml-0.5 opacity-70">✕</span>
-              </button>
+            {/* Date filter dropdown */}
+            {dateFilter && onDateFilterChange && onClearDateFilter && (
+              <DateDropdown
+                filter={dateFilter}
+                active={dateFilterActive}
+                onChange={onDateFilterChange}
+                onClear={onClearDateFilter}
+              />
             )}
           </div>
           {hasFilters && (
