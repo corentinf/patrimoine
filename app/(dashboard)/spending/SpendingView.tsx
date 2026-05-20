@@ -466,8 +466,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
   return (
     <div className="space-y-8">
-      {/* Header with integrated date navigation */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* Header with integrated date navigation — sticky on mobile */}
+      <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-3 bg-sand-50/95 backdrop-blur-sm border-b border-sand-200/60 md:static md:mx-0 md:px-0 md:pt-0 md:pb-0 md:bg-transparent md:backdrop-blur-none md:border-0 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl text-ink-800">Spending</h2>
           <p className="text-sm text-ink-400 mt-1">Where your money goes</p>
