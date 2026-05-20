@@ -786,6 +786,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               accounts={accounts}
               selectedAccount={selectedAccount}
               onAccountChange={setSelectedAccount}
+              dateFilterActive={dateFilterTouched}
+              dateFilterLabel={
+                dateFilter.mode === 'month'
+                  ? formatMonthLabel(dateFilter.year, dateFilter.month)
+                  : `${dateFilter.start} → ${dateFilter.end}`
+              }
+              onClearDateFilter={() => setDateFilterTouched(false)}
             />
           ) : (
             <div className="card text-center py-16">

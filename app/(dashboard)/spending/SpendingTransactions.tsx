@@ -105,6 +105,9 @@ interface SpendingTransactionsProps {
   accounts?: { id: string; name: string; institution: string }[];
   selectedAccount?: string | null;
   onAccountChange?: (id: string | null) => void;
+  dateFilterActive?: boolean;
+  dateFilterLabel?: string;
+  onClearDateFilter?: () => void;
 }
 
 type SortField = 'date' | 'amount' | 'category';
@@ -117,6 +120,9 @@ export default function SpendingTransactions({
   accounts = [],
   selectedAccount = null,
   onAccountChange,
+  dateFilterActive = false,
+  dateFilterLabel,
+  onClearDateFilter,
 }: SpendingTransactionsProps) {
   const venmoByTxId = useMemo(
     () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
@@ -205,7 +211,11 @@ export default function SpendingTransactions({
     }
   }
 
-  const hasFilters = filterCategories.length > 0 || !!search.trim() || !!selectedAccount;
+  const hasFilters =
+    filterCategories.length > 0 ||
+    !!search.trim() ||
+    !!selectedAccount ||
+    dateFilterActive;
   const detailTx = detailTxId ? transactions.find((t) => t.id === detailTxId) : null;
 
   return (
@@ -272,10 +282,30 @@ export default function SpendingTransactions({
                 onChange={onAccountChange ?? (() => {})}
               />
             )}
+            {/* Active date filter chip */}
+            {dateFilterActive && dateFilterLabel && (
+              <button
+                onClick={onClearDateFilter}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-ink-800 text-white hover:bg-ink-700 transition-colors"
+                title="Clear date filter"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {dateFilterLabel}
+                <span className="ml-0.5 opacity-70">✕</span>
+              </button>
+            )}
           </div>
           {hasFilters && (
             <button
-              onClick={() => { setFilterCategories([]); setSearch(''); onAccountChange?.(null); }}
+              onClick={() => {
+                setFilterCategories([]);
+                setSearch('');
+                onAccountChange?.(null);
+                onClearDateFilter?.();
+              }}
               className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
             >
               Clear filters
