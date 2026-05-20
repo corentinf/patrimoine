@@ -258,11 +258,18 @@ function DateNav({ filter, onChange }: { filter: DateFilter; onChange: (f: DateF
 
 export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets }: SpendingViewProps) {
   const now = new Date();
-  const [dateFilter, setDateFilter] = useState<DateFilter>({
+  const [dateFilter, setDateFilterRaw] = useState<DateFilter>({
     mode: 'month',
     year: now.getFullYear(),
     month: now.getMonth(),
   });
+  // Tracks whether the user has interacted with the date picker. Until they do,
+  // the Transactions tab shows all transactions across all months.
+  const [dateFilterTouched, setDateFilterTouched] = useState(false);
+  const setDateFilter = (f: DateFilter) => {
+    setDateFilterTouched(true);
+    setDateFilterRaw(f);
+  };
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
@@ -306,19 +313,22 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return filteredTransactions.filter((tx) => tx.category?.id === selectedCategoryKey);
   }, [filteredTransactions, selectedCategoryKey]);
 
-  // Transactions tab uses full dataset (all 12 months), only account + category filtered
+  // Transactions tab: full dataset (all months) until the user touches the date picker,
+  // then it filters down to the selected period.
   const allAccountFiltered = useMemo(() => {
     if (!selectedAccount) return transactions;
     return transactions.filter((tx) => tx.account_id === selectedAccount);
   }, [transactions, selectedAccount]);
 
-  const allTabTransactions = useMemo(() => {
+  const unfilteredTabTransactions = useMemo(() => {
     if (!selectedCategoryKey) return allAccountFiltered;
     if (selectedCategoryKey === '__uncategorized__') {
       return allAccountFiltered.filter((tx) => !tx.category);
     }
     return allAccountFiltered.filter((tx) => tx.category?.id === selectedCategoryKey);
   }, [allAccountFiltered, selectedCategoryKey]);
+
+  const allTabTransactions = dateFilterTouched ? visibleTransactions : unfilteredTabTransactions;
 
   const prevFiltered = useMemo(() => {
     const prev = applyDateFilter(transactions, getPrevPeriodFilter(dateFilter));
