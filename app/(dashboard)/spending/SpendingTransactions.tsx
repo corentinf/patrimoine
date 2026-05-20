@@ -274,6 +274,10 @@ interface SpendingTransactionsProps {
   accounts?: { id: string; name: string; institution: string }[];
   selectedAccount?: string | null;
   onAccountChange?: (id: string | null) => void;
+  /** External date filter (e.g. from the page-level month picker) — when it
+   *  changes, the transactions list syncs to it. The user can still override
+   *  via the local dropdown without affecting the parent. */
+  externalDateFilter?: DateFilter;
 }
 
 type SortField = 'date' | 'amount' | 'category';
@@ -286,6 +290,7 @@ export default function SpendingTransactions({
   accounts = [],
   selectedAccount = null,
   onAccountChange,
+  externalDateFilter,
 }: SpendingTransactionsProps) {
   // Local date filter — affects only the transactions list, not the page-level charts.
   const [dateFilter, setDateFilter] = useState<DateFilter>(() => {
@@ -298,6 +303,19 @@ export default function SpendingTransactions({
     setDateFilter(f);
   };
   const clearDateFilter = () => setDateFilterActive(false);
+
+  // Sync from the parent date picker when it changes (but not on first mount —
+  // we want the transactions list to default to "all time").
+  const firstRenderRef = useRef(true);
+  useEffect(() => {
+    if (!externalDateFilter) return;
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      return;
+    }
+    setDateFilter(externalDateFilter);
+    setDateFilterActive(true);
+  }, [externalDateFilter]);
   const venmoByTxId = useMemo(
     () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
     [venmoRequests],
