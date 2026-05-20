@@ -466,84 +466,113 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
   return (
     <div className="space-y-8">
-      {/* Header with integrated date navigation — sticky on mobile */}
-      <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-3 bg-sand-50/95 backdrop-blur-sm border-b border-sand-200/60 md:static md:mx-0 md:px-0 md:pt-0 md:pb-0 md:bg-transparent md:backdrop-blur-none md:border-0 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl text-ink-800">Spending</h2>
-          <p className="text-sm text-ink-400 mt-1">Where your money goes</p>
-        </div>
-        <div className="sm:text-right">
-          {/* Period label with inline navigation */}
-          {showCustom && dateFilter.mode === 'custom' ? (
-            <div className="flex flex-wrap items-center gap-2 justify-end mb-1">
-              <div className="flex items-center gap-1.5">
-                <label className="text-xs text-ink-400">From</label>
-                <input
-                  type="date"
-                  value={dateFilter.start}
-                  max={dateFilter.end}
-                  onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
-                  className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <label className="text-xs text-ink-400">To</label>
-                <input
-                  type="date"
-                  value={dateFilter.end}
-                  min={dateFilter.start}
-                  max={now.toISOString().substring(0, 10)}
-                  onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
-                  className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
-                />
-              </div>
-              <button onClick={backToMonth} className="text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap">
-                ← Month view
-              </button>
+      {(() => {
+        const dateNav = showCustom && dateFilter.mode === 'custom' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-ink-400">From</label>
+              <input
+                type="date"
+                value={dateFilter.start}
+                max={dateFilter.end}
+                onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
+                className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
+              />
             </div>
-          ) : (
-            <div className="flex items-center gap-0.5 justify-end mb-1">
-              <button
-                onClick={() => goMonth(-1)}
-                className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
-                aria-label="Previous month"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span className="stat-label px-1">{periodLabel}</span>
-              <button
-                onClick={() => goMonth(1)}
-                disabled={isCurrentMonth}
-                className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
-                aria-label="Next month"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-              <button
-                onClick={activateCustom}
-                className="ml-0.5 p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
-                title="Custom date range"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </button>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-ink-400">To</label>
+              <input
+                type="date"
+                value={dateFilter.end}
+                min={dateFilter.start}
+                max={now.toISOString().substring(0, 10)}
+                onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
+                className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
+              />
             </div>
-          )}
-          <p className="stat-value text-accent-red">{formatCurrency(totalSpending)}</p>
-          {pacedTotal !== null && (
-            <p className="text-xs text-ink-400 mt-1">
-              on pace for{' '}
-              <span className="font-mono text-ink-600">{formatCurrency(pacedTotal)}</span>
-              {' '}by end of month
-            </p>
-          )}
-        </div>
-      </div>
+            <button onClick={backToMonth} className="text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap">
+              ← Month view
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => goMonth(-1)}
+              className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
+              aria-label="Previous month"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className="stat-label px-1">{periodLabel}</span>
+            <button
+              onClick={() => goMonth(1)}
+              disabled={isCurrentMonth}
+              className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
+              aria-label="Next month"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            <button
+              onClick={activateCustom}
+              className="ml-0.5 p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
+              title="Custom date range"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+          </div>
+        );
+
+        const paceLine = pacedTotal !== null && (
+          <p className="text-xs text-ink-400">
+            on pace for{' '}
+            <span className="font-mono text-ink-600">{formatCurrency(pacedTotal)}</span>
+            <span className="hidden sm:inline">{' '}by end of month</span>
+          </p>
+        );
+
+        return (
+          <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-2 bg-sand-50/95 backdrop-blur-sm border-b border-sand-200/60 md:static md:mx-0 md:px-0 md:pt-0 md:pb-0 md:bg-transparent md:backdrop-blur-none md:border-0">
+            {/* Mobile: compact 2-row layout */}
+            <div className="md:hidden space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-display text-xl text-ink-800 leading-none">Spending</h2>
+                <p className="font-display text-2xl tracking-tight text-accent-red leading-none">
+                  {formatCurrency(totalSpending)}
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="min-w-0 [&>*]:flex-wrap">{dateNav}</div>
+                <div className="text-right truncate">{paceLine}</div>
+              </div>
+            </div>
+
+            {/* Desktop: original two-column layout */}
+            <div className="hidden md:flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl text-ink-800">Spending</h2>
+                <p className="text-sm text-ink-400 mt-1">Where your money goes</p>
+              </div>
+              <div className="sm:text-right">
+                <div className="flex justify-end mb-1">{dateNav}</div>
+                <p className="stat-value text-accent-red">{formatCurrency(totalSpending)}</p>
+                {pacedTotal !== null && (
+                  <p className="text-xs text-ink-400 mt-1">
+                    on pace for{' '}
+                    <span className="font-mono text-ink-600">{formatCurrency(pacedTotal)}</span>
+                    {' '}by end of month
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Savings rate */}
       <SavingsRateModule
