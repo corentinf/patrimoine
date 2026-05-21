@@ -5,24 +5,98 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createBrowserClient } from '@/app/lib/supabase';
 import { usePrivacy } from '@/app/lib/privacy';
+import { formatCurrency, accountTypeConfig } from '@/app/lib/utils';
 import PlaidLinkButton from './PlaidLink';
 import SimpleFINLinkButton from './SimpleFINLink';
 
 const navItems = [
-  { href: '/accounts', label: 'Accounts', icon: '◉' },
   { href: '/spending', label: 'Spending', icon: '◧' },
   { href: '/networth', label: 'Net worth', icon: '◆' },
 ];
 
-export default function Sidebar() {
+export interface SidebarAccount {
+  id: string;
+  name: string;
+  institution: string;
+  account_type: string;
+  balance: number;
+}
+
+function compactCurrency(amount: number): string {
+  const abs = Math.abs(amount);
+  if (abs >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+  if (abs >= 10_000) return `$${(amount / 1000).toFixed(0)}K`;
+  if (abs >= 1_000) return `$${(amount / 1000).toFixed(1)}K`;
+  return `$${Math.round(amount)}`;
+}
+
+const TYPE_ORDER = ['checking', 'savings', 'investment', 'credit'];
+
+function AccountsPanel({ accounts }: { accounts: SidebarAccount[] }) {
+  const assets = accounts
+    .filter((a) => a.account_type !== 'credit')
+    .reduce((s, a) => s + Number(a.balance), 0);
+  const liabilities = accounts
+    .filter((a) => a.account_type === 'credit')
+    .reduce((s, a) => s + Math.abs(Number(a.balance)), 0);
+  const netWorth = assets - liabilities;
+
+  const grouped = accounts.reduce<Record<string, SidebarAccount[]>>((acc, a) => {
+    const t = a.account_type || 'checking';
+    (acc[t] ||= []).push(a);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-3">
+      <div className="px-3 py-2 rounded-lg border border-ink-800/20 bg-sand-50">
+        <p className="text-[10px] uppercase tracking-wider text-ink-400 font-medium">Net worth</p>
+        <p className="font-display text-lg text-ink-800 mt-0.5 leading-tight" data-sensitive>
+          {formatCurrency(netWorth)}
+        </p>
+      </div>
+      {TYPE_ORDER.map((t) => {
+        const group = grouped[t];
+        if (!group?.length) return null;
+        const cfg = accountTypeConfig[t];
+        return (
+          <div key={t} className="space-y-0.5">
+            <div className="px-3 flex items-center gap-1 text-[10px] uppercase tracking-wider text-ink-400 font-semibold">
+              <span>{cfg.icon}</span>
+              {cfg.label}
+            </div>
+            {group.map((a) => (
+              <div
+                key={a.id}
+                className="flex items-center justify-between gap-2 px-3 py-1 rounded-md text-xs hover:bg-sand-50"
+                title={`${a.institution} — ${a.name}`}
+              >
+                <span className="truncate text-ink-700">{a.institution || a.name}</span>
+                <span
+                  className={`font-mono shrink-0 ${a.account_type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
+                  data-sensitive
+                >
+                  {compactCurrency(a.balance)}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function Sidebar({ accounts }: { accounts: SidebarAccount[] }) {
   const pathname = usePathname();
+  const [mobileAccountsOpen, setMobileAccountsOpen] = useState(false);
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside className="hidden md:flex fixed top-0 left-0 h-screen w-56 bg-white border-r border-sand-200 flex-col z-10">
         {/* Logo */}
-        <div className="px-6 py-6 border-b border-sand-100">
+        <div className="px-6 py-5 border-b border-sand-100 flex-shrink-0">
           <h1 className="font-display text-xl text-ink-800 tracking-tight">
             Patrimoine
           </h1>
@@ -32,7 +106,7 @@ export default function Sidebar() {
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="px-3 py-3 space-y-1 flex-shrink-0 border-b border-sand-100">
           {navItems.map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
@@ -40,7 +114,7 @@ export default function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                  flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium
                   transition-all duration-150
                   ${isActive
                     ? 'bg-sand-100 text-ink-800'
@@ -55,8 +129,13 @@ export default function Sidebar() {
           })}
         </nav>
 
+        {/* Accounts panel (scrollable) */}
+        <div className="flex-1 overflow-y-auto py-3">
+          <AccountsPanel accounts={accounts} />
+        </div>
+
         {/* Bottom actions */}
-        <div className="px-3 py-4 border-t border-sand-100 space-y-2">
+        <div className="px-3 py-3 border-t border-sand-100 space-y-2 flex-shrink-0">
           <SyncButton />
           <ProfileMenu />
         </div>
@@ -79,9 +158,43 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        <button
+          onClick={() => setMobileAccountsOpen(true)}
+          className="flex-1 flex flex-col items-center gap-1 py-2.5 text-ink-400 hover:text-ink-600 transition-colors"
+        >
+          <span className="text-lg leading-none">◉</span>
+          <span className="text-[10px] font-medium">Accounts</span>
+        </button>
         <MobileSyncButton />
         <MobileProfileMenu />
       </nav>
+
+      {/* Mobile accounts drawer */}
+      {mobileAccountsOpen && (
+        <div className="md:hidden fixed inset-0 z-[60]">
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setMobileAccountsOpen(false)}
+          />
+          <aside className="absolute right-0 top-0 bottom-0 w-[85%] max-w-sm bg-white border-l border-sand-200 flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-sand-100">
+              <h2 className="font-display text-lg text-ink-800">Accounts</h2>
+              <button
+                onClick={() => setMobileAccountsOpen(false)}
+                className="p-1 text-ink-400 hover:text-ink-700"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto py-3">
+              <AccountsPanel accounts={accounts} />
+            </div>
+          </aside>
+        </div>
+      )}
     </>
   );
 }
@@ -373,7 +486,7 @@ function ResetButton({ onClose }: { onClose: () => void }) {
   async function handleReset() {
     setPhase('resetting');
     await fetch('/api/reset', { method: 'POST' });
-    window.location.href = '/accounts';
+    window.location.href = '/spending';
   }
 
   if (phase === 'confirm') {

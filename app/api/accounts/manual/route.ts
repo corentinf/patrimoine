@@ -52,8 +52,7 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await captureNetWorthSnapshot(supabase, user.id);
-  revalidatePath('/accounts');
-  revalidatePath('/networth');
+  revalidatePath('/', 'layout');
   return NextResponse.json({ ok: true, id });
 }
 
@@ -90,7 +89,6 @@ export async function DELETE(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   await captureNetWorthSnapshot(supabase, user.id);
-  revalidatePath('/accounts');
-  revalidatePath('/networth');
+  revalidatePath('/', 'layout');
   return NextResponse.json({ ok: true });
 }

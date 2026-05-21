@@ -21,7 +21,7 @@ export default function GatePage() {
     });
 
     if (res.ok) {
-      router.replace('/accounts');
+      router.replace('/spending');
     } else {
       setError('Incorrect password');
       setLoading(false);

@@ -36,9 +36,7 @@ export async function POST() {
   await supabase.from('simplefin_connections').delete().eq('user_id', uid);
   // Categories and category_rules are intentionally kept
 
-  revalidatePath('/accounts');
-  revalidatePath('/spending');
-  revalidatePath('/networth');
+  revalidatePath('/', 'layout');
 
   return NextResponse.json({ ok: true });
 }

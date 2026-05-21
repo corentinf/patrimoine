@@ -34,6 +34,6 @@ export async function PATCH(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  revalidatePath('/accounts');
+  revalidatePath('/', 'layout');
   return NextResponse.json({ ok: true });
 }
