@@ -4,43 +4,103 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrencyPrecise } from '@/app/lib/utils';
 import type { DateFilter } from './SpendingView';
 
-type Segment = '7d' | '30d' | '3m' | '6m' | 'ytd' | 'all' | 'custom';
-
-const SEGMENTS: { id: Segment; label: string }[] = [
-  { id: '7d', label: '7D' },
-  { id: '30d', label: '30D' },
-  { id: '3m', label: '3M' },
-  { id: '6m', label: '6M' },
-  { id: 'ytd', label: 'YTD' },
-  { id: 'all', label: 'All' },
-  { id: 'custom', label: 'Custom' },
-];
-
-function computeSegmentRange(seg: Segment): { start: string; end: string } | null {
-  if (seg === 'all' || seg === 'custom') return null;
-  const today = new Date();
-  const end = today.toISOString().substring(0, 10);
-  const from = new Date(today);
-  if (seg === '7d') from.setDate(from.getDate() - 6);
-  else if (seg === '30d') from.setDate(from.getDate() - 29);
-  else if (seg === '3m') from.setMonth(from.getMonth() - 3);
-  else if (seg === '6m') from.setMonth(from.getMonth() - 6);
-  else { from.setMonth(0); from.setDate(1); } // ytd
-  return { start: from.toISOString().substring(0, 10), end };
+function isoDate(y: number, m: number, d: number) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-function DateSegmentControl({
-  value,
-  customRange,
-  onSelect,
-  onCustomRange,
+function CalendarMonth({
+  year, month, rangeStart, rangeEnd, hoverDate, selecting,
+  onDayClick, onDayHover,
 }: {
-  value: Segment;
-  customRange: { start: string; end: string };
-  onSelect: (seg: Segment) => void;
-  onCustomRange: (range: { start: string; end: string }) => void;
+  year: number; month: number;
+  rangeStart: string | null; rangeEnd: string | null;
+  hoverDate: string | null; selecting: boolean;
+  onDayClick: (d: string) => void;
+  onDayHover: (d: string | null) => void;
 }) {
+  const label = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Effective range including hover preview
+  const [effStart, effEnd] = (() => {
+    if (selecting && hoverDate && rangeStart) {
+      return hoverDate >= rangeStart
+        ? [rangeStart, hoverDate]
+        : [hoverDate, rangeStart];
+    }
+    return [rangeStart, rangeEnd];
+  })();
+
+  const cells: (number | null)[] = Array(firstDow).fill(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div className="min-w-[196px]">
+      <p className="text-xs font-semibold text-ink-700 text-center mb-3">{label}</p>
+      <div className="grid grid-cols-7 mb-1">
+        {['S','M','T','W','T','F','S'].map((d, i) => (
+          <span key={i} className="text-center text-[10px] text-ink-300 font-medium">{d}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {cells.map((day, i) => {
+          if (!day) return <span key={`e${i}`} />;
+          const ds = isoDate(year, month, day);
+          const isStart = ds === effStart;
+          const isEnd = ds === effEnd;
+          const inRange = !!(effStart && effEnd && ds > effStart && ds < effEnd);
+          return (
+            <div
+              key={day}
+              className={`flex items-center justify-center h-8 ${
+                inRange ? 'bg-sand-100' : ''
+              } ${isStart && effEnd ? 'rounded-l-full' : ''} ${isEnd && effStart ? 'rounded-r-full' : ''}`}
+            >
+              <button
+                onClick={() => onDayClick(ds)}
+                onMouseEnter={() => onDayHover(ds)}
+                onMouseLeave={() => onDayHover(null)}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs transition-colors ${
+                  isStart || isEnd
+                    ? 'bg-ink-800 text-white font-medium'
+                    : inRange
+                      ? 'hover:bg-sand-200 text-ink-700'
+                      : 'hover:bg-sand-100 text-ink-600'
+                }`}
+              >
+                {day}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DateControl({
+  dateFilter,
+  dateFilterActive,
+  onChange,
+  onClear,
+}: {
+  dateFilter: DateFilter;
+  dateFilterActive: boolean;
+  onChange: (f: DateFilter) => void;
+  onClear: () => void;
+}) {
+  const today = new Date();
   const [customOpen, setCustomOpen] = useState(false);
+  const [calYear, setCalYear] = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(Math.max(today.getMonth() - 1, 0));
+  const [rangeStart, setRangeStart] = useState<string | null>(
+    dateFilter.mode === 'custom' && dateFilterActive ? dateFilter.start : null
+  );
+  const [rangeEnd, setRangeEnd] = useState<string | null>(
+    dateFilter.mode === 'custom' && dateFilterActive ? dateFilter.end : null
+  );
+  const [hoverDate, setHoverDate] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,56 +111,125 @@ function DateSegmentControl({
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  function handleSegment(seg: Segment) {
-    if (seg === 'custom') {
-      setCustomOpen((v) => !v);
+  const isMonthActive = dateFilter.mode === 'month' && dateFilterActive;
+  const isCustomActive = dateFilter.mode === 'custom' && dateFilterActive;
+
+  const monthYear = isMonthActive
+    ? new Date(dateFilter.year, dateFilter.month, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : today.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+  const customLabel = isCustomActive
+    ? `${dateFilter.start.slice(5).replace('-', '/')} – ${dateFilter.end.slice(5).replace('-', '/')}`
+    : 'Custom';
+
+  function goMonth(delta: number) {
+    const base = isMonthActive ? new Date(dateFilter.year, dateFilter.month, 1) : new Date(today.getFullYear(), today.getMonth(), 1);
+    base.setMonth(base.getMonth() + delta);
+    onChange({ mode: 'month', year: base.getFullYear(), month: base.getMonth() });
+  }
+
+  function handleDayClick(ds: string) {
+    if (!rangeStart || (rangeStart && rangeEnd)) {
+      setRangeStart(ds);
+      setRangeEnd(null);
     } else {
+      const [s, e] = ds >= rangeStart ? [rangeStart, ds] : [ds, rangeStart];
+      setRangeStart(s);
+      setRangeEnd(e);
+      onChange({ mode: 'custom', start: s, end: e });
       setCustomOpen(false);
+      setHoverDate(null);
     }
-    onSelect(seg);
+  }
+
+  // Second calendar month
+  const cal2Month = calMonth === 11 ? 0 : calMonth + 1;
+  const cal2Year = calMonth === 11 ? calYear + 1 : calYear;
+
+  function calPrev() {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); }
+    else setCalMonth(calMonth - 1);
+  }
+  function calNext() {
+    if (calMonth === 10) { setCalMonth(11); }
+    else if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); }
+    else setCalMonth(calMonth + 1);
   }
 
   return (
-    <div ref={ref} className="relative shrink-0">
-      <div className="inline-flex items-center rounded-lg border border-sand-200 bg-white overflow-hidden divide-x divide-sand-200">
-        {SEGMENTS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => handleSegment(s.id)}
-            className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-              value === s.id
-                ? 'bg-ink-800 text-white'
-                : 'text-ink-500 hover:bg-sand-50 hover:text-ink-700'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
+    <div ref={ref} className="relative shrink-0 flex items-center gap-1.5">
+      {/* Inline month navigator */}
+      <div className={`flex items-center rounded-lg border bg-white ${isMonthActive ? 'border-ink-700' : 'border-sand-200'}`}>
+        <button
+          onClick={() => goMonth(-1)}
+          className="px-1.5 py-1 text-ink-400 hover:text-ink-700 transition-colors"
+          aria-label="Previous month"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <button
+          onClick={() => isMonthActive ? onClear() : onChange({ mode: 'month', year: today.getFullYear(), month: today.getMonth() })}
+          className={`text-xs font-medium px-1 min-w-[76px] text-center transition-colors ${isMonthActive ? 'text-ink-800' : 'text-ink-400 hover:text-ink-700'}`}
+        >
+          {monthYear}
+        </button>
+        <button
+          onClick={() => goMonth(1)}
+          className="px-1.5 py-1 text-ink-400 hover:text-ink-700 transition-colors"
+          aria-label="Next month"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
 
+      {/* Custom range button */}
+      <button
+        onClick={() => setCustomOpen((v) => !v)}
+        className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${
+          isCustomActive
+            ? 'bg-ink-800 text-white border-ink-800'
+            : 'bg-white border-sand-200 text-ink-500 hover:border-sand-300'
+        }`}
+      >
+        {customLabel}
+      </button>
+
+      {/* Calendar popover */}
       {customOpen && (
-        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg p-3 space-y-2 w-52">
-          <p className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Custom range</p>
-          <div className="flex items-center gap-1.5 text-xs">
-            <label className="text-ink-400 w-7 shrink-0">From</label>
-            <input
-              type="date"
-              value={customRange.start}
-              max={customRange.end || undefined}
-              onChange={(e) => onCustomRange({ ...customRange, start: e.target.value })}
-              className="flex-1 px-2 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
+        <div className="absolute right-0 top-full mt-2 z-30 bg-white border border-sand-200 rounded-2xl shadow-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={calPrev} className="p-1.5 rounded-lg hover:bg-sand-100 text-ink-400 hover:text-ink-700 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button onClick={calNext} className="p-1.5 rounded-lg hover:bg-sand-100 text-ink-400 hover:text-ink-700 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex gap-8">
+            <CalendarMonth
+              year={calYear} month={calMonth}
+              rangeStart={rangeStart} rangeEnd={rangeEnd}
+              hoverDate={hoverDate} selecting={!!(rangeStart && !rangeEnd)}
+              onDayClick={handleDayClick} onDayHover={setHoverDate}
+            />
+            <CalendarMonth
+              year={cal2Year} month={cal2Month}
+              rangeStart={rangeStart} rangeEnd={rangeEnd}
+              hoverDate={hoverDate} selecting={!!(rangeStart && !rangeEnd)}
+              onDayClick={handleDayClick} onDayHover={setHoverDate}
             />
           </div>
-          <div className="flex items-center gap-1.5 text-xs">
-            <label className="text-ink-400 w-7 shrink-0">To</label>
-            <input
-              type="date"
-              value={customRange.end}
-              min={customRange.start || undefined}
-              onChange={(e) => onCustomRange({ ...customRange, end: e.target.value })}
-              className="flex-1 px-2 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
-            />
-          </div>
+          {rangeStart && !rangeEnd && (
+            <p className="text-xs text-ink-400 text-center mt-3">Select end date</p>
+          )}
         </div>
       )}
     </div>
@@ -233,11 +362,6 @@ export default function SpendingTransactions({
     return { mode: 'month', year: n.getFullYear(), month: n.getMonth() };
   });
   const [dateFilterActive, setDateFilterActive] = useState(false);
-  const [activeSegment, setActiveSegment] = useState<Segment>('all');
-  const [customDateRange, setCustomDateRange] = useState(() => {
-    const today = new Date();
-    return { start: `${today.getFullYear()}-01-01`, end: today.toISOString().substring(0, 10) };
-  });
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   const handleDateFilterChange = (f: DateFilter) => {
@@ -245,27 +369,6 @@ export default function SpendingTransactions({
     setDateFilter(f);
   };
   const clearDateFilter = () => setDateFilterActive(false);
-
-  function handleSegmentSelect(seg: Segment) {
-    setActiveSegment(seg);
-    if (seg === 'all') {
-      clearDateFilter();
-    } else if (seg === 'custom') {
-      if (customDateRange.start && customDateRange.end) {
-        handleDateFilterChange({ mode: 'custom', start: customDateRange.start, end: customDateRange.end });
-      }
-    } else {
-      const range = computeSegmentRange(seg)!;
-      handleDateFilterChange({ mode: 'custom', start: range.start, end: range.end });
-    }
-  }
-
-  function handleCustomRangeChange(range: { start: string; end: string }) {
-    setCustomDateRange(range);
-    if (range.start && range.end) {
-      handleDateFilterChange({ mode: 'custom', start: range.start, end: range.end });
-    }
-  }
 
   // Sync from the parent date picker when it changes (but not on first mount —
   // we want the transactions list to default to "all time").
@@ -278,14 +381,6 @@ export default function SpendingTransactions({
     }
     setDateFilter(externalDateFilter);
     setDateFilterActive(true);
-    setActiveSegment('custom');
-    if (externalDateFilter.mode === 'custom') {
-      setCustomDateRange({ start: externalDateFilter.start, end: externalDateFilter.end });
-    } else if (externalDateFilter.mode === 'month') {
-      const start = new Date(externalDateFilter.year, externalDateFilter.month, 1).toISOString().substring(0, 10);
-      const end = new Date(externalDateFilter.year, externalDateFilter.month + 1, 0).toISOString().substring(0, 10);
-      setCustomDateRange({ start, end });
-    }
   }, [externalDateFilter]);
   const venmoByTxId = useMemo(
     () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
@@ -600,12 +695,12 @@ export default function SpendingTransactions({
             </button>
           </div>
 
-          {/* Date segment control */}
-          <DateSegmentControl
-            value={activeSegment}
-            customRange={customDateRange}
-            onSelect={handleSegmentSelect}
-            onCustomRange={handleCustomRangeChange}
+          {/* Date control */}
+          <DateControl
+            dateFilter={dateFilter}
+            dateFilterActive={dateFilterActive}
+            onChange={handleDateFilterChange}
+            onClear={clearDateFilter}
           />
 
           {/* Clear filters */}
@@ -616,7 +711,6 @@ export default function SpendingTransactions({
                 setSearch('');
                 onAccountChange?.(null);
                 clearDateFilter();
-                setActiveSegment('all');
               }}
               className="shrink-0 text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap"
             >
