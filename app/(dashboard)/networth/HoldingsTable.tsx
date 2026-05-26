@@ -253,39 +253,35 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
         ))}
       </div>
 
-      {/* Group breakdown — only in "All" view */}
-      {!selectedGroup && groupSummary.length > 1 && (
+      {/* Group breakdown */}
+      {groupSummary.length > 1 && (
         <div className="card p-0 overflow-hidden">
-          {groupSummary.map((g, i) => (
-            <button
-              key={g.group}
-              onClick={() => setSelectedGroup(g.group)}
-              className={`w-full grid grid-cols-12 gap-2 px-5 py-3 items-center text-left hover:bg-sand-50 transition-colors ${i > 0 ? 'border-t border-sand-100' : ''}`}
-            >
-              <div className="col-span-4 sm:col-span-3">
-                <p className="text-xs font-medium text-ink-700">{g.group}</p>
-                <p className="text-[10px] text-ink-400">{g.count} holding{g.count !== 1 ? 's' : ''}</p>
-              </div>
-              <div className="col-span-4 sm:col-span-3 text-right">
-                <p className="font-mono text-xs font-medium text-ink-700">{formatCurrency(g.mv)}</p>
-                <p className="text-[10px] text-ink-400">{g.portfolioPct.toFixed(1)}% of portfolio</p>
-              </div>
-              <div className={`col-span-4 sm:col-span-3 text-right font-mono text-xs font-medium ${g.gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {g.gain >= 0 ? '+' : ''}{formatCurrency(g.gain)}
-                <span className="ml-1 opacity-70">({g.gainPct >= 0 ? '+' : ''}{g.gainPct.toFixed(1)}%)</span>
-              </div>
-              <div className="hidden sm:block col-span-3">
-                <div className="flex items-center gap-2">
+          {groupSummary
+            .filter((g) => !selectedGroup || g.group === selectedGroup)
+            .map((g, i) => (
+              <div
+                key={g.group}
+                className={`grid grid-cols-12 gap-2 px-5 py-3 items-center ${i > 0 ? 'border-t border-sand-100' : ''}`}
+              >
+                <div className="col-span-4 sm:col-span-3">
+                  <p className="text-xs font-medium text-ink-700">{g.group}</p>
+                  <p className="text-[10px] text-ink-400">{g.count} holding{g.count !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="col-span-4 sm:col-span-3 text-right">
+                  <p className="font-mono text-xs font-medium text-ink-700">{formatCurrency(g.mv)}</p>
+                  <p className="text-[10px] text-ink-400">{g.portfolioPct.toFixed(1)}% of portfolio</p>
+                </div>
+                <div className={`col-span-4 sm:col-span-3 text-right font-mono text-xs font-medium ${g.gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                  {g.gain >= 0 ? '+' : ''}{formatCurrency(g.gain)}
+                  <span className="ml-1 opacity-70">({g.gainPct >= 0 ? '+' : ''}{g.gainPct.toFixed(1)}%)</span>
+                </div>
+                <div className="hidden sm:block col-span-3">
                   <div className="flex-1 h-1.5 bg-sand-100 rounded-full overflow-hidden">
                     <div className="h-full bg-ink-300 rounded-full" style={{ width: `${g.portfolioPct}%` }} />
                   </div>
-                  <svg className="w-3 h-3 text-ink-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
                 </div>
               </div>
-            </button>
-          ))}
+            ))}
         </div>
       )}
 
