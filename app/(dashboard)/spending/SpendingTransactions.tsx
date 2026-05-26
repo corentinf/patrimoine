@@ -1,170 +1,105 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
+import { formatCurrencyPrecise } from '@/app/lib/utils';
 import type { DateFilter } from './SpendingView';
 
-function DateDropdown({
-  filter,
-  active,
-  onChange,
-  onClear,
+type Segment = '7d' | '30d' | '3m' | '6m' | 'ytd' | 'all' | 'custom';
+
+const SEGMENTS: { id: Segment; label: string }[] = [
+  { id: '7d', label: '7D' },
+  { id: '30d', label: '30D' },
+  { id: '3m', label: '3M' },
+  { id: '6m', label: '6M' },
+  { id: 'ytd', label: 'YTD' },
+  { id: 'all', label: 'All' },
+  { id: 'custom', label: 'Custom' },
+];
+
+function computeSegmentRange(seg: Segment): { start: string; end: string } | null {
+  if (seg === 'all' || seg === 'custom') return null;
+  const today = new Date();
+  const end = today.toISOString().substring(0, 10);
+  const from = new Date(today);
+  if (seg === '7d') from.setDate(from.getDate() - 6);
+  else if (seg === '30d') from.setDate(from.getDate() - 29);
+  else if (seg === '3m') from.setMonth(from.getMonth() - 3);
+  else if (seg === '6m') from.setMonth(from.getMonth() - 6);
+  else { from.setMonth(0); from.setDate(1); } // ytd
+  return { start: from.toISOString().substring(0, 10), end };
+}
+
+function DateSegmentControl({
+  value,
+  customRange,
+  onSelect,
+  onCustomRange,
 }: {
-  filter: DateFilter;
-  active: boolean;
-  onChange: (f: DateFilter) => void;
-  onClear: () => void;
+  value: Segment;
+  customRange: { start: string; end: string };
+  onSelect: (seg: Segment) => void;
+  onCustomRange: (range: { start: string; end: string }) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [showCustom, setShowCustom] = useState(filter.mode === 'custom');
+  const [customOpen, setCustomOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) setCustomOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const monthLabel = filter.mode === 'month'
-    ? new Date(filter.year, filter.month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    : null;
-
-  const buttonLabel = !active
-    ? 'All time'
-    : filter.mode === 'month'
-      ? monthLabel
-      : `${filter.start} → ${filter.end}`;
-
-  const goMonth = (delta: number) => {
-    if (filter.mode !== 'month') return;
-    let { year, month } = filter;
-    month += delta;
-    if (month < 0) { month = 11; year--; }
-    if (month > 11) { month = 0; year++; }
-    onChange({ mode: 'month', year, month });
-  };
-
-  const switchToMonth = () => {
-    setShowCustom(false);
-    const now = new Date();
-    onChange({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
-  };
-
-  const switchToCustom = () => {
-    setShowCustom(true);
-    const start = filter.mode === 'month'
-      ? new Date(filter.year, filter.month, 1).toISOString().substring(0, 10)
-      : filter.start;
-    const end = filter.mode === 'month'
-      ? new Date(filter.year, filter.month + 1, 0).toISOString().substring(0, 10)
-      : filter.end;
-    onChange({ mode: 'custom', start, end });
-  };
+  function handleSegment(seg: Segment) {
+    if (seg === 'custom') {
+      setCustomOpen((v) => !v);
+    } else {
+      setCustomOpen(false);
+    }
+    onSelect(seg);
+  }
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-          active
-            ? 'bg-ink-800 text-white hover:bg-ink-700'
-            : 'bg-white border border-sand-200 text-ink-600 hover:border-sand-300'
-        }`}
-      >
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        {buttonLabel}
-        <svg
-          className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+    <div ref={ref} className="relative shrink-0">
+      <div className="inline-flex items-center rounded-lg border border-sand-200 bg-white overflow-hidden divide-x divide-sand-200">
+        {SEGMENTS.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => handleSegment(s.id)}
+            className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+              value === s.id
+                ? 'bg-ink-800 text-white'
+                : 'text-ink-500 hover:bg-sand-50 hover:text-ink-700'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
 
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg p-3 w-64 space-y-3">
-          {!showCustom ? (
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => goMonth(-1)}
-                disabled={filter.mode !== 'month'}
-                className="p-1 text-ink-500 hover:text-ink-800 disabled:opacity-30"
-                aria-label="Previous month"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span className="text-sm font-medium text-ink-700">
-                {filter.mode === 'month' ? monthLabel : 'Custom'}
-              </span>
-              <button
-                onClick={() => goMonth(1)}
-                disabled={filter.mode !== 'month'}
-                className="p-1 text-ink-500 hover:text-ink-800 disabled:opacity-30"
-                aria-label="Next month"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-          ) : (
-            filter.mode === 'custom' && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-xs">
-                  <label className="text-ink-400 w-10">From</label>
-                  <input
-                    type="date"
-                    value={filter.start}
-                    max={filter.end}
-                    onChange={(e) => onChange({ ...filter, start: e.target.value })}
-                    className="flex-1 px-2 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5 text-xs">
-                  <label className="text-ink-400 w-10">To</label>
-                  <input
-                    type="date"
-                    value={filter.end}
-                    min={filter.start}
-                    onChange={(e) => onChange({ ...filter, end: e.target.value })}
-                    className="flex-1 px-2 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
-                  />
-                </div>
-              </div>
-            )
-          )}
-
-          <div className="flex items-center justify-between pt-2 border-t border-sand-100 text-xs">
-            {!showCustom ? (
-              <button
-                onClick={switchToCustom}
-                className="text-ink-500 hover:text-ink-800 transition-colors"
-              >
-                Custom range…
-              </button>
-            ) : (
-              <button
-                onClick={switchToMonth}
-                className="text-ink-500 hover:text-ink-800 transition-colors"
-              >
-                ← Month view
-              </button>
-            )}
-            {active && (
-              <button
-                onClick={() => { onClear(); setOpen(false); }}
-                className="text-ink-400 hover:text-ink-700 transition-colors"
-              >
-                Show all
-              </button>
-            )}
+      {customOpen && (
+        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg p-3 space-y-2 w-52">
+          <p className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Custom range</p>
+          <div className="flex items-center gap-1.5 text-xs">
+            <label className="text-ink-400 w-7 shrink-0">From</label>
+            <input
+              type="date"
+              value={customRange.start}
+              max={customRange.end || undefined}
+              onChange={(e) => onCustomRange({ ...customRange, start: e.target.value })}
+              className="flex-1 px-2 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 text-xs">
+            <label className="text-ink-400 w-7 shrink-0">To</label>
+            <input
+              type="date"
+              value={customRange.end}
+              min={customRange.start || undefined}
+              onChange={(e) => onCustomRange({ ...customRange, end: e.target.value })}
+              className="flex-1 px-2 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
+            />
           </div>
         </div>
       )}
@@ -298,11 +233,39 @@ export default function SpendingTransactions({
     return { mode: 'month', year: n.getFullYear(), month: n.getMonth() };
   });
   const [dateFilterActive, setDateFilterActive] = useState(false);
+  const [activeSegment, setActiveSegment] = useState<Segment>('all');
+  const [customDateRange, setCustomDateRange] = useState(() => {
+    const today = new Date();
+    return { start: `${today.getFullYear()}-01-01`, end: today.toISOString().substring(0, 10) };
+  });
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+
   const handleDateFilterChange = (f: DateFilter) => {
     setDateFilterActive(true);
     setDateFilter(f);
   };
   const clearDateFilter = () => setDateFilterActive(false);
+
+  function handleSegmentSelect(seg: Segment) {
+    setActiveSegment(seg);
+    if (seg === 'all') {
+      clearDateFilter();
+    } else if (seg === 'custom') {
+      if (customDateRange.start && customDateRange.end) {
+        handleDateFilterChange({ mode: 'custom', start: customDateRange.start, end: customDateRange.end });
+      }
+    } else {
+      const range = computeSegmentRange(seg)!;
+      handleDateFilterChange({ mode: 'custom', start: range.start, end: range.end });
+    }
+  }
+
+  function handleCustomRangeChange(range: { start: string; end: string }) {
+    setCustomDateRange(range);
+    if (range.start && range.end) {
+      handleDateFilterChange({ mode: 'custom', start: range.start, end: range.end });
+    }
+  }
 
   // Sync from the parent date picker when it changes (but not on first mount —
   // we want the transactions list to default to "all time").
@@ -315,6 +278,14 @@ export default function SpendingTransactions({
     }
     setDateFilter(externalDateFilter);
     setDateFilterActive(true);
+    setActiveSegment('custom');
+    if (externalDateFilter.mode === 'custom') {
+      setCustomDateRange({ start: externalDateFilter.start, end: externalDateFilter.end });
+    } else if (externalDateFilter.mode === 'month') {
+      const start = new Date(externalDateFilter.year, externalDateFilter.month, 1).toISOString().substring(0, 10);
+      const end = new Date(externalDateFilter.year, externalDateFilter.month + 1, 0).toISOString().substring(0, 10);
+      setCustomDateRange({ start, end });
+    }
   }, [externalDateFilter]);
   const venmoByTxId = useMemo(
     () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
@@ -558,9 +529,9 @@ export default function SpendingTransactions({
             )}
           </div>
 
-          {/* Desktop: horizontally scrollable pills */}
-          <div className="hidden md:block flex-1 min-w-0 overflow-x-auto">
-            <div className="flex items-center gap-2">
+          {/* Desktop: collapsible pills */}
+          <div className="hidden md:flex flex-1 min-w-0 items-center gap-1.5">
+            <div className={`flex gap-2 flex-1 min-w-0 ${filtersExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}>
               <button
                 onClick={() => setFilterCategories([])}
                 className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -615,17 +586,27 @@ export default function SpendingTransactions({
                 );
               })}
             </div>
+            <button
+              onClick={() => setFiltersExpanded((v) => !v)}
+              title={filtersExpanded ? 'Show less' : 'Show all categories'}
+              className="shrink-0 p-0.5 text-ink-300 hover:text-ink-600 transition-colors"
+            >
+              <svg
+                className={`w-3.5 h-3.5 transition-transform ${filtersExpanded ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
           </div>
 
-          {/* Date filter */}
-          <div className="shrink-0">
-            <DateDropdown
-              filter={dateFilter}
-              active={dateFilterActive}
-              onChange={handleDateFilterChange}
-              onClear={clearDateFilter}
-            />
-          </div>
+          {/* Date segment control */}
+          <DateSegmentControl
+            value={activeSegment}
+            customRange={customDateRange}
+            onSelect={handleSegmentSelect}
+            onCustomRange={handleCustomRangeChange}
+          />
 
           {/* Clear filters */}
           {hasFilters && (
@@ -635,6 +616,7 @@ export default function SpendingTransactions({
                 setSearch('');
                 onAccountChange?.(null);
                 clearDateFilter();
+                setActiveSegment('all');
               }}
               className="shrink-0 text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap"
             >
