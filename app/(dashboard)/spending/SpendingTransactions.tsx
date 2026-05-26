@@ -453,66 +453,45 @@ export default function SpendingTransactions({
           )}
         </div>
 
-        {/* Sort + account filter + clear */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-ink-400 mr-1">Sort:</span>
-            {(['date', 'amount', 'category'] as SortField[]).map((field) => (
-              <button
-                key={field}
-                onClick={() => toggleSort(field)}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  sortBy === field
-                    ? 'bg-ink-800 text-white'
-                    : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-                }`}
-              >
-                {field.charAt(0).toUpperCase() + field.slice(1)}
-                {sortBy === field && (
-                  <svg
-                    className={`w-3 h-3 transition-transform ${sortDir === 'asc' ? 'rotate-180' : ''}`}
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                )}
-              </button>
-            ))}
-            {/* Account filter dropdown */}
-            {accounts.length > 1 && (
-              <AccountDropdown
-                accounts={accounts}
-                selectedAccount={selectedAccount}
-                onChange={onAccountChange ?? (() => {})}
-              />
-            )}
-            {/* Date filter dropdown — affects only the transactions list */}
-            <DateDropdown
-              filter={dateFilter}
-              active={dateFilterActive}
-              onChange={handleDateFilterChange}
-              onClear={clearDateFilter}
-            />
-          </div>
-          {hasFilters && (
+        {/* Row 1: Sort controls */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-ink-400 shrink-0">Sort by</span>
+          {(['date', 'amount', 'category'] as SortField[]).map((field) => (
             <button
-              onClick={() => {
-                setFilterCategories([]);
-                setSearch('');
-                onAccountChange?.(null);
-                clearDateFilter();
-              }}
-              className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
+              key={field}
+              onClick={() => toggleSort(field)}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                sortBy === field
+                  ? 'bg-ink-800 text-white'
+                  : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+              }`}
             >
-              Clear filters
+              {field.charAt(0).toUpperCase() + field.slice(1)}
+              {sortBy === field && (
+                <svg
+                  className={`w-3 h-3 transition-transform ${sortDir === 'asc' ? 'rotate-180' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              )}
             </button>
+          ))}
+          {accounts.length > 1 && (
+            <AccountDropdown
+              accounts={accounts}
+              selectedAccount={selectedAccount}
+              onChange={onAccountChange ?? (() => {})}
+            />
           )}
         </div>
 
-        {/* Category filter — dropdown on mobile, pills on desktop */}
-        <div>
-          {/* Mobile: dropdown */}
-          <div className="md:hidden relative">
+        {/* Row 2: Filter controls */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs text-ink-400 shrink-0">Filter by</span>
+
+          {/* Mobile: category dropdown */}
+          <div className="md:hidden relative shrink-0">
             {showCategoryDropdown && (
               <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
             )}
@@ -579,63 +558,89 @@ export default function SpendingTransactions({
             )}
           </div>
 
-          {/* Desktop: pills */}
-          <div className="hidden md:flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilterCategories([])}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                filterCategories.length === 0
-                  ? 'bg-ink-800 text-white'
-                  : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-              }`}
-            >
-              All
-            </button>
-
-            {chipCategories.map((cat) => {
-              const active = filterCategories.includes(cat.name);
-              const showAdd = filterCategories.length > 0 && !active && hoveredChip === cat.name;
-              return (
-                <div
-                  key={cat.name}
-                  className="relative"
-                  onMouseEnter={() => setHoveredChip(cat.name)}
-                  onMouseLeave={() => setHoveredChip(null)}
-                >
-                  <button
-                    onClick={() => {
-                      if (active) {
-                        setFilterCategories(filterCategories.filter((n) => n !== cat.name));
-                      } else {
-                        setFilterCategories([cat.name]);
-                      }
-                    }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      active ? 'text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-                    }`}
-                    style={active ? { backgroundColor: cat.color } : {}}
+          {/* Desktop: horizontally scrollable pills */}
+          <div className="hidden md:block flex-1 min-w-0 overflow-x-auto">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setFilterCategories([])}
+                className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  filterCategories.length === 0
+                    ? 'bg-ink-800 text-white'
+                    : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                }`}
+              >
+                All
+              </button>
+              {chipCategories.map((cat) => {
+                const active = filterCategories.includes(cat.name);
+                const showAdd = filterCategories.length > 0 && !active && hoveredChip === cat.name;
+                return (
+                  <div
+                    key={cat.name}
+                    className="relative shrink-0"
+                    onMouseEnter={() => setHoveredChip(cat.name)}
+                    onMouseLeave={() => setHoveredChip(null)}
                   >
-                    <span>{cat.icon}</span>
-                    {cat.name}
-                  </button>
-                  {showAdd && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFilterCategories([...filterCategories, cat.name]);
+                      onClick={() => {
+                        if (active) {
+                          setFilterCategories(filterCategories.filter((n) => n !== cat.name));
+                        } else {
+                          setFilterCategories([cat.name]);
+                        }
                       }}
-                      className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-ink-800 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-ink-600 transition-colors"
-                      title={`Add ${cat.name} to filter`}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        active ? 'text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                      }`}
+                      style={active ? { backgroundColor: cat.color } : {}}
                     >
-                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                      </svg>
+                      <span>{cat.icon}</span>
+                      {cat.name}
                     </button>
-                  )}
-                </div>
-              );
-            })}
+                    {showAdd && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFilterCategories([...filterCategories, cat.name]);
+                        }}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-ink-800 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-ink-600 transition-colors"
+                        title={`Add ${cat.name} to filter`}
+                      >
+                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Date filter */}
+          <div className="shrink-0">
+            <DateDropdown
+              filter={dateFilter}
+              active={dateFilterActive}
+              onChange={handleDateFilterChange}
+              onClear={clearDateFilter}
+            />
+          </div>
+
+          {/* Clear filters */}
+          {hasFilters && (
+            <button
+              onClick={() => {
+                setFilterCategories([]);
+                setSearch('');
+                onAccountChange?.(null);
+                clearDateFilter();
+              }}
+              className="shrink-0 text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Transaction list */}
