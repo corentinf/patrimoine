@@ -2,6 +2,7 @@ import { createServiceClient } from '@/app/lib/supabase';
 import { formatCurrency } from '@/app/lib/utils';
 import NetWorthChart from './NetWorthChart';
 import HoldingsTable from './HoldingsTable';
+import HoldingsInsights from './HoldingsInsights';
 
 export const revalidate = 300;
 
@@ -222,6 +223,7 @@ export default async function NetWorthPage() {
             </span>
           </h3>
           <HoldingsTable holdings={holdings} totalHoldingsValue={totalHoldingsValue} />
+          <HoldingsInsights />
         </div>
       )}
 
