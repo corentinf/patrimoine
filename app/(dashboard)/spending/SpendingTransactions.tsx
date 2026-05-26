@@ -363,6 +363,7 @@ export default function SpendingTransactions({
   });
   const [dateFilterActive, setDateFilterActive] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const pillsRef = useRef<HTMLDivElement>(null);
 
   const handleDateFilterChange = (f: DateFilter) => {
     setDateFilterActive(true);
@@ -382,6 +383,7 @@ export default function SpendingTransactions({
     setDateFilter(externalDateFilter);
     setDateFilterActive(true);
   }, [externalDateFilter]);
+
   const venmoByTxId = useMemo(
     () => new Map(venmoRequests.map((r) => [r.transaction_id, r])),
     [venmoRequests],
@@ -424,6 +426,34 @@ export default function SpendingTransactions({
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions, categoryOverrides]);
+
+  // Hide pills that overflow the row instead of clipping them mid-chip.
+  useEffect(() => {
+    const container = pillsRef.current;
+    if (!container) return;
+
+    function update() {
+      if (!container) return;
+      if (filtersExpanded) {
+        (Array.from(container.children) as HTMLElement[]).forEach((el) => {
+          el.style.opacity = '';
+          el.style.pointerEvents = '';
+        });
+        return;
+      }
+      const right = container.getBoundingClientRect().right;
+      (Array.from(container.children) as HTMLElement[]).forEach((el) => {
+        const fits = el.getBoundingClientRect().right <= right + 1;
+        el.style.opacity = fits ? '' : '0';
+        el.style.pointerEvents = fits ? '' : 'none';
+      });
+    }
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [filtersExpanded, chipCategories]);
 
   const filtered = useMemo(() => {
     let result = transactions;
@@ -635,11 +665,8 @@ export default function SpendingTransactions({
           {/* Desktop: collapsible pills */}
           <div className="hidden md:flex flex-1 min-w-0 items-start gap-1.5">
             <div
+              ref={pillsRef}
               className={`flex gap-2 flex-1 min-w-0 ${filtersExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
-              style={!filtersExpanded ? {
-                WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 2rem), transparent)',
-                maskImage: 'linear-gradient(to right, black calc(100% - 2rem), transparent)',
-              } : undefined}
             >
               <button
                 onClick={() => setFilterCategories([])}
