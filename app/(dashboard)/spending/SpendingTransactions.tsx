@@ -550,12 +550,14 @@ export default function SpendingTransactions({
               onChange={onAccountChange ?? (() => {})}
             />
           )}
-          <DateControl
-            dateFilter={dateFilter}
-            dateFilterActive={dateFilterActive}
-            onChange={handleDateFilterChange}
-            onClear={clearDateFilter}
-          />
+          <div className="ml-auto">
+            <DateControl
+              dateFilter={dateFilter}
+              dateFilterActive={dateFilterActive}
+              onChange={handleDateFilterChange}
+              onClear={clearDateFilter}
+            />
+          </div>
         </div>
 
         {/* Row 2: Filter controls */}
