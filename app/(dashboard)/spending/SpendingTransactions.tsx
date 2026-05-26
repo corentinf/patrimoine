@@ -550,6 +550,12 @@ export default function SpendingTransactions({
               onChange={onAccountChange ?? (() => {})}
             />
           )}
+          <DateControl
+            dateFilter={dateFilter}
+            dateFilterActive={dateFilterActive}
+            onChange={handleDateFilterChange}
+            onClear={clearDateFilter}
+          />
         </div>
 
         {/* Row 2: Filter controls */}
@@ -694,14 +700,6 @@ export default function SpendingTransactions({
               </svg>
             </button>
           </div>
-
-          {/* Date control */}
-          <DateControl
-            dateFilter={dateFilter}
-            dateFilterActive={dateFilterActive}
-            onChange={handleDateFilterChange}
-            onClear={clearDateFilter}
-          />
 
           {/* Clear filters */}
           {hasFilters && (
