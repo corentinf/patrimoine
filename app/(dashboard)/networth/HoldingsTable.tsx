@@ -20,6 +20,49 @@ interface HoldingsTableProps {
   totalHoldingsValue: number;
 }
 
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative group/tip inline-flex items-center ml-1">
+      <svg
+        className="w-3 h-3 text-ink-300 group-hover/tip:text-ink-500 transition-colors cursor-default flex-shrink-0"
+        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+      >
+        <circle cx="12" cy="12" r="10" strokeWidth={2} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
+      </svg>
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/tip:opacity-100 transition-opacity z-50 shadow-lg">
+        {text}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-ink-800" />
+      </span>
+    </span>
+  );
+}
+
+function Kpi({
+  label,
+  tooltip,
+  value,
+  sub,
+  valueColor = 'text-ink-800',
+}: {
+  label: string;
+  tooltip: string;
+  value: string;
+  sub?: string;
+  valueColor?: string;
+}) {
+  return (
+    <div className="bg-white border border-sand-100 rounded-xl px-4 py-3.5 flex flex-col gap-1">
+      <div className="flex items-center">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400">{label}</span>
+        <InfoTooltip text={tooltip} />
+      </div>
+      <p className={`font-mono text-lg font-semibold leading-tight ${valueColor}`}>{value}</p>
+      {sub && <p className="text-xs text-ink-400 font-mono">{sub}</p>}
+    </div>
+  );
+}
+
 function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   if (!active) {
     return (
@@ -117,7 +160,62 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
     );
   }
 
+  // KPI computations (totalCost / totalGain / totalGainPct declared above)
+  const winners = enriched.filter((h) => h._cost_basis > 0);
+  const bestPerformer = winners.length > 0
+    ? winners.reduce((best, h) => h._gain_pct > best._gain_pct ? h : best)
+    : null;
+  const worstPerformer = winners.length > 0
+    ? winners.reduce((worst, h) => h._gain_pct < worst._gain_pct ? h : worst)
+    : null;
+
   return (
+    <div className="space-y-4">
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Kpi
+          label="Market Value"
+          tooltip="Current total market value of all your investment positions at today's prices."
+          value={formatCurrency(totalHoldingsValue)}
+        />
+        <Kpi
+          label="Total Return"
+          tooltip="Total unrealized gain or loss across all positions — the difference between current market value and what you originally paid (cost basis)."
+          value={`${totalGain >= 0 ? '+' : ''}${formatCurrency(totalGain)}`}
+          sub={`${totalGainPct >= 0 ? '+' : ''}${totalGainPct.toFixed(1)}% overall`}
+          valueColor={totalGain >= 0 ? 'text-accent-green' : 'text-accent-red'}
+        />
+        <Kpi
+          label="Cost Basis"
+          tooltip="Total amount you paid to acquire your current positions, used as the baseline for calculating unrealized gains and losses."
+          value={formatCurrency(totalCost)}
+        />
+        <Kpi
+          label="Avg Return"
+          tooltip="Weighted average return across all positions, weighted by cost basis. Shows how your overall portfolio has performed relative to what you invested."
+          value={`${totalGainPct >= 0 ? '+' : ''}${totalGainPct.toFixed(1)}%`}
+          valueColor={totalGainPct >= 0 ? 'text-accent-green' : 'text-accent-red'}
+        />
+        {bestPerformer && (
+          <Kpi
+            label="Best Performer"
+            tooltip="Your highest-returning position by percentage gain since purchase."
+            value={bestPerformer.symbol || bestPerformer.description || '—'}
+            sub={`+${bestPerformer._gain_pct.toFixed(1)}%`}
+            valueColor="text-accent-green"
+          />
+        )}
+        {worstPerformer && (
+          <Kpi
+            label="Worst Performer"
+            tooltip="Your lowest-returning position by percentage gain since purchase. A negative number means unrealized loss."
+            value={worstPerformer.symbol || worstPerformer.description || '—'}
+            sub={`${worstPerformer._gain_pct >= 0 ? '+' : ''}${worstPerformer._gain_pct.toFixed(1)}%`}
+            valueColor={worstPerformer._gain_pct >= 0 ? 'text-ink-800' : 'text-accent-red'}
+          />
+        )}
+      </div>
+
     <div className="card p-0">
       {/* Desktop header */}
       <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-2.5 border-b border-sand-100">
@@ -217,6 +315,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
         </div>
         <div className="col-span-2 text-right font-mono text-xs text-ink-400">100%</div>
       </div>
+    </div>
     </div>
   );
 }
