@@ -43,6 +43,15 @@ export default function TransactionDetail({
   const [payeeDraft, setPayeeDraft] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
+  const [enrichment, setEnrichment] = useState<{
+    businessName: string;
+    description: string;
+    category: string;
+    website: string | null;
+  } | null>(null);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichError, setEnrichError] = useState('');
+
   const displayPayee = localPayee ?? tx.payee ?? tx.description ?? 'Unknown';
   const effectiveCategory = localCategory ?? tx.category;
 
@@ -81,6 +90,28 @@ export default function TransactionDetail({
       await assignTransactionCategory(tx.id, cat.id);
       router.refresh();
     });
+  }
+
+  async function handleEnrich() {
+    setEnriching(true);
+    setEnrichError('');
+    try {
+      const res = await fetch('/api/transactions/enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: tx.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEnrichment(data.enrichment);
+      } else {
+        setEnrichError(data.error || 'Lookup failed');
+      }
+    } catch (err: any) {
+      setEnrichError(err.message || 'Lookup failed');
+    } finally {
+      setEnriching(false);
+    }
   }
 
   return (
@@ -143,14 +174,33 @@ export default function TransactionDetail({
                   <p className="text-xs text-ink-400 mt-0.5 truncate">{secondaryLine}</p>
                 )}
               </div>
-              <button
-                onClick={onClose}
-                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-sand-100 text-ink-400 transition-colors flex-shrink-0"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={handleEnrich}
+                  disabled={enriching}
+                  title="AI lookup"
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-sand-100 text-ink-400 hover:text-ink-600 transition-colors disabled:opacity-50"
+                >
+                  {enriching ? (
+                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-sand-100 text-ink-400 transition-colors flex-shrink-0"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -170,6 +220,49 @@ export default function TransactionDetail({
               )}
             </p>
           </div>
+
+          {/* AI enrichment result */}
+          {(enrichment || enrichError) && (
+            <div className="px-5 py-4 border-b border-sand-100">
+              {enrichError ? (
+                <p className="text-xs text-red-400">{enrichError}</p>
+              ) : enrichment && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-ink-500 uppercase tracking-wider">AI Lookup</p>
+                    <button
+                      onClick={() => setEnrichment(null)}
+                      className="text-ink-200 hover:text-ink-400 transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="bg-sand-50 rounded-xl p-3 space-y-1.5">
+                    <p className="text-sm font-medium text-ink-800">{enrichment.businessName}</p>
+                    <p className="text-xs text-ink-500 leading-relaxed">{enrichment.description}</p>
+                    <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                      <span className="text-[10px] font-medium px-2 py-0.5 bg-white border border-sand-200 rounded-full text-ink-500">
+                        {enrichment.category}
+                      </span>
+                      {enrichment.website && (
+                        <a
+                          href={`https://${enrichment.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-ink-400 hover:text-ink-600 underline underline-offset-2 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {enrichment.website}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Venmo section */}
           <VenmoSection transactionId={tx.id} transactionAmount={tx.amount} />
