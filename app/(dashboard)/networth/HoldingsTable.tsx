@@ -152,6 +152,9 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
   const activeGain = activeValue - activeCost;
   const activeGainPct = activeCost > 0 ? (activeGain / activeCost) * 100 : 0;
   const activePortfolioPct = totalHoldingsValue > 0 ? (activeValue / totalHoldingsValue) * 100 : 100;
+  const activeWinners = activeHoldings.filter((h) => h._cost_basis > 0);
+  const activeBest = activeWinners.length > 0 ? activeWinners.reduce((b, h) => h._gain_pct > b._gain_pct ? h : b) : null;
+  const activeWorst = activeWinners.length > 0 ? activeWinners.reduce((w, h) => h._gain_pct < w._gain_pct ? h : w) : null;
 
   // Sorted table rows
   const sorted = [...activeHoldings].sort((a, b) => {
@@ -254,6 +257,54 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
           </button>
         ))}
       </div>
+
+      {/* Group KPIs — shown only when a filter is active */}
+      {selectedGroup && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+          <Kpi
+            label="Market Value"
+            tooltip={`Current total market value of ${selectedGroup} positions.`}
+            value={formatCurrency(activeValue)}
+            sub={`${activePortfolioPct.toFixed(1)}% of portfolio`}
+          />
+          <Kpi
+            label="Total Return"
+            tooltip={`Total unrealized gain or loss across ${selectedGroup} positions.`}
+            value={`${activeGain >= 0 ? '+' : ''}${formatCurrency(activeGain)}`}
+            sub={`${activeGainPct >= 0 ? '+' : ''}${activeGainPct.toFixed(1)}% overall`}
+            valueColor={activeGain >= 0 ? 'text-accent-green' : 'text-accent-red'}
+          />
+          <Kpi
+            label="Cost Basis"
+            tooltip={`Total amount paid to acquire ${selectedGroup} positions.`}
+            value={formatCurrency(activeCost)}
+          />
+          <Kpi
+            label="Avg Return"
+            tooltip={`Weighted average return across ${selectedGroup} positions.`}
+            value={`${activeGainPct >= 0 ? '+' : ''}${activeGainPct.toFixed(1)}%`}
+            valueColor={activeGainPct >= 0 ? 'text-accent-green' : 'text-accent-red'}
+          />
+          {activeBest && (
+            <Kpi
+              label="Best Performer"
+              tooltip={`Highest-returning ${selectedGroup} position by % gain.`}
+              value={activeBest.symbol || activeBest.description || '—'}
+              sub={`+${activeBest._gain_pct.toFixed(1)}%`}
+              valueColor="text-accent-green"
+            />
+          )}
+          {activeWorst && (
+            <Kpi
+              label="Worst Performer"
+              tooltip={`Lowest-returning ${selectedGroup} position by % gain.`}
+              value={activeWorst.symbol || activeWorst.description || '—'}
+              sub={`${activeWorst._gain_pct >= 0 ? '+' : ''}${activeWorst._gain_pct.toFixed(1)}%`}
+              valueColor={activeWorst._gain_pct >= 0 ? 'text-ink-800' : 'text-accent-red'}
+            />
+          )}
+        </div>
+      )}
 
       {/* Group breakdown */}
       {groupSummary.length > 1 && (
