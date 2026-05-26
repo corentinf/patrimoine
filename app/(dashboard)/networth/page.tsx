@@ -146,31 +146,6 @@ export default async function NetWorthPage() {
         <NetWorthChart data={chartData} />
       )}
 
-      {/* Asset/Liability breakdown from latest snapshot */}
-      {latest?.breakdown && (
-        <div>
-          <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-3">
-            Account breakdown
-          </h3>
-          <div className="card p-0 divide-y divide-sand-100">
-            {Object.entries(latest.breakdown as Record<string, number>)
-              .sort(([, a], [, b]) => b - a)
-              .map(([name, balance]) => (
-                <div
-                  key={name}
-                  className="flex items-center justify-between px-5 py-3"
-                >
-                  <p className="text-sm text-ink-600">{name}</p>
-                  <p className={`font-mono text-sm font-medium ${
-                    balance >= 0 ? 'text-ink-700' : 'text-accent-red'
-                  }`}>
-                    {formatCurrency(balance)}
-                  </p>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
 
       {/* Milestones */}
       {milestones.length > 0 && (
