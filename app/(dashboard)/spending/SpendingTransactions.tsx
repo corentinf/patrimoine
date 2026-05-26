@@ -561,7 +561,7 @@ export default function SpendingTransactions({
         </div>
 
         {/* Row 2: Filter controls */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-start gap-2 min-w-0">
           <span className="text-xs text-ink-400 shrink-0">Filter by</span>
 
           {/* Mobile: category dropdown */}
@@ -633,8 +633,14 @@ export default function SpendingTransactions({
           </div>
 
           {/* Desktop: collapsible pills */}
-          <div className="hidden md:flex flex-1 min-w-0 items-center gap-1.5">
-            <div className={`flex gap-2 flex-1 min-w-0 ${filtersExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}>
+          <div className="hidden md:flex flex-1 min-w-0 items-start gap-1.5">
+            <div
+              className={`flex gap-2 flex-1 min-w-0 ${filtersExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
+              style={!filtersExpanded ? {
+                WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 2rem), transparent)',
+                maskImage: 'linear-gradient(to right, black calc(100% - 2rem), transparent)',
+              } : undefined}
+            >
               <button
                 onClick={() => setFilterCategories([])}
                 className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
