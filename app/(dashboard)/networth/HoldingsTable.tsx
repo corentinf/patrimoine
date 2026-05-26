@@ -133,8 +133,24 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
         <div className="col-span-2 flex justify-end">
           <ColHeader label="Market value" col="market_value" />
         </div>
-        <div className="col-span-2 flex justify-end">
-          <ColHeader label="Gain/Loss" col="gain" />
+        <div className="col-span-2 flex justify-end items-center gap-1">
+          <span className="text-xs font-medium uppercase tracking-wider text-ink-400">Gain/Loss</span>
+          <button
+            onClick={() => handleSort('gain')}
+            className={`flex items-center gap-0.5 text-xs font-medium uppercase tracking-wider transition-colors px-1 py-0.5 rounded ${
+              sortKey === 'gain' ? 'text-ink-600 bg-sand-100' : 'text-ink-400 hover:text-ink-500'
+            }`}
+          >
+            $<SortIcon active={sortKey === 'gain'} dir={sortDir} />
+          </button>
+          <button
+            onClick={() => handleSort('gain_pct')}
+            className={`flex items-center gap-0.5 text-xs font-medium uppercase tracking-wider transition-colors px-1 py-0.5 rounded ${
+              sortKey === 'gain_pct' ? 'text-ink-600 bg-sand-100' : 'text-ink-400 hover:text-ink-500'
+            }`}
+          >
+            %<SortIcon active={sortKey === 'gain_pct'} dir={sortDir} />
+          </button>
         </div>
         <div className="col-span-2 flex justify-end">
           <ColHeader label="Portfolio" col="portfolio_pct" />
