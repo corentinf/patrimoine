@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/app/lib/supabase';
 import { formatCurrency } from '@/app/lib/utils';
 import NetWorthChart from './NetWorthChart';
+import HoldingsTable from './HoldingsTable';
 
 export const revalidate = 300;
 
@@ -220,83 +221,7 @@ export default async function NetWorthPage() {
               · {formatCurrency(totalHoldingsValue)}
             </span>
           </h3>
-          <div className="card p-0">
-            {/* Desktop header row */}
-            <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-2.5 border-b border-sand-100 text-xs text-ink-400 font-medium uppercase tracking-wider">
-              <div className="col-span-3">Holding</div>
-              <div className="col-span-1 text-right">Shares</div>
-              <div className="col-span-2 text-right">Cost basis</div>
-              <div className="col-span-2 text-right">Market value</div>
-              <div className="col-span-2 text-right">Gain/Loss</div>
-              <div className="col-span-2 text-right">Portfolio</div>
-            </div>
-            {holdings.map((h) => {
-              const gain = Number(h.market_value || 0) - Number(h.cost_basis || 0);
-              const gainPct = Number(h.cost_basis) > 0
-                ? (gain / Number(h.cost_basis)) * 100
-                : 0;
-              const portfolioPct = totalHoldingsValue > 0
-                ? (Number(h.market_value || 0) / totalHoldingsValue) * 100
-                : 0;
-
-              return (
-                <div key={h.id} className="border-b border-sand-50 last:border-0 hover:bg-sand-50 transition-colors">
-                  {/* Desktop row */}
-                  <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-3 items-center">
-                    <div className="col-span-3">
-                      <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
-                      <p className="text-xs text-ink-300 truncate">{h.description}</p>
-                    </div>
-                    <div className="col-span-1 text-right font-mono text-sm text-ink-600">{Number(h.shares).toFixed(2)}</div>
-                    <div className="col-span-2 text-right font-mono text-sm text-ink-600">{formatCurrency(Number(h.cost_basis || 0))}</div>
-                    <div className="col-span-2 text-right font-mono text-sm font-medium text-ink-700">{formatCurrency(Number(h.market_value || 0))}</div>
-                    <div className={`col-span-2 text-right font-mono text-sm font-medium ${gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                      {gain >= 0 ? '+' : ''}{formatCurrency(gain)}
-                      <span className="text-xs ml-1 opacity-70">({gainPct >= 0 ? '+' : ''}{gainPct.toFixed(1)}%)</span>
-                    </div>
-                    <div className="col-span-2 flex flex-col items-end gap-1">
-                      <span className="font-mono text-xs text-ink-600">{portfolioPct.toFixed(1)}%</span>
-                      <div className="w-full h-1 bg-sand-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-ink-400 rounded-full" style={{ width: `${portfolioPct}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                  {/* Mobile card row */}
-                  <div className="sm:hidden px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
-                      <p className="text-xs text-ink-400">{Number(h.shares).toFixed(2)} shares · {portfolioPct.toFixed(1)}% of portfolio</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-mono text-sm font-medium text-ink-700">{formatCurrency(Number(h.market_value || 0))}</p>
-                      <p className={`font-mono text-xs font-medium ${gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                        {gain >= 0 ? '+' : ''}{formatCurrency(gain)} ({gainPct >= 0 ? '+' : ''}{gainPct.toFixed(1)}%)
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {/* Total row */}
-            {(() => {
-              const totalCost = holdings.reduce((s, h) => s + Number(h.cost_basis || 0), 0);
-              const totalGain = totalHoldingsValue - totalCost;
-              const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
-              return (
-                <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-3 border-t border-sand-200 bg-sand-50 rounded-b-xl items-center">
-                  <div className="col-span-3 text-xs font-semibold text-ink-500 uppercase tracking-wider">Total</div>
-                  <div className="col-span-1" />
-                  <div className="col-span-2 text-right font-mono text-sm text-ink-600">{formatCurrency(totalCost)}</div>
-                  <div className="col-span-2 text-right font-mono text-sm font-semibold text-ink-800">{formatCurrency(totalHoldingsValue)}</div>
-                  <div className={`col-span-2 text-right font-mono text-sm font-semibold ${totalGain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                    {totalGain >= 0 ? '+' : ''}{formatCurrency(totalGain)}
-                    <span className="text-xs ml-1 opacity-70">({totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(1)}%)</span>
-                  </div>
-                  <div className="col-span-2 text-right font-mono text-xs text-ink-400">100%</div>
-                </div>
-              );
-            })()}
-          </div>
+          <HoldingsTable holdings={holdings} totalHoldingsValue={totalHoldingsValue} />
         </div>
       )}
 
