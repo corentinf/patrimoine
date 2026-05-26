@@ -134,21 +134,24 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
     return { group, count: items.length, mv, cost, gain, gainPct, portfolioPct };
   }).filter(Boolean) as { group: Group; count: number; mv: number; cost: number; gain: number; gainPct: number; portfolioPct: number }[];
 
-  // Active holdings (filtered by group when selected)
+  // KPI totals — always the full portfolio, unaffected by group filter
+  const kpiValue = enriched.reduce((s, h) => s + h._market_value, 0);
+  const kpiCost = enriched.reduce((s, h) => s + h._cost_basis, 0);
+  const kpiGain = kpiValue - kpiCost;
+  const kpiGainPct = kpiCost > 0 ? (kpiGain / kpiCost) * 100 : 0;
+  const winners = enriched.filter((h) => h._cost_basis > 0);
+  const bestPerformer = winners.length > 0 ? winners.reduce((b, h) => h._gain_pct > b._gain_pct ? h : b) : null;
+  const worstPerformer = winners.length > 0 ? winners.reduce((w, h) => h._gain_pct < w._gain_pct ? h : w) : null;
+
+  // Active holdings (filtered by group when selected) — used for table + total row
   const activeHoldings = selectedGroup
     ? enriched.filter((h) => h._group === selectedGroup)
     : enriched;
-
-  // KPI totals — reflect the active (filtered) set
-  const kpiValue = activeHoldings.reduce((s, h) => s + h._market_value, 0);
-  const kpiCost = activeHoldings.reduce((s, h) => s + h._cost_basis, 0);
-  const kpiGain = kpiValue - kpiCost;
-  const kpiGainPct = kpiCost > 0 ? (kpiGain / kpiCost) * 100 : 0;
-  const kpiPortfolioPct = totalHoldingsValue > 0 ? (kpiValue / totalHoldingsValue) * 100 : 100;
-
-  const winners = activeHoldings.filter((h) => h._cost_basis > 0);
-  const bestPerformer = winners.length > 0 ? winners.reduce((b, h) => h._gain_pct > b._gain_pct ? h : b) : null;
-  const worstPerformer = winners.length > 0 ? winners.reduce((w, h) => h._gain_pct < w._gain_pct ? h : w) : null;
+  const activeValue = activeHoldings.reduce((s, h) => s + h._market_value, 0);
+  const activeCost = activeHoldings.reduce((s, h) => s + h._cost_basis, 0);
+  const activeGain = activeValue - activeCost;
+  const activeGainPct = activeCost > 0 ? (activeGain / activeCost) * 100 : 0;
+  const activePortfolioPct = totalHoldingsValue > 0 ? (activeValue / totalHoldingsValue) * 100 : 100;
 
   // Sorted table rows
   const sorted = [...activeHoldings].sort((a, b) => {
@@ -184,20 +187,19 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi
           label="Market Value"
-          tooltip="Current total market value of the selected positions at today's prices."
+          tooltip="Current total market value of all your investment positions at today's prices."
           value={formatCurrency(kpiValue)}
-          sub={selectedGroup ? `${kpiPortfolioPct.toFixed(1)}% of portfolio` : undefined}
         />
         <Kpi
           label="Total Return"
-          tooltip="Total unrealized gain or loss — the difference between current market value and what you originally paid (cost basis)."
+          tooltip="Total unrealized gain or loss across all positions — the difference between current market value and what you originally paid (cost basis)."
           value={`${kpiGain >= 0 ? '+' : ''}${formatCurrency(kpiGain)}`}
           sub={`${kpiGainPct >= 0 ? '+' : ''}${kpiGainPct.toFixed(1)}% overall`}
           valueColor={kpiGain >= 0 ? 'text-accent-green' : 'text-accent-red'}
         />
         <Kpi
           label="Cost Basis"
-          tooltip="Total amount paid to acquire the selected positions, used as the baseline for calculating unrealized gains and losses."
+          tooltip="Total amount paid to acquire all positions, used as the baseline for calculating unrealized gains and losses."
           value={formatCurrency(kpiCost)}
         />
         <Kpi
@@ -352,17 +354,17 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
         {/* Total row */}
         <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-3 border-t border-sand-200 bg-sand-50 rounded-b-xl items-center">
           <div className="col-span-3 text-xs font-semibold text-ink-500 uppercase tracking-wider">
-            {selectedGroup ? selectedGroup : 'Total'}
+            {selectedGroup ?? 'Total'}
           </div>
           <div className="col-span-1" />
-          <div className="col-span-2 text-right font-mono text-sm text-ink-600">{formatCurrency(kpiCost)}</div>
-          <div className="col-span-2 text-right font-mono text-sm font-semibold text-ink-800">{formatCurrency(kpiValue)}</div>
-          <div className={`col-span-2 text-right font-mono text-sm font-semibold ${kpiGain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {kpiGain >= 0 ? '+' : ''}{formatCurrency(kpiGain)}
-            <span className="text-xs ml-1 opacity-70">({kpiGainPct >= 0 ? '+' : ''}{kpiGainPct.toFixed(1)}%)</span>
+          <div className="col-span-2 text-right font-mono text-sm text-ink-600">{formatCurrency(activeCost)}</div>
+          <div className="col-span-2 text-right font-mono text-sm font-semibold text-ink-800">{formatCurrency(activeValue)}</div>
+          <div className={`col-span-2 text-right font-mono text-sm font-semibold ${activeGain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+            {activeGain >= 0 ? '+' : ''}{formatCurrency(activeGain)}
+            <span className="text-xs ml-1 opacity-70">({activeGainPct >= 0 ? '+' : ''}{activeGainPct.toFixed(1)}%)</span>
           </div>
           <div className="col-span-2 text-right font-mono text-xs text-ink-400">
-            {selectedGroup ? `${kpiPortfolioPct.toFixed(1)}%` : '100%'}
+            {selectedGroup ? `${activePortfolioPct.toFixed(1)}%` : '100%'}
           </div>
         </div>
       </div>
