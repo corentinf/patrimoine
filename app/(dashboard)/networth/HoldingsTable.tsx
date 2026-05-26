@@ -306,12 +306,10 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
         </div>
       )}
 
-      {/* Group breakdown */}
-      {groupSummary.length > 1 && (
+      {/* Group breakdown — only in All view */}
+      {!selectedGroup && groupSummary.length > 1 && (
         <div className="card p-0 overflow-hidden">
-          {groupSummary
-            .filter((g) => !selectedGroup || g.group === selectedGroup)
-            .map((g, i) => (
+          {groupSummary.map((g, i) => (
               <div
                 key={g.group}
                 className={`grid grid-cols-12 gap-2 px-5 py-3 items-center ${i > 0 ? 'border-t border-sand-100' : ''}`}
