@@ -10,6 +10,7 @@ export interface Category {
   icon: string;
   color: string;
   is_income: boolean;
+  parent_id: string | null;
 }
 
 interface CategoryManagerProps {
@@ -24,7 +25,7 @@ const COLORS = [
   '#EC4899', '#F43F5E', '#78716C', '#9CA3AF',
 ];
 
-const EMPTY_FORM = { name: '', icon: '✨', color: '#6366F1' };
+const EMPTY_FORM = { name: '', icon: '✨', color: '#6366F1', parent_id: null as string | null };
 
 export default function CategoryManager({ categories, onClose }: CategoryManagerProps) {
   const router = useRouter();
@@ -35,6 +36,9 @@ export default function CategoryManager({ categories, onClose }: CategoryManager
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
 
+  // Only top-level categories are valid parents
+  const parentOptions = categories.filter((c) => !c.parent_id && !c.is_income);
+
   function openCreate() {
     setForm(EMPTY_FORM);
     setError(null);
@@ -42,7 +46,7 @@ export default function CategoryManager({ categories, onClose }: CategoryManager
   }
 
   function openEdit(cat: Category) {
-    setForm({ name: cat.name, icon: cat.icon || '✨', color: cat.color || '#6366F1' });
+    setForm({ name: cat.name, icon: cat.icon || '✨', color: cat.color || '#6366F1', parent_id: cat.parent_id });
     setError(null);
     setEditing(cat.id);
   }
@@ -68,6 +72,22 @@ export default function CategoryManager({ categories, onClose }: CategoryManager
   }
 
   const isEditing = editing !== null;
+
+  // Group categories: parents first, then their children indented
+  const grouped: Array<Category & { children: Category[] }> = [];
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const childrenByParent = new Map<string, Category[]>();
+  for (const cat of categories) {
+    if (cat.parent_id) {
+      if (!childrenByParent.has(cat.parent_id)) childrenByParent.set(cat.parent_id, []);
+      childrenByParent.get(cat.parent_id)!.push(cat);
+    }
+  }
+  for (const cat of categories) {
+    if (!cat.parent_id) {
+      grouped.push({ ...cat, children: childrenByParent.get(cat.id) ?? [] });
+    }
+  }
 
   return (
     <>
@@ -107,33 +127,71 @@ export default function CategoryManager({ categories, onClose }: CategoryManager
           {/* Body */}
           <div className="flex-1 overflow-y-auto">
             {!isEditing ? (
-              /* ── List view ── */
+              /* ── List view (hierarchical) ── */
               <div className="divide-y divide-sand-100">
-                {categories.map((cat) => (
-                  <div key={cat.id} className="flex items-center gap-3 px-5 py-3">
-                    <span className="text-xl w-8 text-center">{cat.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-ink-700">{cat.name}</p>
-                      {cat.is_income && (
-                        <p className="text-xs text-accent-green">Income</p>
-                      )}
+                {grouped.map((cat) => (
+                  <div key={cat.id}>
+                    {/* Parent row */}
+                    <div className="flex items-center gap-3 px-5 py-3">
+                      <span className="text-xl w-8 text-center">{cat.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-ink-700">{cat.name}</p>
+                        {cat.is_income && <p className="text-xs text-accent-green">Income</p>}
+                      </div>
+                      <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                      <button
+                        onClick={() => openEdit(cat)}
+                        className="text-xs text-ink-400 hover:text-ink-700 transition-colors px-2 py-1 rounded hover:bg-sand-100"
+                      >
+                        Edit
+                      </button>
                     </div>
-                    <span
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    <button
-                      onClick={() => openEdit(cat)}
-                      className="text-xs text-ink-400 hover:text-ink-700 transition-colors px-2 py-1 rounded hover:bg-sand-100"
-                    >
-                      Edit
-                    </button>
+                    {/* Sub-category rows */}
+                    {cat.children.map((child) => (
+                      <div key={child.id} className="flex items-center gap-3 pl-12 pr-5 py-2 bg-sand-50/60">
+                        <span className="text-base w-6 text-center">{child.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-ink-600">{child.name}</p>
+                        </div>
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: child.color }} />
+                        <button
+                          onClick={() => openEdit(child)}
+                          className="text-xs text-ink-400 hover:text-ink-700 transition-colors px-2 py-1 rounded hover:bg-sand-100"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
             ) : (
               /* ── Create / Edit form ── */
               <div className="px-5 py-5 space-y-5">
+                {/* Parent category (only for new) */}
+                {editing === 'new' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-500 uppercase tracking-wider mb-2">
+                      Parent category <span className="font-normal text-ink-300 normal-case">(optional)</span>
+                    </label>
+                    <select
+                      value={form.parent_id ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value || null;
+                        // Inherit parent color when a parent is selected
+                        const parent = val ? categories.find((c) => c.id === val) : null;
+                        setForm((f) => ({ ...f, parent_id: val, ...(parent ? { color: parent.color } : {}) }));
+                      }}
+                      className="w-full px-3 py-2 border border-sand-200 rounded-xl text-sm text-ink-700 bg-white focus:outline-none focus:ring-2 focus:ring-sand-300"
+                    >
+                      <option value="">None — top-level category</option>
+                      {parentOptions.map((p) => (
+                        <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Emoji + preview */}
                 <div>
                   <label className="block text-xs font-semibold text-ink-500 uppercase tracking-wider mb-2">

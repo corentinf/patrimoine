@@ -91,21 +91,45 @@ function isExcludedFromSpending(tx: RawTransaction): boolean {
   return tx.is_transfer || !!tx.category?.is_income || tx.category?.name === 'Transfer';
 }
 
-function sumByCategory(txs: RawTransaction[]): Map<string, { name: string; color: string; icon: string; total: number }> {
-  const map = new Map<string, { name: string; color: string; icon: string; total: number }>();
+// Rolls sub-categories up to their parent for aggregation.
+// Returns a map keyed by parent category ID (or '__uncategorized__').
+// Each entry includes a subBreakdown for sub-categories that contributed to this total.
+function sumByCategory(
+  txs: RawTransaction[],
+  subCatToParent: Map<string, string>,
+  catMeta: Map<string, { name: string; color: string; icon: string }>,
+): Map<string, {
+  name: string; color: string; icon: string; total: number;
+  subBreakdown: Map<string, { id: string; name: string; color: string; icon: string; total: number }>;
+}> {
+  const map = new Map<string, {
+    name: string; color: string; icon: string; total: number;
+    subBreakdown: Map<string, { id: string; name: string; color: string; icon: string; total: number }>;
+  }>();
+
   for (const tx of txs) {
     if (isExcludedFromSpending(tx)) continue;
-    const key = tx.category?.id ?? '__uncategorized__';
+    const cat = tx.category;
+    const amount = Math.abs(Number(tx.amount));
+    const parentId = cat ? (subCatToParent.get(cat.id) ?? cat.id) : null;
+    const key = parentId ?? '__uncategorized__';
+
     if (!map.has(key)) {
-      map.set(key, {
-        name: tx.category?.name ?? 'Uncategorized',
-        color: tx.category?.color ?? '#D1D5DB',
-        icon: tx.category?.icon ?? '❓',
-        total: 0,
-      });
+      const meta = parentId ? (catMeta.get(parentId) ?? { name: cat?.name ?? 'Uncategorized', color: cat?.color ?? '#D1D5DB', icon: cat?.icon ?? '❓' }) : { name: 'Uncategorized', color: '#D1D5DB', icon: '❓' };
+      map.set(key, { ...meta, total: 0, subBreakdown: new Map() });
     }
-    map.get(key)!.total += Math.abs(Number(tx.amount));
+    const entry = map.get(key)!;
+    entry.total += amount;
+
+    // Track sub-breakdown if this is a sub-category transaction
+    if (cat && subCatToParent.has(cat.id)) {
+      if (!entry.subBreakdown.has(cat.id)) {
+        entry.subBreakdown.set(cat.id, { id: cat.id, name: cat.name, color: cat.color, icon: cat.icon, total: 0 });
+      }
+      entry.subBreakdown.get(cat.id)!.total += amount;
+    }
   }
+
   return map;
 }
 
@@ -117,12 +141,15 @@ interface CategoryRow {
   current: number;
   previous: number;
   delta: number | null; // null = brand new category
+  subBreakdown: Array<{ id: string; name: string; color: string; icon: string; total: number }>;
 }
 
-function buildCategoryRows(
-  current: Map<string, { name: string; color: string; icon: string; total: number }>,
-  previous: Map<string, { name: string; color: string; icon: string; total: number }>,
-): CategoryRow[] {
+type SumByCatMap = Map<string, {
+  name: string; color: string; icon: string; total: number;
+  subBreakdown: Map<string, { id: string; name: string; color: string; icon: string; total: number }>;
+}>;
+
+function buildCategoryRows(current: SumByCatMap, previous: SumByCatMap): CategoryRow[] {
   const keys = Array.from(new Set([...Array.from(current.keys()), ...Array.from(previous.keys())]));
   const rows: CategoryRow[] = [];
   for (const key of keys) {
@@ -134,9 +161,10 @@ function buildCategoryRows(
     const delta = previousTotal === 0
       ? (currentTotal > 0 ? null : 0)
       : ((currentTotal - previousTotal) / previousTotal) * 100;
-    rows.push({ key, name: meta.name, color: meta.color, icon: meta.icon, current: currentTotal, previous: previousTotal, delta });
+    const subBreakdown = Array.from(cur?.subBreakdown?.values() ?? [])
+      .sort((a, b) => b.total - a.total);
+    rows.push({ key, name: meta.name, color: meta.color, icon: meta.icon, current: currentTotal, previous: previousTotal, delta, subBreakdown });
   }
-  // Sort: new categories first (null delta), then by delta descending
   return rows
     .filter((r) => r.current > 0 || r.previous > 0)
     .sort((a, b) => {
@@ -265,6 +293,29 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   });
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
+
+  // Derived lookup maps for sub-category hierarchy
+  const subCatToParent = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const cat of allCategories) { if (cat.parent_id) m.set(cat.id, cat.parent_id); }
+    return m;
+  }, [allCategories]);
+
+  const catMeta = useMemo(() => {
+    return new Map(allCategories.map((c) => [c.id, { name: c.name, color: c.color, icon: c.icon }]));
+  }, [allCategories]);
+
+  // Child IDs by parent — used so clicking a parent key also includes sub-cat transactions
+  const childIdsByParent = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const cat of allCategories) {
+      if (cat.parent_id) {
+        if (!m.has(cat.parent_id)) m.set(cat.parent_id, []);
+        m.get(cat.parent_id)!.push(cat.id);
+      }
+    }
+    return m;
+  }, [allCategories]);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('transactions');
@@ -303,8 +354,10 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     if (selectedCategoryKey === '__uncategorized__') {
       return filteredTransactions.filter((tx) => !tx.category);
     }
-    return filteredTransactions.filter((tx) => tx.category?.id === selectedCategoryKey);
-  }, [filteredTransactions, selectedCategoryKey]);
+    const childIds = childIdsByParent.get(selectedCategoryKey) ?? [];
+    const allowed = new Set([selectedCategoryKey, ...childIds]);
+    return filteredTransactions.filter((tx) => allowed.has(tx.category?.id ?? ''));
+  }, [filteredTransactions, selectedCategoryKey, childIdsByParent]);
 
   // Transactions tab: full dataset (all months) — its own toolbar lets the user
   // filter independently of the page-level date picker that drives the charts.
@@ -318,8 +371,10 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     if (selectedCategoryKey === '__uncategorized__') {
       return allAccountFiltered.filter((tx) => !tx.category);
     }
-    return allAccountFiltered.filter((tx) => tx.category?.id === selectedCategoryKey);
-  }, [allAccountFiltered, selectedCategoryKey]);
+    const childIds = childIdsByParent.get(selectedCategoryKey) ?? [];
+    const allowed = new Set([selectedCategoryKey, ...childIds]);
+    return allAccountFiltered.filter((tx) => allowed.has(tx.category?.id ?? ''));
+  }, [allAccountFiltered, selectedCategoryKey, childIdsByParent]);
 
   const prevFiltered = useMemo(() => {
     const prev = applyDateFilter(transactions, getPrevPeriodFilter(dateFilter));
@@ -328,8 +383,11 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   }, [transactions, dateFilter, selectedAccount]);
 
   const categoryRows = useMemo(() =>
-    buildCategoryRows(sumByCategory(filteredTransactions), sumByCategory(prevFiltered)),
-  [filteredTransactions, prevFiltered]);
+    buildCategoryRows(
+      sumByCategory(filteredTransactions, subCatToParent, catMeta),
+      sumByCategory(prevFiltered, subCatToParent, catMeta),
+    ),
+  [filteredTransactions, prevFiltered, subCatToParent, catMeta]);
 
   const prevTotalSpending = useMemo(() =>
     prevFiltered.reduce((sum, tx) => {
@@ -347,20 +405,21 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   }, [dateFilter]);
 
   const { sortedCategories, totalSpending } = useMemo(() => {
-    const totals: Record<string, { id?: string; name: string; color: string; icon: string; total: number; count: number }> = {};
-    for (const tx of filteredTransactions) {
-      const cat = tx.category;
-      if (isExcludedFromSpending(tx)) continue;
-      const key = cat?.name || 'Uncategorized';
-      if (!totals[key]) {
-        totals[key] = { id: cat?.id, name: key, color: cat?.color || '#D1D5DB', icon: cat?.icon || '❓', total: 0, count: 0 };
-      }
-      totals[key].total += Math.abs(Number(tx.amount));
-      totals[key].count += 1;
-    }
-    const sorted = Object.values(totals).sort((a, b) => b.total - a.total);
+    const rolled = sumByCategory(filteredTransactions, subCatToParent, catMeta);
+    const sorted = Array.from(rolled.entries()).map(([key, v]) => ({
+      id: key === '__uncategorized__' ? undefined : key,
+      name: v.name,
+      color: v.color,
+      icon: v.icon,
+      total: v.total,
+      count: Array.from(filteredTransactions).filter((tx) => {
+        if (isExcludedFromSpending(tx)) return false;
+        const parentId = tx.category ? (subCatToParent.get(tx.category.id) ?? tx.category.id) : null;
+        return (parentId ?? '__uncategorized__') === key;
+      }).length,
+    })).sort((a, b) => b.total - a.total);
     return { sortedCategories: sorted, totalSpending: sorted.reduce((s, c) => s + c.total, 0) };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, subCatToParent, catMeta]);
 
   const monthlyChartData = useMemo(() => {
     const src = selectedAccount
@@ -668,6 +727,23 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                         {isNew ? 'new' : row.delta === 0 ? '—' : `${isIncrease ? '+' : ''}${row.delta!.toFixed(0)}%`}
                       </span>
                     </button>
+
+                    {/* Sub-category breakdown (when sub-cats contributed to this parent's total) */}
+                    {row.subBreakdown.length > 0 && (
+                      <div className="mx-5 mb-1 rounded-lg bg-sand-50 overflow-hidden">
+                        {row.subBreakdown.map((sub) => (
+                          <button
+                            key={sub.id}
+                            onClick={() => { setSelectedCategoryKey(sub.id); setActiveTab('transactions'); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-sand-100 transition-colors border-b border-sand-100/60 last:border-0"
+                          >
+                            <span className="text-xs w-4 text-center flex-shrink-0">{sub.icon}</span>
+                            <span className="flex-1 text-xs text-ink-500">{sub.name}</span>
+                            <span className="font-mono text-xs text-ink-500">{formatCurrency(sub.total)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Budget row */}
                     {row.key !== '__uncategorized__' && (

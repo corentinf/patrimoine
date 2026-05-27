@@ -573,8 +573,24 @@ function MobileSyncButton() {
     setSyncing(true);
     try {
       const res = await fetch('/api/plaid/sync', { method: 'POST' });
-      const data = await res.json();
-      if (data.ok) setTimeout(() => window.location.reload(), 500);
+      if (!res.ok || !res.body) return;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            if (event.done && event.ok) { setTimeout(() => window.location.reload(), 500); return; }
+          } catch {}
+        }
+      }
     } finally {
       setSyncing(false);
     }
@@ -593,6 +609,7 @@ function MobileSyncButton() {
 }
 
 type SyncPhase = 'idle' | 'syncing' | 'done' | 'error';
+type SyncStep = 'accounts' | 'transactions' | 'categorize' | 'snapshot';
 
 interface SyncResult {
   accountsUpdated: number;
@@ -603,35 +620,84 @@ interface SyncResult {
   errors: string[];
 }
 
+const SYNC_STEPS: { key: SyncStep; label: string }[] = [
+  { key: 'accounts',     label: 'Accounts & balances' },
+  { key: 'transactions', label: 'Transactions' },
+  { key: 'categorize',   label: 'AI categorization' },
+  { key: 'snapshot',     label: 'Net worth snapshot' },
+];
+
 function SyncButton() {
   const [phase, setPhase] = useState<SyncPhase>('idle');
   const [result, setResult] = useState<SyncResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [doneSteps, setDoneSteps] = useState<Set<SyncStep>>(new Set());
+  const [stepCounts, setStepCounts] = useState<Partial<Record<SyncStep, number>>>({});
 
   const handleSync = async () => {
     setPhase('syncing');
     setResult(null);
     setErrorMsg('');
+    setDoneSteps(new Set());
+    setStepCounts({});
 
     try {
       const res = await fetch('/api/plaid/sync', { method: 'POST' });
-      const text = await res.text();
 
-      let data: any;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        setErrorMsg(`Server error (${res.status}):\n${text.slice(0, 800)}`);
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = `Error ${res.status}`;
+        try { msg = JSON.parse(text).error || msg; } catch {}
+        setErrorMsg(msg);
         setPhase('error');
         return;
       }
 
-      if (data.ok) {
-        setResult(data);
-        setPhase('done');
-        setTimeout(() => window.location.reload(), 3000);
-      } else {
-        setErrorMsg(data.error || 'Sync failed');
+      if (!res.body) {
+        setErrorMsg('No response body');
+        setPhase('error');
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let receivedDone = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event: any;
+          try { event = JSON.parse(line); } catch { continue; }
+
+          if (event.type === 'progress') {
+            const step = event.step as SyncStep;
+            setDoneSteps((prev) => { const next = new Set(prev); next.add(step); return next; });
+            if (event.count !== undefined) {
+              setStepCounts((prev) => ({ ...prev, [step]: event.count }));
+            }
+          } else if (event.done) {
+            receivedDone = true;
+            if (event.ok) {
+              setResult(event as SyncResult);
+              setPhase('done');
+              setTimeout(() => window.location.reload(), 3000);
+            } else {
+              setErrorMsg(event.error || 'Sync failed');
+              setPhase('error');
+            }
+          }
+        }
+      }
+
+      if (!receivedDone) {
+        setErrorMsg('Sync ended without completing');
         setPhase('error');
       }
     } catch (err: any) {
@@ -640,7 +706,7 @@ function SyncButton() {
     }
   };
 
-  const reset = () => { setPhase('idle'); setResult(null); setErrorMsg(''); };
+  const reset = () => { setPhase('idle'); setResult(null); setErrorMsg(''); setDoneSteps(new Set()); setStepCounts({}); };
 
   if (phase === 'idle') {
     return (
@@ -652,15 +718,31 @@ function SyncButton() {
 
   if (phase === 'syncing') {
     return (
-      <div className="rounded-lg border border-sand-200 bg-sand-50 p-3 space-y-2">
+      <div className="rounded-lg border border-sand-200 bg-sand-50 p-3 space-y-2.5">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-3 h-3 border-2 border-ink-400 border-t-transparent rounded-full animate-spin" />
+          <span className="inline-block w-3 h-3 border-2 border-ink-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
           <span className="text-xs font-medium text-ink-600">Syncing…</span>
         </div>
-        <div className="space-y-1 text-xs text-ink-400">
-          <p>Fetching accounts & balances</p>
-          <p>Pulling new transactions</p>
-          <p>Running AI categorization</p>
+        <div className="space-y-1.5">
+          {SYNC_STEPS.map(({ key, label }) => {
+            const done = doneSteps.has(key);
+            const count = stepCounts[key];
+            return (
+              <div key={key} className="flex items-center gap-2 text-xs">
+                {done ? (
+                  <span className="w-3.5 h-3.5 rounded-sm bg-green-500 text-white flex items-center justify-center text-[9px] leading-none flex-shrink-0">✓</span>
+                ) : (
+                  <span className="w-3.5 h-3.5 rounded-sm border border-sand-300 bg-white flex-shrink-0" />
+                )}
+                <span className={done ? 'text-ink-600' : 'text-ink-300'}>
+                  {label}
+                  {done && count !== undefined && count > 0 ? (
+                    <span className="text-ink-300 ml-1">({count})</span>
+                  ) : null}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     );

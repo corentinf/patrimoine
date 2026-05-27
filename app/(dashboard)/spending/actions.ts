@@ -10,13 +10,14 @@ async function getSupabaseAndUser() {
   return { supabase, user };
 }
 
-export async function createCategory(data: { name: string; icon: string; color: string }) {
+export async function createCategory(data: { name: string; icon: string; color: string; parent_id?: string | null }) {
   const { supabase, user } = await getSupabaseAndUser();
   const { error } = await supabase.from('categories').insert({
     name: data.name.trim(),
     icon: data.icon.trim(),
     color: data.color,
     user_id: user.id,
+    ...(data.parent_id ? { parent_id: data.parent_id } : {}),
   });
   if (error) throw new Error(error.message);
   revalidatePath('/spending');

@@ -23,10 +23,32 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  try {
-    const result = await syncAll(user.id);
-    return NextResponse.json({ ok: true, timestamp: new Date().toISOString(), ...result });
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
-  }
+  const encoder = new TextEncoder();
+  let ctrl!: ReadableStreamDefaultController<Uint8Array>;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) { ctrl = c; },
+  });
+
+  const emit = (event: object) => {
+    ctrl.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+  };
+
+  syncAll(user.id, emit)
+    .then((result) => {
+      emit({ ok: true, done: true, ...result });
+      ctrl.close();
+    })
+    .catch((err) => {
+      emit({ ok: false, done: true, error: err.message });
+      ctrl.close();
+    });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }

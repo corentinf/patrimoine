@@ -118,8 +118,9 @@ async function getAllCategories() {
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from('categories')
-    .select('id, name, color, icon, is_income')
+    .select('id, name, color, icon, is_income, parent_id')
     .order('is_income')
+    .order('sort_order')
     .order('name');
 
   if (error) throw error;
