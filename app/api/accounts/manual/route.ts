@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
 
   const { error } = await supabase.from('accounts').upsert({
     id,
-    user_id: user.id,
     name,
     institution,
     account_type,
@@ -83,8 +82,46 @@ export async function DELETE(request: NextRequest) {
   const { error } = await supabase
     .from('accounts')
     .delete()
-    .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('id', id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await captureNetWorthSnapshot(supabase, user.id);
+  revalidatePath('/', 'layout');
+  return NextResponse.json({ ok: true });
+}
+
+export async function PATCH(request: NextRequest) {
+  const cookieStore = await cookies();
+  const authClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (toSet) =>
+          toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)),
+      },
+    },
+  );
+
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id, name, institution, account_type, balance } = await request.json();
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (name !== undefined) updates.name = name;
+  if (institution !== undefined) updates.institution = institution;
+  if (account_type !== undefined) updates.account_type = account_type;
+  if (balance !== undefined) {
+    updates.balance = Number(balance);
+    updates.balance_date = new Date().toISOString();
+  }
+
+  const supabase = createServiceClient();
+  const { error } = await supabase.from('accounts').update(updates).eq('id', id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
