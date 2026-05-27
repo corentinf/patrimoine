@@ -417,15 +417,27 @@ export default function SpendingTransactions({
   }
 
   const chipCategories = useMemo(() => {
-    const map = new Map<string, { name: string; icon: string; color: string }>();
+    // Start from allCategories so sub-categories appear even before any
+    // transactions are assigned to them.
+    const list: { name: string; icon: string; color: string }[] = allCategories
+      .filter((c) => !c.is_income)
+      .map((c) => ({ name: c.name, icon: c.icon, color: c.color }));
+
+    const knownNames = new Set(list.map((c) => c.name));
+
+    // Capture any transaction categories not yet in allCategories.
     for (const tx of transactions) {
       const cat = getEffectiveCategory(tx);
       const name = cat?.name || 'Uncategorized';
-      if (!map.has(name)) map.set(name, { name, icon: cat?.icon || '❓', color: cat?.color || '#D1D5DB' });
+      if (!knownNames.has(name)) {
+        list.push({ name, icon: cat?.icon || '❓', color: cat?.color || '#D1D5DB' });
+        knownNames.add(name);
+      }
     }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+    return list.sort((a, b) => a.name.localeCompare(b.name));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, categoryOverrides]);
+  }, [transactions, allCategories, categoryOverrides]);
 
   // Hide pills that overflow the row instead of clipping them mid-chip.
   useEffect(() => {
