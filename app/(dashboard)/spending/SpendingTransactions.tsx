@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import { formatCurrencyPrecise } from '@/app/lib/utils';
 import type { DateFilter } from './SpendingView';
 
@@ -709,52 +709,60 @@ export default function SpendingTransactions({
               {chipCategories.map((cat) => {
                 const active = filterCategories.includes(cat.name);
                 const isExpanded = expandedParent === cat.name;
+                const children = isExpanded ? subChips : [];
                 return (
-                  <button
-                    key={cat.name}
-                    onClick={() => {
-                      if (isExpanded) {
-                        setFilterCategories([]);
-                        setExpandedParent(null);
-                      } else {
-                        setFilterCategories([cat.name]);
-                        setExpandedParent(cat.name);
+                  <Fragment key={cat.name}>
+                    <button
+                      onClick={() => {
+                        if (isExpanded) {
+                          setFilterCategories([]);
+                          setExpandedParent(null);
+                        } else {
+                          setFilterCategories([cat.name]);
+                          setExpandedParent(cat.name);
+                        }
+                      }}
+                      className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                        active
+                          ? 'text-white border-transparent'
+                          : isExpanded
+                            ? 'bg-white text-ink-600'
+                            : 'bg-white border-sand-200 text-ink-500 hover:border-sand-300'
+                      }`}
+                      style={
+                        active
+                          ? { backgroundColor: cat.color, borderColor: cat.color }
+                          : isExpanded
+                            ? { borderColor: cat.color, color: cat.color }
+                            : {}
                       }
-                    }}
-                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      active ? 'text-white' : isExpanded ? 'bg-sand-100 border border-sand-300 text-ink-600' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-                    }`}
-                    style={active ? { backgroundColor: cat.color } : {}}
-                  >
-                    <span>{cat.icon}</span>
-                    {cat.name}
-                  </button>
+                    >
+                      <span>{cat.icon}</span>
+                      {cat.name}
+                    </button>
+                    {children.map((sub) => {
+                      const subActive = filterCategories.includes(sub.name);
+                      return (
+                        <button
+                          key={sub.name}
+                          onClick={() => setFilterCategories(subActive ? [cat.name] : [sub.name])}
+                          className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border-2 ${
+                            subActive ? 'text-white' : 'bg-white'
+                          }`}
+                          style={
+                            subActive
+                              ? { backgroundColor: cat.color, borderColor: cat.color }
+                              : { borderColor: cat.color, color: cat.color }
+                          }
+                        >
+                          <span className="text-[10px]">{sub.icon}</span>
+                          {sub.name}
+                        </button>
+                      );
+                    })}
+                  </Fragment>
                 );
               })}
-              {/* Subcategory pills — visible when a parent is expanded */}
-              {subChips.length > 0 && (
-                <>
-                  <span className="shrink-0 text-sand-300 select-none">›</span>
-                  {subChips.map((sub) => {
-                    const active = filterCategories.includes(sub.name);
-                    return (
-                      <button
-                        key={sub.name}
-                        onClick={() => {
-                          setFilterCategories(active ? [expandedParent!] : [sub.name]);
-                        }}
-                        className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                          active ? 'text-white' : 'bg-white border border-sand-200 text-ink-400 hover:border-sand-300'
-                        }`}
-                        style={active ? { backgroundColor: sub.color } : {}}
-                      >
-                        <span>{sub.icon}</span>
-                        {sub.name}
-                      </button>
-                    );
-                  })}
-                </>
-              )}
             </div>
             <button
               onClick={() => setFiltersExpanded((v) => !v)}
