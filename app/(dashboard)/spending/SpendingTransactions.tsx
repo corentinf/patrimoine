@@ -397,6 +397,7 @@ export default function SpendingTransactions({
   const [sortBy, setSortBy] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
+  const [expandedParent, setExpandedParent] = useState<string | null>(null);
   const [hoveredChip, setHoveredChip] = useState<string | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
@@ -417,20 +418,19 @@ export default function SpendingTransactions({
   }
 
   const chipCategories = useMemo(() => {
-    // Start from allCategories so sub-categories appear even before any
-    // transactions are assigned to them.
-    const list: { name: string; icon: string; color: string }[] = allCategories
-      .filter((c) => !c.is_income)
-      .map((c) => ({ name: c.name, icon: c.icon, color: c.color }));
+    // Top-level (parent) categories only — subcategories appear on expansion.
+    const list: { id: string; name: string; icon: string; color: string }[] = allCategories
+      .filter((c) => !c.is_income && !c.parent_id)
+      .map((c) => ({ id: c.id, name: c.name, icon: c.icon || '', color: c.color || '#6B7280' }));
 
     const knownNames = new Set(list.map((c) => c.name));
 
-    // Capture any transaction categories not yet in allCategories.
+    // Capture any transaction categories not yet in allCategories (treat as top-level).
     for (const tx of transactions) {
       const cat = getEffectiveCategory(tx);
       const name = cat?.name || 'Uncategorized';
-      if (!knownNames.has(name)) {
-        list.push({ name, icon: cat?.icon || '❓', color: cat?.color || '#D1D5DB' });
+      if (!knownNames.has(name) && !allCategories.find((c) => c.name === name)?.parent_id) {
+        list.push({ id: cat?.id || name, name, icon: cat?.icon || '❓', color: cat?.color || '#D1D5DB' });
         knownNames.add(name);
       }
     }
@@ -438,6 +438,16 @@ export default function SpendingTransactions({
     return list.sort((a, b) => a.name.localeCompare(b.name));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions, allCategories, categoryOverrides]);
+
+  const subChips = useMemo(() => {
+    if (!expandedParent) return [];
+    const parent = allCategories.find((c) => c.name === expandedParent);
+    if (!parent) return [];
+    return allCategories
+      .filter((c) => c.parent_id === parent.id)
+      .map((c) => ({ id: c.id, name: c.name, icon: c.icon || '', color: c.color || parent.color || '#6B7280' }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [expandedParent, allCategories]);
 
   // Hide pills that overflow the row instead of clipping them mid-chip.
   useEffect(() => {
@@ -483,9 +493,15 @@ export default function SpendingTransactions({
     }
 
     if (filterCategories.length > 0) {
-      result = result.filter((tx) =>
-        filterCategories.includes(getEffectiveCategory(tx)?.name || 'Uncategorized'),
-      );
+      // Expand parent selection to include its children's transactions.
+      const matchNames = new Set<string>(filterCategories);
+      for (const name of filterCategories) {
+        const parent = allCategories.find((c) => c.name === name && !c.parent_id);
+        if (parent) {
+          allCategories.filter((c) => c.parent_id === parent.id).forEach((c) => matchNames.add(c.name));
+        }
+      }
+      result = result.filter((tx) => matchNames.has(getEffectiveCategory(tx)?.name || 'Uncategorized'));
     }
 
     if (search.trim()) {
@@ -681,7 +697,7 @@ export default function SpendingTransactions({
               className={`flex gap-2 flex-1 min-w-0 ${filtersExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
             >
               <button
-                onClick={() => setFilterCategories([])}
+                onClick={() => { setFilterCategories([]); setExpandedParent(null); }}
                 className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   filterCategories.length === 0
                     ? 'bg-ink-800 text-white'
@@ -692,47 +708,53 @@ export default function SpendingTransactions({
               </button>
               {chipCategories.map((cat) => {
                 const active = filterCategories.includes(cat.name);
-                const showAdd = filterCategories.length > 0 && !active && hoveredChip === cat.name;
+                const isExpanded = expandedParent === cat.name;
                 return (
-                  <div
+                  <button
                     key={cat.name}
-                    className="relative shrink-0"
-                    onMouseEnter={() => setHoveredChip(cat.name)}
-                    onMouseLeave={() => setHoveredChip(null)}
+                    onClick={() => {
+                      if (isExpanded) {
+                        setFilterCategories([]);
+                        setExpandedParent(null);
+                      } else {
+                        setFilterCategories([cat.name]);
+                        setExpandedParent(cat.name);
+                      }
+                    }}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      active ? 'text-white' : isExpanded ? 'bg-sand-100 border border-sand-300 text-ink-600' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                    }`}
+                    style={active ? { backgroundColor: cat.color } : {}}
                   >
-                    <button
-                      onClick={() => {
-                        if (active) {
-                          setFilterCategories(filterCategories.filter((n) => n !== cat.name));
-                        } else {
-                          setFilterCategories([cat.name]);
-                        }
-                      }}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                        active ? 'text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-                      }`}
-                      style={active ? { backgroundColor: cat.color } : {}}
-                    >
-                      <span>{cat.icon}</span>
-                      {cat.name}
-                    </button>
-                    {showAdd && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFilterCategories([...filterCategories, cat.name]);
-                        }}
-                        className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-ink-800 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-ink-600 transition-colors"
-                        title={`Add ${cat.name} to filter`}
-                      >
-                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
+                    <span>{cat.icon}</span>
+                    {cat.name}
+                  </button>
                 );
               })}
+              {/* Subcategory pills — visible when a parent is expanded */}
+              {subChips.length > 0 && (
+                <>
+                  <span className="shrink-0 text-sand-300 select-none">›</span>
+                  {subChips.map((sub) => {
+                    const active = filterCategories.includes(sub.name);
+                    return (
+                      <button
+                        key={sub.name}
+                        onClick={() => {
+                          setFilterCategories(active ? [expandedParent!] : [sub.name]);
+                        }}
+                        className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          active ? 'text-white' : 'bg-white border border-sand-200 text-ink-400 hover:border-sand-300'
+                        }`}
+                        style={active ? { backgroundColor: sub.color } : {}}
+                      >
+                        <span>{sub.icon}</span>
+                        {sub.name}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </div>
             <button
               onClick={() => setFiltersExpanded((v) => !v)}
@@ -753,6 +775,7 @@ export default function SpendingTransactions({
             <button
               onClick={() => {
                 setFilterCategories([]);
+                setExpandedParent(null);
                 setSearch('');
                 onAccountChange?.(null);
                 clearDateFilter();
