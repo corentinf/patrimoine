@@ -587,14 +587,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           </div>
         );
 
-        const paceLine = pacedTotal !== null && (
-          <p className="text-xs text-ink-400">
-            on pace for{' '}
-            <span className="font-mono text-ink-600">{formatCurrency(pacedTotal)}</span>
-            <span className="hidden sm:inline">{' '}by end of month</span>
-          </p>
-        );
-
         return (
           <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-2 bg-sand-50/95 backdrop-blur-sm border-b border-sand-200/60 md:static md:mx-0 md:px-0 md:pt-0 md:pb-0 md:bg-transparent md:backdrop-blur-none md:border-0">
             {/* Mobile: compact 2-row layout */}
@@ -607,38 +599,28 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               </div>
               <div className="flex items-center justify-between gap-2 min-w-0">
                 <div className="min-w-0 [&>*]:flex-wrap">{dateNav}</div>
-                <div className="text-right truncate">{paceLine}</div>
               </div>
             </div>
 
-            {/* Desktop: original two-column layout */}
-            <div className="hidden md:flex flex-wrap items-end justify-between gap-4">
+            {/* Desktop: title + date nav */}
+            <div className="hidden md:flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="font-display text-2xl text-ink-800">Spending</h2>
                 <p className="text-sm text-ink-400 mt-1">Where your money goes</p>
               </div>
-              <div className="sm:text-right">
-                <div className="flex justify-end mb-1">{dateNav}</div>
-                <p className="stat-value text-accent-red">{formatCurrency(totalSpending)}</p>
-                {pacedTotal !== null && (
-                  <p className="text-xs text-ink-400 mt-1">
-                    on pace for{' '}
-                    <span className="font-mono text-ink-600">{formatCurrency(pacedTotal)}</span>
-                    {' '}by end of month
-                  </p>
-                )}
-              </div>
+              <div className="flex justify-end">{dateNav}</div>
             </div>
           </div>
         );
       })()}
 
-      {/* Savings rate */}
+      {/* Spending + savings rate combined card */}
       <SavingsRateModule
         currentSpending={totalSpending}
         prevSpending={prevTotalSpending}
         monthlyIncome={monthlyIncome}
         periodDays={periodDays}
+        pacedTotal={pacedTotal}
       />
 
       {/* Charts — always visible above tabs */}
