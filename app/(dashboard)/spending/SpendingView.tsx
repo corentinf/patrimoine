@@ -713,6 +713,21 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             ) : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
+        {activeTab === 'transactions' && (
+          <div className="ml-auto flex items-center gap-2 pb-px">
+            <AICategorizeButton />
+            <VenmoImport />
+            <button
+              onClick={() => setShowCategoryManager(true)}
+              className="inline-flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 12h.01M7 17h.01M11 7h6M11 12h6M11 17h6" />
+              </svg>
+              Manage categories
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tab: Categories */}
@@ -884,36 +899,21 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       {/* Tab: Transactions */}
       {activeTab === 'transactions' && (
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              {selectedCategoryKey && (() => {
-                const row = categoryRows.find((r) => r.key === selectedCategoryKey);
-                return row ? (
-                  <button
-                    onClick={() => setSelectedCategoryKey(null)}
-                    className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-sand-200 bg-sand-100 text-ink-600 hover:bg-sand-200 transition-colors"
-                  >
-                    <span style={{ color: row.color }}>{row.icon}</span>
-                    {row.name}
-                    <span className="ml-0.5 text-ink-400">✕</span>
-                  </button>
-                ) : null;
-              })()}
-            </div>
-            <div className="flex items-center gap-2">
-              <AICategorizeButton />
-              <VenmoImport />
-              <button
-                onClick={() => setShowCategoryManager(true)}
-                className="inline-flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 12h.01M7 17h.01M11 7h6M11 12h6M11 17h6" />
-                </svg>
-                Manage categories
-              </button>
-            </div>
-          </div>
+          {selectedCategoryKey && (() => {
+            const row = categoryRows.find((r) => r.key === selectedCategoryKey);
+            return row ? (
+              <div className="mt-3">
+                <button
+                  onClick={() => setSelectedCategoryKey(null)}
+                  className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-sand-200 bg-sand-100 text-ink-600 hover:bg-sand-200 transition-colors"
+                >
+                  <span style={{ color: row.color }}>{row.icon}</span>
+                  {row.name}
+                  <span className="ml-0.5 text-ink-400">✕</span>
+                </button>
+              </div>
+            ) : null;
+          })()}
           {allTabTransactions.length > 0 ? (
             <SpendingTransactions
               transactions={allTabTransactions as any}
