@@ -488,10 +488,19 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     if (dateFilter.year !== now.getFullYear() || dateFilter.month !== now.getMonth()) return null;
     const dayOfMonth = now.getDate();
     const daysInMonth = new Date(dateFilter.year, dateFilter.month + 1, 0).getDate();
-    if (dayOfMonth >= daysInMonth - 1) return null; // month nearly over, not useful
-    const dailyAvg = totalSpending / dayOfMonth;
-    return Math.round(dailyAvg * daysInMonth);
-  }, [dateFilter, totalSpending, now]);
+    if (dayOfMonth >= daysInMonth - 1) return null;
+    const LARGE_THRESHOLD = 500;
+    let recurringSpend = 0;
+    let largeSpend = 0;
+    for (const tx of filteredTransactions) {
+      if (isExcludedFromSpending(tx)) continue;
+      const amount = Math.abs(Number(tx.amount));
+      if (amount >= LARGE_THRESHOLD) largeSpend += amount;
+      else recurringSpend += amount;
+    }
+    const paced = Math.round((recurringSpend / dayOfMonth) * daysInMonth);
+    return { paced, largeTotal: Math.round(largeSpend) };
+  }, [dateFilter, filteredTransactions, now]);
 
   const goMonth = (delta: number) => {
     if (dateFilter.mode !== 'month') return;

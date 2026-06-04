@@ -8,7 +8,7 @@ interface Props {
   prevSpending: number;
   monthlyIncome: number;
   periodDays: number;
-  pacedTotal: number | null;
+  pacedTotal: { paced: number; largeTotal: number } | null;
 }
 
 function savingsRate(spending: number, income: number): number | null {
@@ -64,8 +64,16 @@ export default function SavingsRateModule({ currentSpending, prevSpending, month
         {pacedTotal !== null && (
           <p className="text-xs text-ink-400 mt-1">
             on pace for{' '}
-            <span className="font-mono text-ink-600">{formatCurrency(pacedTotal)}</span>
-            {' '}by end of month
+            <span className="font-mono text-ink-600">~{formatCurrency(pacedTotal.paced)}</span>
+            {pacedTotal.largeTotal > 0 ? (
+              <span className="text-ink-300">
+                {' '}(excl.{' '}
+                <span className="font-mono">{formatCurrency(pacedTotal.largeTotal)}</span>
+                {' '}in large purchases)
+              </span>
+            ) : (
+              <span> by end of month</span>
+            )}
           </p>
         )}
       </div>
