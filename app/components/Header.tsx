@@ -282,7 +282,8 @@ export default function Header() {
   const pathname = usePathname();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-20 h-14 bg-white/95 backdrop-blur border-b border-sand-200 flex items-center px-6 gap-6">
+    <header className="fixed top-0 left-0 right-0 z-20 h-14 bg-white/95 backdrop-blur border-b border-sand-200">
+      <div className="max-w-screen-xl mx-auto px-6 lg:px-10 h-full flex items-center gap-6">
       <h1 className="font-display text-lg text-ink-800 tracking-tight flex-shrink-0">
         Patrimoine
       </h1>
@@ -307,6 +308,7 @@ export default function Header() {
       <div className="ml-auto flex items-center gap-1">
         <SyncDropdown />
         <ProfileMenu />
+      </div>
       </div>
     </header>
   );
