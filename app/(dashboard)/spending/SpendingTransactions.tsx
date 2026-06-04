@@ -397,6 +397,7 @@ export default function SpendingTransactions({
   const [sortBy, setSortBy] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
+  const [showTransfers, setShowTransfers] = useState(true);
   const [expandedParent, setExpandedParent] = useState<string | null>(null);
   const [hoveredChip, setHoveredChip] = useState<string | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -514,6 +515,13 @@ export default function SpendingTransactions({
       });
     }
 
+    if (!showTransfers) {
+      result = result.filter((tx) => {
+        const effectiveIsTransfer = (transferOverrides[tx.id] ?? tx.is_transfer) || tx.category?.name === 'Transfer';
+        return !effectiveIsTransfer;
+      });
+    }
+
     return [...result].sort((a, b) => {
       let cmp = 0;
       if (sortBy === 'date') {
@@ -528,7 +536,7 @@ export default function SpendingTransactions({
       return sortDir === 'desc' ? -cmp : cmp;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, dateFilter, dateFilterActive, filterCategories, search, sortBy, sortDir, categoryOverrides, payeeOverrides]);
+  }, [transactions, dateFilter, dateFilterActive, filterCategories, search, sortBy, sortDir, categoryOverrides, payeeOverrides, transferOverrides, showTransfers]);
 
   function toggleSort(field: SortField) {
     if (sortBy === field) {
@@ -543,7 +551,8 @@ export default function SpendingTransactions({
     filterCategories.length > 0 ||
     !!search.trim() ||
     !!selectedAccount ||
-    dateFilterActive;
+    dateFilterActive ||
+    !showTransfers;
   const detailTx = detailTxId ? transactions.find((t) => t.id === detailTxId) : null;
 
   return (
@@ -608,6 +617,20 @@ export default function SpendingTransactions({
               onChange={onAccountChange ?? (() => {})}
             />
           )}
+          <button
+            onClick={() => setShowTransfers((v) => !v)}
+            title={showTransfers ? 'Hide transfers' : 'Show transfers'}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              !showTransfers
+                ? 'bg-ink-800 text-white'
+                : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+            }`}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Transfers
+          </button>
           <div className="ml-auto">
             <DateControl
               dateFilter={dateFilter}
@@ -787,6 +810,7 @@ export default function SpendingTransactions({
                 setSearch('');
                 onAccountChange?.(null);
                 clearDateFilter();
+                setShowTransfers(true);
               }}
               className="shrink-0 text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap"
             >

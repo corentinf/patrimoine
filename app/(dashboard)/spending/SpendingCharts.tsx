@@ -19,6 +19,7 @@ interface SpendingChartsProps {
   monthlyData: Array<{
     month: string;
     total: number;
+    isCurrentMonth?: boolean;
   }>;
   totalSpending: number;
   selectedCategoryKey?: string | null;
@@ -97,12 +98,15 @@ export default function SpendingCharts({
                 tick={(props) => <BlurredYTick {...props} formatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} blurred={blurred} />}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: '#FAF7F2' }} />
-              <Bar
-                dataKey="total"
-                fill="#B85450"
-                radius={[4, 4, 0, 0]}
-                maxBarSize={40}
-              />
+              <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                {monthlyData.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill="#B85450"
+                    fillOpacity={entry.isCurrentMonth ? 0.4 : 1}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

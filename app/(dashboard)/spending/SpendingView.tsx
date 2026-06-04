@@ -430,13 +430,25 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       const month = tx.posted_at.substring(0, 7);
       byMonth[month] = (byMonth[month] || 0) + Math.abs(Number(tx.amount));
     }
+
+    // Always include the current month using the full transactions dataset,
+    // which is more up-to-date than the separately-fetched monthlyRaw query.
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+    const currentMonthTotal = (selectedAccount ? transactions.filter((t) => t.account_id === selectedAccount) : transactions)
+      .filter((t) => t.posted_at >= currentMonthStart && t.posted_at <= currentMonthEnd)
+      .reduce((sum, t) => (isExcludedFromSpending(t) ? sum : sum + Math.abs(Number(t.amount))), 0);
+    if (currentMonthTotal > 0) byMonth[currentMonthKey] = currentMonthTotal;
+
     return Object.entries(byMonth)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, total]) => ({
         month: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         total: Math.round(total),
+        isCurrentMonth: month === currentMonthKey,
       }));
-  }, [monthlyRaw, selectedAccount]);
+  }, [monthlyRaw, selectedAccount, transactions, now]);
 
   const saveBudget = async (categoryId: string) => {
     const val = parseFloat(budgetDraft);
