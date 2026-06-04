@@ -1,4 +1,6 @@
+import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
+import AccountsWidget from '../components/AccountsPanel';
 import Chat from '../components/Chat';
 import { PrivacyProvider } from '../lib/privacy';
 import { createServiceClient } from '../lib/supabase';
@@ -25,11 +27,24 @@ export default async function DashboardLayout({
 
   return (
     <PrivacyProvider>
-      <div className="flex min-h-screen">
+      <div className="min-h-screen flex flex-col">
+        <Header />
+
+        <div className="flex-1 pt-14">
+          <div className="max-w-screen-xl mx-auto px-6 lg:px-10 py-8 flex gap-10 items-start">
+            <main className="flex-1 min-w-0 max-w-4xl">
+              {children}
+            </main>
+
+            <aside className="hidden xl:block w-64 flex-shrink-0">
+              <div className="sticky top-20">
+                <AccountsWidget accounts={accounts} />
+              </div>
+            </aside>
+          </div>
+        </div>
+
         <Sidebar accounts={accounts} />
-        <main className="flex-1 min-w-0 w-full md:ml-56 p-4 md:p-8 max-w-6xl pb-28 md:pb-8 overflow-x-clip">
-          {children}
-        </main>
         <Chat />
       </div>
     </PrivacyProvider>
