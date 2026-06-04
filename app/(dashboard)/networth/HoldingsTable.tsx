@@ -50,16 +50,46 @@ interface HoldingsTableProps {
   totalHoldingsValue: number;
 }
 
-function InfoTooltip({ text }: { text: string }) {
+function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'center' | 'left' | 'right' }) {
+  const translateX = align === 'left' ? 'left-0 -translate-x-0' : align === 'right' ? 'right-0 translate-x-0' : 'left-1/2 -translate-x-1/2';
+  const arrowX = align === 'left' ? 'left-4' : align === 'right' ? 'right-4' : 'left-1/2 -translate-x-1/2';
   return (
     <span className="relative group/tip inline-flex items-center ml-1">
       <svg className="w-3 h-3 text-ink-300 group-hover/tip:text-ink-500 transition-colors cursor-default flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="10" strokeWidth={2} />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
       </svg>
-      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/tip:opacity-100 transition-opacity z-50 shadow-lg">
+      <span className={`pointer-events-none absolute bottom-full ${translateX} mb-2 w-56 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/tip:opacity-100 transition-opacity z-50 shadow-lg`}>
         {text}
-        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-ink-800" />
+        <span className={`absolute top-full ${arrowX} border-4 border-transparent border-t-ink-800`} />
+      </span>
+    </span>
+  );
+}
+
+const GROUP_DESCRIPTIONS: Record<string, string> = {
+  'Broad Market ETFs': 'Funds tracking an entire market index (S&P 500, total US/global market). Maximally diversified, low-cost exposure to the whole market.',
+  'Sector/Specialty ETFs': 'Funds focused on a specific sector, theme, or strategy. More concentrated than broad-market funds — higher potential return and risk.',
+  'Bonds': 'Fixed-income securities paying regular interest. Generally lower risk than equities, used to reduce portfolio volatility.',
+  'Individual Stocks': 'Direct ownership in a single company. No built-in diversification — higher potential upside and downside than funds.',
+};
+
+function HoldingInfoTooltip({ holding, group }: { holding: { symbol: string | null; description: string | null; account: { name: string; institution: string } | null }; group: string }) {
+  return (
+    <span className="relative group/holdingTip inline-flex items-center">
+      <svg className="w-3 h-3 text-ink-200 group-hover/holdingTip:text-ink-400 transition-colors cursor-default flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" strokeWidth={2} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
+      </svg>
+      <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-64 bg-ink-800 text-white text-xs rounded-lg px-3 py-2.5 leading-relaxed opacity-0 group-hover/holdingTip:opacity-100 transition-opacity z-50 shadow-lg space-y-1.5">
+        {holding.description && (
+          <p className="font-medium text-white/90">{holding.description}</p>
+        )}
+        <p className="text-white/60">{group}</p>
+        {holding.account && (
+          <p className="text-white/50">{holding.account.institution} · {holding.account.name}</p>
+        )}
+        <span className="absolute top-full left-4 border-4 border-transparent border-t-ink-800" />
       </span>
     </span>
   );
@@ -171,15 +201,18 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
-  function ColHeader({ label, col }: { label: string; col: SortKey }) {
+  function ColHeader({ label, col, tooltip, tooltipAlign }: { label: string; col: SortKey; tooltip?: string; tooltipAlign?: 'center' | 'left' | 'right' }) {
     const active = sortKey === col;
     return (
-      <button
-        onClick={() => handleSort(col)}
-        className={`flex items-center gap-1 text-xs font-medium uppercase tracking-wider transition-colors ${active ? 'text-ink-600' : 'text-ink-400 hover:text-ink-500'}`}
-      >
-        {label}<SortIcon active={active} dir={sortDir} />
-      </button>
+      <span className="inline-flex items-center gap-0.5">
+        <button
+          onClick={() => handleSort(col)}
+          className={`flex items-center gap-1 text-xs font-medium uppercase tracking-wider transition-colors ${active ? 'text-ink-600' : 'text-ink-400 hover:text-ink-500'}`}
+        >
+          {label}<SortIcon active={active} dir={sortDir} />
+        </button>
+        {tooltip && <InfoTooltip text={tooltip} align={tooltipAlign} />}
+      </span>
     );
   }
 
@@ -244,17 +277,22 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
           All
         </button>
         {GROUPS.filter((g) => groupSummary.some((s) => s.group === g)).map((g) => (
-          <button
-            key={g}
-            onClick={() => setSelectedGroup(selectedGroup === g ? null : g)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              selectedGroup === g
-                ? 'bg-ink-800 text-white'
-                : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
-            }`}
-          >
-            {g}
-          </button>
+          <span key={g} className="relative group/pill inline-flex items-center">
+            <button
+              onClick={() => setSelectedGroup(selectedGroup === g ? null : g)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                selectedGroup === g
+                  ? 'bg-ink-800 text-white'
+                  : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
+              }`}
+            >
+              {g}
+            </button>
+            <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-64 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/pill:opacity-100 transition-opacity z-50 shadow-lg">
+              {GROUP_DESCRIPTIONS[g]}
+              <span className="absolute top-full left-4 border-4 border-transparent border-t-ink-800" />
+            </span>
+          </span>
         ))}
       </div>
 
@@ -340,12 +378,15 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
       <div className="card p-0">
         {/* Desktop header */}
         <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-2.5 border-b border-sand-100">
-          <div className="col-span-3"><ColHeader label="Holding" col="symbol" /></div>
-          <div className="col-span-1 flex justify-end"><ColHeader label="Shares" col="shares" /></div>
-          <div className="col-span-2 flex justify-end"><ColHeader label="Cost basis" col="cost_basis" /></div>
-          <div className="col-span-2 flex justify-end"><ColHeader label="Market value" col="market_value" /></div>
+          <div className="col-span-3"><ColHeader label="Holding" col="symbol" tooltip="Ticker symbol and full name of the security." tooltipAlign="left" /></div>
+          <div className="col-span-1 flex justify-end"><ColHeader label="Shares" col="shares" tooltip="Number of shares or units held in this position." tooltipAlign="right" /></div>
+          <div className="col-span-2 flex justify-end"><ColHeader label="Cost basis" col="cost_basis" tooltip="Total amount originally paid to acquire this position — the baseline used to calculate unrealized gains and losses." tooltipAlign="right" /></div>
+          <div className="col-span-2 flex justify-end"><ColHeader label="Market value" col="market_value" tooltip="Current value of your position at today's market price." tooltipAlign="right" /></div>
           <div className="col-span-2 flex justify-end items-center gap-1">
-            <span className="text-xs font-medium uppercase tracking-wider text-ink-400">Gain/Loss</span>
+            <span className="relative group/gainTip inline-flex items-center gap-0.5">
+              <span className="text-xs font-medium uppercase tracking-wider text-ink-400">Gain/Loss</span>
+              <InfoTooltip text="Unrealized gain or loss — the difference between current market value and cost basis. Not locked in until you sell." align="right" />
+            </span>
             <button
               onClick={() => handleSort('gain')}
               className={`flex items-center gap-0.5 text-xs font-medium uppercase tracking-wider transition-colors px-1 py-0.5 rounded ${sortKey === 'gain' ? 'text-ink-600 bg-sand-100' : 'text-ink-400 hover:text-ink-500'}`}
@@ -359,7 +400,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
               %<SortIcon active={sortKey === 'gain_pct'} dir={sortDir} />
             </button>
           </div>
-          <div className="col-span-2 flex justify-end"><ColHeader label="Portfolio" col="portfolio_pct" /></div>
+          <div className="col-span-2 flex justify-end"><ColHeader label="Portfolio" col="portfolio_pct" tooltip="This position's share of your total portfolio by current market value." tooltipAlign="right" /></div>
         </div>
 
         {sorted.map((h) => (
@@ -367,7 +408,10 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
             {/* Desktop row */}
             <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-3 items-center">
               <div className="col-span-3">
-                <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
+                  <HoldingInfoTooltip holding={h} group={h._group} />
+                </div>
                 <p className="text-xs text-ink-300 truncate">{h.description}</p>
               </div>
               <div className="col-span-1 text-right font-mono text-sm text-ink-600">{Number(h.shares).toFixed(2)}</div>
