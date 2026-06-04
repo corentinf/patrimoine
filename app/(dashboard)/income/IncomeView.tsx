@@ -196,7 +196,7 @@ export default function IncomeView({ transactions, categories }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <span className="stat-label px-1">{periodLabel}</span>
+          <span className="stat-label w-[168px] text-center">{periodLabel}</span>
           <button
             onClick={() => goMonth(1)}
             disabled={isCurrentMonth}
@@ -223,7 +223,7 @@ export default function IncomeView({ transactions, categories }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <span className="text-xs text-ink-500">{periodLabel}</span>
+          <span className="text-xs text-ink-500 w-[168px] text-center">{periodLabel}</span>
           <button onClick={() => goMonth(1)} disabled={isCurrentMonth} className="p-1 text-ink-400 disabled:opacity-30">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

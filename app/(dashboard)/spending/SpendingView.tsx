@@ -585,7 +585,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <span className="stat-label px-1">{periodLabel}</span>
+            <span className="stat-label w-[168px] text-center">{periodLabel}</span>
             <button
               onClick={() => goMonth(1)}
               disabled={isCurrentMonth}
