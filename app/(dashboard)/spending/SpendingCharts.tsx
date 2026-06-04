@@ -24,6 +24,7 @@ interface SpendingChartsProps {
   totalSpending: number;
   selectedCategoryKey?: string | null;
   onCategoryClick?: (id: string) => void;
+  barColor?: string;
 }
 
 function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
@@ -41,6 +42,7 @@ export default function SpendingCharts({
   totalSpending,
   selectedCategoryKey,
   onCategoryClick,
+  barColor = '#B85450',
 }: SpendingChartsProps) {
   const { blurred } = usePrivacy();
   // Take top 8 categories for pie chart, group rest as "Other"
@@ -102,7 +104,7 @@ export default function SpendingCharts({
                 {monthlyData.map((entry, i) => (
                   <Cell
                     key={i}
-                    fill="#B85450"
+                    fill={barColor}
                     fillOpacity={entry.isCurrentMonth ? 0.4 : 1}
                   />
                 ))}
