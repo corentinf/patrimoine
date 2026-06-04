@@ -203,15 +203,22 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
 
   function ColHeader({ label, col, tooltip, tooltipAlign }: { label: string; col: SortKey; tooltip?: string; tooltipAlign?: 'center' | 'left' | 'right' }) {
     const active = sortKey === col;
+    const translateX = tooltipAlign === 'left' ? 'left-0' : tooltipAlign === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2';
+    const arrowX = tooltipAlign === 'left' ? 'left-4' : tooltipAlign === 'right' ? 'right-4' : 'left-1/2 -translate-x-1/2';
     return (
-      <span className="inline-flex items-center gap-0.5">
+      <span className="relative group/col inline-flex items-center">
         <button
           onClick={() => handleSort(col)}
           className={`flex items-center gap-1 text-xs font-medium uppercase tracking-wider transition-colors ${active ? 'text-ink-600' : 'text-ink-400 hover:text-ink-500'}`}
         >
           {label}<SortIcon active={active} dir={sortDir} />
         </button>
-        {tooltip && <InfoTooltip text={tooltip} align={tooltipAlign} />}
+        {tooltip && (
+          <span className={`pointer-events-none absolute bottom-full ${translateX} mb-2 w-56 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/col:opacity-100 transition-opacity z-50 shadow-lg normal-case font-normal tracking-normal`}>
+            {tooltip}
+            <span className={`absolute top-full ${arrowX} border-4 border-transparent border-t-ink-800`} />
+          </span>
+        )}
       </span>
     );
   }
@@ -383,9 +390,12 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
           <div className="col-span-2 flex justify-end"><ColHeader label="Cost basis" col="cost_basis" tooltip="Total amount originally paid to acquire this position — the baseline used to calculate unrealized gains and losses." tooltipAlign="right" /></div>
           <div className="col-span-2 flex justify-end"><ColHeader label="Market value" col="market_value" tooltip="Current value of your position at today's market price." tooltipAlign="right" /></div>
           <div className="col-span-2 flex justify-end items-center gap-1">
-            <span className="relative group/gainTip inline-flex items-center gap-0.5">
+            <span className="relative group/gainTip inline-flex items-center cursor-default">
               <span className="text-xs font-medium uppercase tracking-wider text-ink-400">Gain/Loss</span>
-              <InfoTooltip text="Unrealized gain or loss — the difference between current market value and cost basis. Not locked in until you sell." align="right" />
+              <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-56 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/gainTip:opacity-100 transition-opacity z-50 shadow-lg normal-case font-normal tracking-normal">
+                Unrealized gain or loss — the difference between current market value and cost basis. Not locked in until you sell.
+                <span className="absolute top-full right-4 border-4 border-transparent border-t-ink-800" />
+              </span>
             </span>
             <button
               onClick={() => handleSort('gain')}
