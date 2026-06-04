@@ -36,8 +36,10 @@ export default function CategoryManager({ categories, onClose }: CategoryManager
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
 
-  // Only top-level categories are valid parents
-  const parentOptions = categories.filter((c) => !c.parent_id && !c.is_income);
+  // Only top-level categories are valid parents, sorted A→Z
+  const parentOptions = categories
+    .filter((c) => !c.parent_id && !c.is_income)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   function openCreate() {
     setForm(EMPTY_FORM);
@@ -73,9 +75,7 @@ export default function CategoryManager({ categories, onClose }: CategoryManager
 
   const isEditing = editing !== null;
 
-  // Group categories: parents first, then their children indented
-  const grouped: Array<Category & { children: Category[] }> = [];
-  const catById = new Map(categories.map((c) => [c.id, c]));
+  // Group and sort: parents A→Z, children A→Z under each parent
   const childrenByParent = new Map<string, Category[]>();
   for (const cat of categories) {
     if (cat.parent_id) {
@@ -83,11 +83,13 @@ export default function CategoryManager({ categories, onClose }: CategoryManager
       childrenByParent.get(cat.parent_id)!.push(cat);
     }
   }
-  for (const cat of categories) {
-    if (!cat.parent_id) {
-      grouped.push({ ...cat, children: childrenByParent.get(cat.id) ?? [] });
-    }
-  }
+  const grouped = categories
+    .filter((c) => !c.parent_id)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((cat) => ({
+      ...cat,
+      children: (childrenByParent.get(cat.id) ?? []).sort((a, b) => a.name.localeCompare(b.name)),
+    }));
 
   return (
     <>

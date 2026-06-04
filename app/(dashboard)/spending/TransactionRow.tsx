@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrencyPrecise, formatShortDate, amountColor } from '@/app/lib/utils';
+import { formatCurrencyPrecise, formatShortDate, amountColor, groupAndSortCategories } from '@/app/lib/utils';
 import { assignTransactionCategory, toggleTransfer } from './actions';
 import type { Category } from './CategoryManager';
 import type { FullTransaction } from './TransactionDetail';
@@ -281,23 +281,42 @@ export default function TransactionRow({
           className="absolute left-5 right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 max-h-56 overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
-          {allCategories.map((cat) => {
-            const active = effectiveCategory?.id === cat.id;
+          {groupAndSortCategories(allCategories).map(({ parent, children }) => {
+            const parentActive = effectiveCategory?.id === parent.id;
             return (
-              <button
-                key={cat.id}
-                onClick={(e) => handleCategorySelect(cat, e)}
-                className={`w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-sand-50 transition-colors border-b border-sand-100 last:border-0 ${active ? 'bg-sand-50' : ''}`}
-              >
-                <span className="text-base w-6 text-center">{cat.icon}</span>
-                <span className="flex-1 text-sm text-ink-700">{cat.name}</span>
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                {active && (
-                  <svg className="w-3.5 h-3.5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </button>
+              <div key={parent.id} className="border-b border-sand-100 last:border-0">
+                <button
+                  onClick={(e) => handleCategorySelect(parent, e)}
+                  className={`w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-sand-50 transition-colors ${parentActive ? 'bg-sand-50' : ''}`}
+                >
+                  <span className="text-base w-6 text-center">{parent.icon}</span>
+                  <span className="flex-1 text-sm text-ink-700">{parent.name}</span>
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: parent.color as string }} />
+                  {parentActive && (
+                    <svg className="w-3.5 h-3.5 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+                {children.map((child) => {
+                  const childActive = effectiveCategory?.id === child.id;
+                  return (
+                    <button
+                      key={child.id}
+                      onClick={(e) => handleCategorySelect(child, e)}
+                      className={`w-full flex items-center gap-3 pl-10 pr-4 py-1.5 text-left hover:bg-sand-50 transition-colors border-t border-sand-50 ${childActive ? 'bg-sand-100' : ''}`}
+                    >
+                      <span className="text-sm w-5 text-center">{child.icon}</span>
+                      <span className="flex-1 text-xs text-ink-600">{child.name}</span>
+                      {childActive && (
+                        <svg className="w-3 h-3 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </div>

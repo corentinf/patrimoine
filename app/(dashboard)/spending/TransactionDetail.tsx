@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrencyPrecise, formatDate } from '@/app/lib/utils';
+import { formatCurrencyPrecise, formatDate, groupAndSortCategories } from '@/app/lib/utils';
 import { assignTransactionCategory, updateTransactionPayee } from './actions';
 import type { Category } from './CategoryManager';
 import VenmoSection from './VenmoSection';
@@ -298,65 +298,49 @@ export default function TransactionDetail({
               </button>
             </div>
 
-            {/* Inline picker — grouped by parent */}
-            {showCategoryPicker && (() => {
-              // Build grouped structure: parents with their children
-              const childrenByParent = new Map<string, typeof allCategories>();
-              const topLevel: typeof allCategories = [];
-              for (const cat of allCategories) {
-                if (cat.parent_id) {
-                  if (!childrenByParent.has(cat.parent_id)) childrenByParent.set(cat.parent_id, []);
-                  childrenByParent.get(cat.parent_id)!.push(cat);
-                } else {
-                  topLevel.push(cat);
-                }
-              }
-              return (
-                <div className="mt-3 border border-sand-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
-                  {topLevel.map((parent) => {
-                    const children = childrenByParent.get(parent.id) ?? [];
-                    const isParentActive = (effectiveCategory?.id === parent.id);
-                    return (
-                      <div key={parent.id} className="border-b border-sand-100 last:border-0">
-                        {/* Parent row */}
-                        <button
-                          onClick={() => handleCategorySelect(parent)}
-                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-sand-50 ${isParentActive ? 'bg-sand-50' : ''}`}
-                        >
-                          <span className="text-base w-6 text-center flex-shrink-0">{parent.icon}</span>
-                          <span className="flex-1 text-sm font-medium text-ink-700">{parent.name}</span>
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: parent.color }} />
-                          {isParentActive && (
-                            <svg className="w-3.5 h-3.5 text-ink-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
-                        {/* Sub-category rows */}
-                        {children.map((child) => {
-                          const isChildActive = effectiveCategory?.id === child.id;
-                          return (
-                            <button
-                              key={child.id}
-                              onClick={() => handleCategorySelect(child)}
-                              className={`w-full flex items-center gap-3 pl-10 pr-4 py-2 text-left transition-colors hover:bg-sand-50 border-t border-sand-50 ${isChildActive ? 'bg-sand-100' : ''}`}
-                            >
-                              <span className="text-sm w-5 text-center flex-shrink-0">{child.icon}</span>
-                              <span className="flex-1 text-xs text-ink-600">{child.name}</span>
-                              {isChildActive && (
-                                <svg className="w-3 h-3 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+            {/* Inline picker — grouped by parent, sorted A→Z */}
+            {showCategoryPicker && (
+              <div className="mt-3 border border-sand-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
+                {groupAndSortCategories(allCategories).map(({ parent, children }) => {
+                  const isParentActive = effectiveCategory?.id === parent.id;
+                  return (
+                    <div key={parent.id} className="border-b border-sand-100 last:border-0">
+                      <button
+                        onClick={() => handleCategorySelect(parent)}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-sand-50 ${isParentActive ? 'bg-sand-50' : ''}`}
+                      >
+                        <span className="text-base w-6 text-center flex-shrink-0">{parent.icon}</span>
+                        <span className="flex-1 text-sm font-medium text-ink-700">{parent.name}</span>
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: parent.color }} />
+                        {isParentActive && (
+                          <svg className="w-3.5 h-3.5 text-ink-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                      {children.map((child) => {
+                        const isChildActive = effectiveCategory?.id === child.id;
+                        return (
+                          <button
+                            key={child.id}
+                            onClick={() => handleCategorySelect(child)}
+                            className={`w-full flex items-center gap-3 pl-10 pr-4 py-2 text-left transition-colors hover:bg-sand-50 border-t border-sand-50 ${isChildActive ? 'bg-sand-100' : ''}`}
+                          >
+                            <span className="text-sm w-5 text-center flex-shrink-0">{child.icon}</span>
+                            <span className="flex-1 text-xs text-ink-600">{child.name}</span>
+                            {isChildActive && (
+                              <svg className="w-3 h-3 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
