@@ -146,7 +146,13 @@ export default async function HomePage() {
       </div>
 
       {/* Chart */}
-      {chartData.length > 0 && <NetWorthChart data={chartData} />}
+      {chartData.length > 0 && (
+        <NetWorthChart
+          data={chartData}
+          trackingStartDate={trackingStartDate}
+          currentNetWorth={currentNetWorth}
+        />
+      )}
 
       {/* Account summary */}
       {accounts.length > 0 && (

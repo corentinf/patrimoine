@@ -14,6 +14,8 @@ interface NetWorthChartProps {
     assets: number;
     liabilities: number;
   }>;
+  trackingStartDate?: string | null;
+  currentNetWorth?: number;
 }
 
 function CustomTooltip({ active, payload, label }: any) {
@@ -40,16 +42,40 @@ function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
   );
 }
 
-export default function NetWorthChart({ data }: NetWorthChartProps) {
+export default function NetWorthChart({ data, trackingStartDate, currentNetWorth }: NetWorthChartProps) {
   const { blurred } = usePrivacy();
-  if (data.length < 2) {
+  if (data.length < 3) {
     return (
       <div className="card">
         <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
           Net worth over time
         </h4>
-        <div className="h-[260px] flex flex-col items-center justify-center gap-2">
-          <p className="text-ink-400 text-sm">First snapshot captured — sync again next month to see your trend.</p>
+        <div className="h-[260px] flex flex-col items-center justify-center gap-3 text-center">
+          <svg className="w-8 h-8 text-ink-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 17l6-6 4 4 8-8" />
+          </svg>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-ink-600">Building your history</p>
+            <p className="text-xs text-ink-400 max-w-xs">
+              Your trend will appear after a few more syncs.
+            </p>
+          </div>
+          <div className="flex gap-6 mt-1 text-xs text-ink-400">
+            {trackingStartDate && (
+              <div>
+                <p className="text-ink-300 uppercase tracking-wider text-[10px] font-semibold mb-0.5">Tracking since</p>
+                <p className="font-medium text-ink-500">{trackingStartDate}</p>
+              </div>
+            )}
+            {currentNetWorth !== undefined && (
+              <div>
+                <p className="text-ink-300 uppercase tracking-wider text-[10px] font-semibold mb-0.5">Current net worth</p>
+                <p className="font-mono font-medium text-ink-600" data-sensitive>
+                  {blurred ? '••••••' : `$${Math.round(currentNetWorth).toLocaleString()}`}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );

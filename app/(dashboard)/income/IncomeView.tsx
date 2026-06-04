@@ -196,6 +196,7 @@ export default function IncomeView({ transactions, categories, dateFilter }: Pro
         selectedCategoryKey={selectedCategoryId}
         onCategoryClick={(id) => setSelectedCategoryId((prev) => prev === id ? null : id)}
         barColor="#16A34A"
+        barLabel="Monthly income"
       />
 
       {/* Transaction list */}

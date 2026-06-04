@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatCurrency } from '@/app/lib/utils';
 
 export interface Holding {
@@ -124,6 +124,87 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
     </svg>
+  );
+}
+
+const NOTES_STORAGE_KEY = 'holding_notes_v1';
+
+function NoteCell({ holdingId }: { holdingId: string }) {
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(NOTES_STORAGE_KEY);
+      if (stored) setNotes(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (editing) {
+      setDraft(notes[holdingId] ?? '');
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [editing]);
+
+  function save() {
+    const updated = { ...notes };
+    if (draft.trim()) {
+      updated[holdingId] = draft.trim();
+    } else {
+      delete updated[holdingId];
+    }
+    setNotes(updated);
+    try { localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated)); } catch {}
+    setEditing(false);
+  }
+
+  const note = notes[holdingId];
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+          onBlur={save}
+          placeholder="Add memo…"
+          maxLength={120}
+          className="text-xs text-ink-600 border border-sand-300 rounded px-2 py-0.5 w-44 focus:outline-none focus:ring-1 focus:ring-sand-400 bg-white placeholder-ink-300"
+        />
+      </div>
+    );
+  }
+
+  if (note) {
+    return (
+      <span className="relative group/note inline-flex items-center gap-1 cursor-pointer" onClick={() => setEditing(true)}>
+        <svg className="w-3 h-3 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h4M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+        </svg>
+        <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-64 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/note:opacity-100 transition-opacity z-50 shadow-lg">
+          {note}
+          <span className="absolute top-full left-4 border-4 border-transparent border-t-ink-800" />
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="opacity-0 group-hover/row:opacity-100 transition-opacity"
+      title="Add memo"
+    >
+      <svg className="w-3 h-3 text-ink-300 hover:text-ink-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.5-6.5a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
+      </svg>
+    </button>
   );
 }
 
@@ -414,13 +495,14 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
         </div>
 
         {sorted.map((h) => (
-          <div key={h.id} className="border-b border-sand-50 last:border-0 hover:bg-sand-50 transition-colors">
+          <div key={h.id} className="border-b border-sand-50 last:border-0 hover:bg-sand-50 transition-colors group/row">
             {/* Desktop row */}
             <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-3 items-center">
               <div className="col-span-3">
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
                   <HoldingInfoTooltip holding={h} group={h._group} />
+                  <NoteCell holdingId={h.id} />
                 </div>
                 <p className="text-xs text-ink-300 truncate">{h.description}</p>
               </div>

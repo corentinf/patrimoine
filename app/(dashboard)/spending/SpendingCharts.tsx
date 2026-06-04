@@ -25,6 +25,7 @@ interface SpendingChartsProps {
   selectedCategoryKey?: string | null;
   onCategoryClick?: (id: string) => void;
   barColor?: string;
+  barLabel?: string;
 }
 
 function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
@@ -43,6 +44,7 @@ export default function SpendingCharts({
   selectedCategoryKey,
   onCategoryClick,
   barColor = '#B85450',
+  barLabel = 'Monthly spending',
 }: SpendingChartsProps) {
   const { blurred } = usePrivacy();
   // Take top 8 categories for pie chart, group rest as "Other"
@@ -83,7 +85,7 @@ export default function SpendingCharts({
       {monthlyData.length > 0 && (
         <div className="card">
           <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
-            Monthly spending
+            {barLabel}
           </h4>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={monthlyData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
