@@ -163,7 +163,7 @@ async function getIncomeCategories() {
 }
 
 export default async function SpendingPage() {
-  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets, incomeTransactions, incomeCategories] = await Promise.all([
+  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets] = await Promise.all([
     getSpendingTransactions(12),
     getMonthlySpending(),
     getAllCategories(),
@@ -171,8 +171,6 @@ export default async function SpendingPage() {
     getSubscriptionOverrides(),
     getMonthlyIncome(),
     getBudgets(),
-    getIncomeTransactions(12),
-    getIncomeCategories(),
   ]);
 
   return (
@@ -184,8 +182,6 @@ export default async function SpendingPage() {
       subscriptionOverrides={subscriptionOverrides}
       monthlyIncome={monthlyIncome}
       budgets={budgets}
-      incomeTransactions={incomeTransactions as any}
-      incomeCategories={incomeCategories}
     />
   );
 }

@@ -10,7 +10,8 @@ import SimpleFINLinkButton from './SimpleFINLink';
 
 const navItems = [
   { href: '/spending', label: 'Spending' },
-  { href: '/networth', label: 'Net worth' },
+  { href: '/income', label: 'Income' },
+  { href: '/networth', label: 'Investment' },
 ];
 
 type SyncPhase = 'idle' | 'syncing' | 'done' | 'error';
