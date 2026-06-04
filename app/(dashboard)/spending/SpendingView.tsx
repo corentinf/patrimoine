@@ -548,30 +548,33 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     <div className="space-y-8">
       {(() => {
         const dateNav = showCustom && dateFilter.mode === 'custom' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-ink-400">From</label>
+          <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 rounded-lg border border-sand-200 bg-white px-1 py-0.5">
               <input
                 type="date"
                 value={dateFilter.start}
                 max={dateFilter.end}
                 onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
-                className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
+                className="text-xs px-1.5 py-1 text-ink-700 bg-transparent focus:outline-none"
               />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-ink-400">To</label>
+              <span className="text-ink-300 text-xs select-none">–</span>
               <input
                 type="date"
                 value={dateFilter.end}
                 min={dateFilter.start}
                 max={now.toISOString().substring(0, 10)}
                 onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
-                className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
+                className="text-xs px-1.5 py-1 text-ink-700 bg-transparent focus:outline-none"
               />
             </div>
-            <button onClick={backToMonth} className="text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap">
-              ← Month view
+            <button
+              onClick={backToMonth}
+              title="Back to month view"
+              className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         ) : (
