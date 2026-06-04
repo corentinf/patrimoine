@@ -100,53 +100,61 @@ export default function VenmoImport() {
   );
 
   return (
-    <div className="rounded-lg border border-sand-200 bg-sand-50 p-3 text-xs space-y-2 max-w-sm">
-      <p className="font-medium text-ink-700">
-        {result?.matched === 0 ? 'No transactions matched' : `${result?.matched} transaction${result?.matched !== 1 ? 's' : ''} labeled`}
-      </p>
+    <div className="relative group/venmo inline-flex items-center">
+      <span className="inline-flex items-center gap-1.5 text-xs text-ink-500 cursor-default">
+        <span className="text-green-500">✓</span>
+        {result?.matched === 0
+          ? 'No transactions matched'
+          : `${result?.matched} transaction${result?.matched !== 1 ? 's' : ''} labeled`}
+      </span>
 
-      <ul className="space-y-0.5 text-ink-500">
-        {(result?.matched ?? 0) > 0 && (
-          <li className="flex items-center gap-1.5">
-            <span className="text-green-500">✓</span>
-            {result?.matched} Chase→Venmo transfers labeled
-          </li>
+      {/* Tooltip */}
+      <div className="pointer-events-none group-hover/venmo:pointer-events-auto absolute bottom-full left-0 mb-2 w-64 bg-white border border-sand-200 rounded-lg shadow-lg p-3 text-xs space-y-2 opacity-0 group-hover/venmo:opacity-100 transition-opacity z-50">
+        <ul className="space-y-0.5 text-ink-500">
+          {(result?.matched ?? 0) > 0 && (
+            <li className="flex items-center gap-1.5">
+              <span className="text-green-500">✓</span>
+              {result?.matched} Chase→Venmo transfers labeled
+            </li>
+          )}
+          {(result?.unmatched ?? 0) > 0 && (
+            <li className="flex items-center gap-1.5">
+              <span className="text-ink-300">–</span>
+              {result?.unmatched} couldn't be matched
+            </li>
+          )}
+        </ul>
+
+        {hasUnmatched && allFromBalance && (
+          <p className="text-ink-400 text-[11px] leading-relaxed">
+            Most unmatched payments came from your <strong>Venmo balance</strong> rather than directly from Chase, so there's no matching bank transaction.
+          </p>
         )}
-        {(result?.unmatched ?? 0) > 0 && (
-          <li className="flex items-center gap-1.5">
-            <span className="text-ink-300">–</span>
-            {result?.unmatched} couldn't be matched
-          </li>
+
+        {hasUnmatched && !allFromBalance && (
+          <button
+            onClick={() => setShowUnmatched((v) => !v)}
+            className="text-ink-400 hover:text-ink-600"
+          >
+            {showUnmatched ? 'Hide' : 'Show'} unmatched ({result?.unmatched})
+          </button>
         )}
-      </ul>
 
-      {hasUnmatched && allFromBalance && (
-        <p className="text-ink-400 text-[11px] leading-relaxed">
-          Most unmatched payments came from your <strong>Venmo balance</strong> rather than directly from Chase, so there's no matching bank transaction.
-        </p>
-      )}
+        {showUnmatched && result?.unmatchedDetails && (
+          <div className="space-y-1.5 max-h-48 overflow-y-auto border-t border-sand-200 pt-2">
+            {result.unmatchedDetails.map((d, i) => (
+              <div key={i} className="space-y-0.5">
+                <p className="font-medium text-ink-600">{d.note} · ${d.amount.toFixed(2)} · {d.date}</p>
+                <p className="text-ink-400 text-[11px] leading-relaxed">{d.reason}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
-      {hasUnmatched && !allFromBalance && (
-        <button
-          onClick={() => setShowUnmatched((v) => !v)}
-          className="text-ink-400 hover:text-ink-600"
-        >
-          {showUnmatched ? 'Hide' : 'Show'} unmatched ({result?.unmatched})
-        </button>
-      )}
+        <button onClick={() => setPhase('idle')} className="text-ink-400 hover:text-ink-600">Import another</button>
 
-      {showUnmatched && result?.unmatchedDetails && (
-        <div className="space-y-1.5 max-h-48 overflow-y-auto border-t border-sand-200 pt-2">
-          {result.unmatchedDetails.map((d, i) => (
-            <div key={i} className="space-y-0.5">
-              <p className="font-medium text-ink-600">{d.note} · ${d.amount.toFixed(2)} · {d.date}</p>
-              <p className="text-ink-400 text-[11px] leading-relaxed">{d.reason}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <button onClick={() => setPhase('idle')} className="text-ink-400 hover:text-ink-600">Import another</button>
+        <span className="absolute top-full left-4 -translate-x-1/2 border-4 border-transparent border-t-sand-200" />
+      </div>
     </div>
   );
 }
