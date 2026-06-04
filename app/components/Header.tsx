@@ -9,6 +9,7 @@ import PlaidLinkButton from './PlaidLink';
 import SimpleFINLinkButton from './SimpleFINLink';
 
 const navItems = [
+  { href: '/home', label: 'Home' },
   { href: '/spending', label: 'Spending' },
   { href: '/income', label: 'Income' },
   { href: '/networth', label: 'Investment' },

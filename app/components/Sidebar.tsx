@@ -8,8 +8,10 @@ import { AccountModal, AccountsPanel, type SidebarAccount } from './AccountsPane
 export type { SidebarAccount };
 
 const navItems = [
+  { href: '/home', label: 'Home', icon: '⌂' },
   { href: '/spending', label: 'Spending', icon: '◧' },
-  { href: '/networth', label: 'Net worth', icon: '◆' },
+  { href: '/income', label: 'Income', icon: '↑' },
+  { href: '/networth', label: 'Investment', icon: '◆' },
 ];
 
 function MobileSyncButton() {
