@@ -9,6 +9,7 @@ import AICategorizeButton from './AICategorizeButton';
 import VenmoImport from './VenmoImport';
 import SubscriptionsSection from './SubscriptionsSection';
 import SavingsRateModule from './SavingsRateModule';
+import IncomeView from '../income/IncomeView';
 
 interface RawTransaction {
   id: string;
@@ -45,6 +46,8 @@ interface SpendingViewProps {
   subscriptionOverrides: Record<string, 'confirmed' | 'dismissed'>;
   monthlyIncome: number;
   budgets: Record<string, number>;
+  incomeTransactions: RawTransaction[];
+  incomeCategories: { id: string; name: string; color: string; icon: string; is_income: boolean; parent_id: string | null }[];
 }
 
 export type DateFilter =
@@ -284,8 +287,9 @@ function DateNav({ filter, onChange }: { filter: DateFilter; onChange: (f: DateF
   );
 }
 
-export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets }: SpendingViewProps) {
+export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, incomeTransactions, incomeCategories }: SpendingViewProps) {
   const now = new Date();
+  const [activeSection, setActiveSection] = useState<'spending' | 'income'>('spending');
   const [dateFilter, setDateFilter] = useState<DateFilter>({
     mode: 'month',
     year: now.getFullYear(),
@@ -613,30 +617,60 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
         return (
           <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-2 bg-sand-50/95 backdrop-blur-sm border-b border-sand-200/60 md:static md:mx-0 md:px-0 md:pt-0 md:pb-0 md:bg-transparent md:backdrop-blur-none md:border-0">
-            {/* Mobile: compact 2-row layout */}
+            {/* Mobile */}
             <div className="md:hidden space-y-1.5">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="font-display text-xl text-ink-800 leading-none">Spending</h2>
-                <p className="font-display text-2xl tracking-tight text-accent-red leading-none">
-                  {formatCurrency(totalSpending)}
-                </p>
+                <div className="flex items-center gap-1 p-0.5 bg-sand-100 rounded-lg">
+                  {(['spending', 'income'] as const).map((s) => (
+                    <button key={s} onClick={() => setActiveSection(s)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors capitalize ${activeSection === s ? 'bg-white text-ink-800 shadow-sm' : 'text-ink-400'}`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                {activeSection === 'spending' && (
+                  <p className="font-display text-2xl tracking-tight text-accent-red leading-none">
+                    {formatCurrency(totalSpending)}
+                  </p>
+                )}
               </div>
-              <div className="flex items-center justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 <div className="min-w-0 [&>*]:flex-wrap">{dateNav}</div>
               </div>
             </div>
 
-            {/* Desktop: title + date nav */}
+            {/* Desktop */}
             <div className="hidden md:flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="font-display text-2xl text-ink-800">Spending</h2>
-                <p className="text-sm text-ink-400 mt-1">Where your money goes</p>
+                <div className="flex items-center gap-1 p-1 bg-sand-100 rounded-xl">
+                  {(['spending', 'income'] as const).map((s) => (
+                    <button key={s} onClick={() => setActiveSection(s)}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize ${activeSection === s ? 'bg-white text-ink-800 shadow-sm' : 'text-ink-400 hover:text-ink-700'}`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-sm text-ink-400 mt-1.5">
+                  {activeSection === 'spending' ? 'Where your money goes' : 'Where your money comes from'}
+                </p>
               </div>
               <div className="flex justify-end">{dateNav}</div>
             </div>
           </div>
         );
       })()}
+
+      {/* Income section */}
+      {activeSection === 'income' && (
+        <IncomeView
+          transactions={incomeTransactions}
+          categories={incomeCategories}
+          dateFilter={dateFilter}
+        />
+      )}
+
+      {/* Spending section */}
+      {activeSection === 'spending' && <>
 
       {/* Spending + savings rate combined card */}
       <SavingsRateModule
@@ -907,6 +941,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           onClose={() => setShowCategoryManager(false)}
         />
       )}
+
+      </>}
     </div>
   );
 }

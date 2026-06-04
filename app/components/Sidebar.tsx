@@ -11,7 +11,6 @@ import SimpleFINLinkButton from './SimpleFINLink';
 
 const navItems = [
   { href: '/spending', label: 'Spending', icon: '◧' },
-  { href: '/income', label: 'Income', icon: '◩' },
   { href: '/networth', label: 'Net worth', icon: '◆' },
 ];
 

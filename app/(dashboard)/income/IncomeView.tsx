@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { formatCurrency, formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
 import SpendingCharts from '../spending/SpendingCharts';
+import type { DateFilter } from '../spending/SpendingView';
 
 interface RawTransaction {
   id: string;
@@ -28,11 +29,8 @@ interface IncomeCategory {
 interface Props {
   transactions: RawTransaction[];
   categories: IncomeCategory[];
+  dateFilter: DateFilter;
 }
-
-type DateFilter =
-  | { mode: 'month'; year: number; month: number }
-  | { mode: 'custom'; start: string; end: string };
 
 function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
   let start: string, end: string;
@@ -46,39 +44,12 @@ function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
   return txs.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
 }
 
-function formatMonthLabel(year: number, month: number) {
-  return new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-}
-
-export default function IncomeView({ transactions, categories }: Props) {
+export default function IncomeView({ transactions, categories, dateFilter }: Props) {
   const now = new Date();
-  const [dateFilter, setDateFilter] = useState<DateFilter>({
-    mode: 'month',
-    year: now.getFullYear(),
-    month: now.getMonth(),
-  });
   const [search, setSearch] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'category'>('date');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-
-  const isCurrentMonth =
-    dateFilter.mode === 'month' &&
-    dateFilter.year === now.getFullYear() &&
-    dateFilter.month === now.getMonth();
-
-  const goMonth = (delta: number) => {
-    if (dateFilter.mode !== 'month') return;
-    let { year, month } = dateFilter;
-    month += delta;
-    if (month < 0) { month = 11; year--; }
-    if (month > 11) { month = 0; year++; }
-    setDateFilter({ mode: 'month', year, month });
-  };
-
-  const periodLabel = dateFilter.mode === 'month'
-    ? formatMonthLabel(dateFilter.year, dateFilter.month)
-    : `${dateFilter.start} – ${dateFilter.end}`;
 
   const filtered = useMemo(() => applyDateFilter(transactions, dateFilter), [transactions, dateFilter]);
 
@@ -87,7 +58,6 @@ export default function IncomeView({ transactions, categories }: Props) {
     [filtered],
   );
 
-  // Previous period for MoM delta
   const prevFilter = useMemo<DateFilter>(() => {
     if (dateFilter.mode === 'month') {
       let { year, month } = dateFilter;
@@ -110,31 +80,21 @@ export default function IncomeView({ transactions, categories }: Props) {
 
   const momDelta = prevTotal > 0 ? ((totalIncome - prevTotal) / prevTotal) * 100 : null;
 
-  // Category breakdown for the period
   const categoryRows = useMemo(() => {
     const map = new Map<string, { name: string; color: string; icon: string; total: number; count: number }>();
     for (const tx of filtered) {
       const cat = tx.category;
       const key = cat?.id ?? '__uncategorized__';
       if (!map.has(key)) {
-        map.set(key, {
-          name: cat?.name ?? 'Uncategorized',
-          color: cat?.color ?? '#D1D5DB',
-          icon: cat?.icon ?? '❓',
-          total: 0,
-          count: 0,
-        });
+        map.set(key, { name: cat?.name ?? 'Uncategorized', color: cat?.color ?? '#D1D5DB', icon: cat?.icon ?? '❓', total: 0, count: 0 });
       }
       const entry = map.get(key)!;
       entry.total += Math.abs(Number(tx.amount));
       entry.count += 1;
     }
-    return Array.from(map.entries())
-      .map(([id, v]) => ({ id, ...v }))
-      .sort((a, b) => b.total - a.total);
+    return Array.from(map.entries()).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.total - a.total);
   }, [filtered]);
 
-  // Monthly chart data — always include current month from live transactions
   const monthlyChartData = useMemo(() => {
     const byMonth: Record<string, number> = {};
     for (const tx of transactions) {
@@ -151,12 +111,9 @@ export default function IncomeView({ transactions, categories }: Props) {
       }));
   }, [transactions, now]);
 
-  // Transaction list with search + sort + category filter
   const visibleTransactions = useMemo(() => {
     let result = filtered;
-    if (selectedCategoryId) {
-      result = result.filter((tx) => tx.category?.id === selectedCategoryId);
-    }
+    if (selectedCategoryId) result = result.filter((tx) => tx.category?.id === selectedCategoryId);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter((tx) => {
@@ -181,57 +138,6 @@ export default function IncomeView({ transactions, categories }: Props) {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="hidden md:flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl text-ink-800">Income</h2>
-          <p className="text-sm text-ink-400 mt-1">Where your money comes from</p>
-        </div>
-        <div className="flex items-center gap-0.5">
-          <button
-            onClick={() => goMonth(-1)}
-            className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <span className="stat-label w-[168px] text-center">{periodLabel}</span>
-          <button
-            onClick={() => goMonth(1)}
-            disabled={isCurrentMonth}
-            className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile header */}
-      <div className="md:hidden space-y-1.5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-xl text-ink-800 leading-none">Income</h2>
-          <p className="font-display text-2xl tracking-tight text-accent-green leading-none">
-            {formatCurrency(totalIncome)}
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={() => goMonth(-1)} className="p-1 text-ink-400">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <span className="text-xs text-ink-500 w-[168px] text-center">{periodLabel}</span>
-          <button onClick={() => goMonth(1)} disabled={isCurrentMonth} className="p-1 text-ink-400 disabled:opacity-30">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
       {/* Summary card */}
       <div className="card flex flex-wrap gap-x-10 gap-y-4 items-center">
         <div>
@@ -256,13 +162,10 @@ export default function IncomeView({ transactions, categories }: Props) {
             )}
           </div>
           {prevTotal > 0 && (
-            <p className="text-xs text-ink-400 mt-1">
-              Prior period: <span className="font-mono">{formatCurrency(prevTotal)}</span>
-            </p>
+            <p className="text-xs text-ink-400 mt-1">Prior period: <span className="font-mono">{formatCurrency(prevTotal)}</span></p>
           )}
         </div>
 
-        {/* Category breakdown pills */}
         {categoryRows.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {categoryRows.map((cat) => (
@@ -315,7 +218,6 @@ export default function IncomeView({ transactions, categories }: Props) {
               )}
             </button>
           ))}
-
           <div className="relative ml-auto">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-300 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
@@ -332,7 +234,7 @@ export default function IncomeView({ transactions, categories }: Props) {
 
         <div className="card p-0">
           {visibleTransactions.length === 0 ? (
-            <div className="py-12 text-center text-ink-400 text-sm">No income transactions found.</div>
+            <div className="py-12 text-center text-ink-400 text-sm">No income transactions for this period.</div>
           ) : (
             visibleTransactions.map((tx) => {
               const displayName = tx.payee ?? tx.description ?? 'Unknown';
@@ -344,17 +246,14 @@ export default function IncomeView({ transactions, categories }: Props) {
                   <span className="text-lg w-8 text-center flex-shrink-0">{catIcon}</span>
                   <div className="flex-1 min-w-0">
                     <p data-sensitive className="text-sm font-medium text-ink-700 truncate">{displayName}</p>
-                    <span
-                      className="inline-block px-1.5 py-px rounded text-[10px] font-medium mt-0.5"
-                      style={{ backgroundColor: catColor + '20', color: catColor }}
-                    >
-                      {catName}
-                    </span>
-                    {tx.account && (
-                      <span className="text-xs text-ink-300 ml-2">
-                        {tx.account.institution || tx.account.name}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="inline-block px-1.5 py-px rounded text-[10px] font-medium" style={{ backgroundColor: catColor + '20', color: catColor }}>
+                        {catName}
                       </span>
-                    )}
+                      {tx.account && (
+                        <span className="text-xs text-ink-300">{tx.account.institution || tx.account.name}</span>
+                      )}
+                    </div>
                   </div>
                   <span className="text-xs text-ink-300 flex-shrink-0 hidden sm:block w-14 text-right">
                     {formatShortDate(tx.posted_at)}
