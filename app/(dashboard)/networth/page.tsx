@@ -44,19 +44,21 @@ async function getInvestmentData() {
     .order('snapshot_date', { ascending: true })
     .limit(365);
 
+  // Build the series from a consistent basket: carry forward each account's last
+  // known balance, and only start emitting points once *every* tracked account has
+  // appeared at least once. This prevents a misleading jump when an account (e.g. a
+  // 401k) is linked partway through the history.
+  const lastKnown: Record<string, number> = {};
   const series: { date: string; value: number }[] = [];
   for (const snap of snapshots ?? []) {
     const breakdown = (snap.breakdown ?? {}) as Record<string, number>;
-    let value = 0;
-    let matched = false;
     for (const key of keys) {
-      if (key in breakdown) {
-        value += Number(breakdown[key] ?? 0);
-        matched = true;
-      }
+      if (key in breakdown) lastKnown[key] = Number(breakdown[key] ?? 0);
     }
-    // Skip days before any investment account existed (avoids phantom zeros).
-    if (matched) series.push({ date: snap.snapshot_date, value });
+    if (keys.every((key) => key in lastKnown)) {
+      const value = keys.reduce((sum, key) => sum + lastKnown[key], 0);
+      series.push({ date: snap.snapshot_date, value });
+    }
   }
   return { series, currentValue };
 }
