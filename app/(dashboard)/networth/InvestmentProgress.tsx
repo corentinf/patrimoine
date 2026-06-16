@@ -4,9 +4,7 @@ import { useMemo, useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import {
-  format, startOfWeek, startOfMonth, startOfYear, subMonths,
-} from 'date-fns';
+import { format, subDays, startOfYear } from 'date-fns';
 import { formatCurrency, amountColor } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
 
@@ -20,12 +18,12 @@ interface InvestmentProgressProps {
   currentValue: number;
 }
 
-type RangeKey = 'today' | 'week' | 'month' | '3m' | 'year' | 'all' | 'custom';
+type RangeKey = 'today' | '7d' | '30d' | '3m' | 'year' | 'all' | 'custom';
 
 const PRESETS: { key: RangeKey; label: string }[] = [
   { key: 'today', label: 'Today' },
-  { key: 'week', label: 'This week' },
-  { key: 'month', label: 'This month' },
+  { key: '7d', label: 'Last 7 days' },
+  { key: '30d', label: 'Last 30 days' },
   { key: '3m', label: '3 months' },
   { key: 'year', label: 'This year' },
   { key: 'all', label: 'All time' },
@@ -54,7 +52,7 @@ function BlurredYTick({ x, y, payload, blurred }: any) {
 
 export default function InvestmentProgress({ series, currentValue }: InvestmentProgressProps) {
   const { blurred } = usePrivacy();
-  const [range, setRange] = useState<RangeKey>('month');
+  const [range, setRange] = useState<RangeKey>('30d');
 
   // Effective series: ensure the live current value is reflected as "today" if the
   // latest snapshot predates today.
@@ -85,18 +83,19 @@ export default function InvestmentProgress({ series, currentValue }: InvestmentP
         const prev = data.length >= 2 ? data[data.length - 2].date : data[0]?.date;
         return { start: prev ?? firstDate, end: lastDate };
       }
-      case 'week':
-        return { start: iso(startOfWeek(now, { weekStartsOn: 1 })), end: lastDate };
-      case 'month':
-        return { start: iso(startOfMonth(now)), end: lastDate };
+      case '7d':
+        return { start: iso(subDays(now, 7)), end: lastDate };
+      case '30d':
+        return { start: iso(subDays(now, 30)), end: lastDate };
       case '3m':
-        return { start: iso(subMonths(now, 3)), end: lastDate };
+        return { start: iso(subDays(now, 90)), end: lastDate };
       case 'year':
         return { start: iso(startOfYear(now)), end: lastDate };
-      case 'all':
-        return { start: firstDate, end: lastDate };
       case 'custom':
         return { start: customFrom, end: customTo };
+      case 'all':
+      default:
+        return { start: firstDate, end: lastDate };
     }
   }, [range, data, firstDate, lastDate, customFrom, customTo]);
 
