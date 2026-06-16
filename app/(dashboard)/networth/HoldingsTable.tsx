@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { formatCurrency } from '@/app/lib/utils';
+import {
+  PRESETS, resolveStart, idxAtOrBefore, type RangeKey,
+} from '@/app/lib/investmentRange';
 
 export interface Holding {
   id: string;
@@ -48,6 +51,8 @@ function classifyHolding(symbol: string | null, description: string | null): Gro
 interface HoldingsTableProps {
   holdings: Holding[];
   totalHoldingsValue: number;
+  priceDates: string[];
+  priceSeries: Record<string, (number | null)[]>;
 }
 
 function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'center' | 'left' | 'right' }) {
@@ -208,10 +213,15 @@ function NoteCell({ holdingId }: { holdingId: string }) {
   );
 }
 
-export default function HoldingsTable({ holdings, totalHoldingsValue }: HoldingsTableProps) {
+export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates, priceSeries }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('market_value');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [range, setRange] = useState<RangeKey>('all');
+  const firstDate = priceDates[0] ?? '';
+  const lastDate = priceDates[priceDates.length - 1] ?? '';
+  const [customFrom, setCustomFrom] = useState(firstDate);
+  const [customTo, setCustomTo] = useState(lastDate);
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -222,37 +232,89 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
     }
   }
 
-  // Enrich and classify all holdings
+  // Resolve the [startIdx, endIdx] into the shared price-date axis for the
+  // selected window. 'all' uses cost basis (since purchase) and ignores these.
+  const periodStart = resolveStart(range, {
+    now: new Date(),
+    firstDate,
+    prevDate: priceDates[priceDates.length - 2] ?? firstDate,
+    customFrom,
+  });
+  const startIdx = idxAtOrBefore(priceDates, periodStart);
+  const endIdx = range === 'custom' ? idxAtOrBefore(priceDates, customTo) : priceDates.length - 1;
+
+  // Enrich and classify all holdings, computing period-aware gain/loss.
   const enriched = holdings.map((h) => {
     const marketValue = Number(h.market_value || 0);
     const costBasis = Number(h.cost_basis || 0);
-    const gain = marketValue - costBasis;
-    const gainPct = costBasis > 0 ? (gain / costBasis) * 100 : 0;
+    const lifetimeGain = marketValue - costBasis;
+    const lifetimeGainPct = costBasis > 0 ? (lifetimeGain / costBasis) * 100 : 0;
     const portfolioPct = totalHoldingsValue > 0 ? (marketValue / totalHoldingsValue) * 100 : 0;
     const group = classifyHolding(h.symbol, h.description);
-    return { ...h, _market_value: marketValue, _cost_basis: costBasis, _gain: gain, _gain_pct: gainPct, _portfolio_pct: portfolioPct, _group: group };
+
+    // Period gain: 'all' = since purchase; otherwise price-series movement.
+    let periodBase: number | null;   // value at period start (denominator)
+    let periodGain: number | null;   // change over the period
+    if (range === 'all') {
+      periodBase = costBasis > 0 ? costBasis : null;
+      periodGain = lifetimeGain;
+    } else {
+      const vals = priceSeries[h.id];
+      const startVal = vals && startIdx >= 0 ? vals[startIdx] : null;
+      const endVal = vals && endIdx >= 0 ? vals[endIdx] : null;
+      if (startVal == null || endVal == null) {
+        periodBase = null;
+        periodGain = null;
+      } else {
+        periodBase = startVal;
+        periodGain = endVal - startVal;
+      }
+    }
+    const periodPct = periodBase && periodBase !== 0 && periodGain != null ? (periodGain / periodBase) * 100 : null;
+
+    return {
+      ...h,
+      _market_value: marketValue,
+      _cost_basis: costBasis,
+      _gain: periodGain,                 // period-aware (drives column + sort)
+      _gain_pct: periodPct,
+      _period_base: periodBase,
+      _lifetime_gain: lifetimeGain,
+      _lifetime_gain_pct: lifetimeGainPct,
+      _portfolio_pct: portfolioPct,
+      _group: group,
+    };
   });
 
-  // Group summary — always computed from all holdings
+  // Aggregate period gain over a set of holdings (skips holdings with no data
+  // for the window). For 'all', _gain is the since-purchase gain.
+  const aggPeriod = (items: typeof enriched) => {
+    let gain = 0, base = 0, has = false;
+    for (const h of items) {
+      if (h._gain != null) { gain += h._gain; base += h._period_base ?? 0; has = true; }
+    }
+    return { gain: has ? gain : null, pct: has && base > 0 ? (gain / base) * 100 : null };
+  };
+
+  // Group summary — always computed from all holdings (gain is period-aware)
   const groupSummary = GROUPS.map((group) => {
     const items = enriched.filter((h) => h._group === group);
     if (items.length === 0) return null;
     const mv = items.reduce((s, h) => s + h._market_value, 0);
     const cost = items.reduce((s, h) => s + h._cost_basis, 0);
-    const gain = mv - cost;
-    const gainPct = cost > 0 ? (gain / cost) * 100 : 0;
+    const { gain, pct: gainPct } = aggPeriod(items);
     const portfolioPct = totalHoldingsValue > 0 ? (mv / totalHoldingsValue) * 100 : 0;
     return { group, count: items.length, mv, cost, gain, gainPct, portfolioPct };
-  }).filter(Boolean) as { group: Group; count: number; mv: number; cost: number; gain: number; gainPct: number; portfolioPct: number }[];
+  }).filter(Boolean) as { group: Group; count: number; mv: number; cost: number; gain: number | null; gainPct: number | null; portfolioPct: number }[];
 
-  // KPI totals — always the full portfolio, unaffected by group filter
+  // KPI totals — always the full portfolio, lifetime (since-purchase), unaffected by range
   const kpiValue = enriched.reduce((s, h) => s + h._market_value, 0);
   const kpiCost = enriched.reduce((s, h) => s + h._cost_basis, 0);
   const kpiGain = kpiValue - kpiCost;
   const kpiGainPct = kpiCost > 0 ? (kpiGain / kpiCost) * 100 : 0;
   const winners = enriched.filter((h) => h._cost_basis > 0);
-  const bestPerformer = winners.length > 0 ? winners.reduce((b, h) => h._gain_pct > b._gain_pct ? h : b) : null;
-  const worstPerformer = winners.length > 0 ? winners.reduce((w, h) => h._gain_pct < w._gain_pct ? h : w) : null;
+  const bestPerformer = winners.length > 0 ? winners.reduce((b, h) => h._lifetime_gain_pct > b._lifetime_gain_pct ? h : b) : null;
+  const worstPerformer = winners.length > 0 ? winners.reduce((w, h) => h._lifetime_gain_pct < w._lifetime_gain_pct ? h : w) : null;
 
   // Active holdings (filtered by group when selected) — used for table + total row
   const activeHoldings = selectedGroup
@@ -260,12 +322,13 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
     : enriched;
   const activeValue = activeHoldings.reduce((s, h) => s + h._market_value, 0);
   const activeCost = activeHoldings.reduce((s, h) => s + h._cost_basis, 0);
-  const activeGain = activeValue - activeCost;
-  const activeGainPct = activeCost > 0 ? (activeGain / activeCost) * 100 : 0;
+  const activeLifetimeGain = activeValue - activeCost;
+  const activeLifetimeGainPct = activeCost > 0 ? (activeLifetimeGain / activeCost) * 100 : 0;
+  const { gain: activeGain, pct: activeGainPct } = aggPeriod(activeHoldings);
   const activePortfolioPct = totalHoldingsValue > 0 ? (activeValue / totalHoldingsValue) * 100 : 100;
   const activeWinners = activeHoldings.filter((h) => h._cost_basis > 0);
-  const activeBest = activeWinners.length > 0 ? activeWinners.reduce((b, h) => h._gain_pct > b._gain_pct ? h : b) : null;
-  const activeWorst = activeWinners.length > 0 ? activeWinners.reduce((w, h) => h._gain_pct < w._gain_pct ? h : w) : null;
+  const activeBest = activeWinners.length > 0 ? activeWinners.reduce((b, h) => h._lifetime_gain_pct > b._lifetime_gain_pct ? h : b) : null;
+  const activeWorst = activeWinners.length > 0 ? activeWinners.reduce((w, h) => h._lifetime_gain_pct < w._lifetime_gain_pct ? h : w) : null;
 
   // Sorted table rows
   const sorted = [...activeHoldings].sort((a, b) => {
@@ -275,8 +338,8 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
       case 'shares':      cmp = Number(a.shares) - Number(b.shares); break;
       case 'cost_basis':  cmp = a._cost_basis - b._cost_basis; break;
       case 'market_value':cmp = a._market_value - b._market_value; break;
-      case 'gain':        cmp = a._gain - b._gain; break;
-      case 'gain_pct':    cmp = a._gain_pct - b._gain_pct; break;
+      case 'gain':        cmp = (a._gain ?? -Infinity) - (b._gain ?? -Infinity); break;
+      case 'gain_pct':    cmp = (a._gain_pct ?? -Infinity) - (b._gain_pct ?? -Infinity); break;
       case 'portfolio_pct': cmp = a._portfolio_pct - b._portfolio_pct; break;
     }
     return sortDir === 'asc' ? cmp : -cmp;
@@ -303,6 +366,8 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
       </span>
     );
   }
+
+  const rangeLabel = range === 'custom' ? 'Custom' : (PRESETS.find((p) => p.key === range)?.label ?? '');
 
   return (
     <div className="space-y-4">
@@ -337,7 +402,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
             label="Best Performer"
             tooltip="Highest-returning position in the current selection, by percentage gain since purchase."
             value={bestPerformer.symbol || bestPerformer.description || '—'}
-            sub={`+${bestPerformer._gain_pct.toFixed(1)}%`}
+            sub={`+${bestPerformer._lifetime_gain_pct.toFixed(1)}%`}
             valueColor="text-accent-green"
           />
         )}
@@ -346,8 +411,8 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
             label="Worst Performer"
             tooltip="Lowest-returning position in the current selection, by percentage gain since purchase."
             value={worstPerformer.symbol || worstPerformer.description || '—'}
-            sub={`${worstPerformer._gain_pct >= 0 ? '+' : ''}${worstPerformer._gain_pct.toFixed(1)}%`}
-            valueColor={worstPerformer._gain_pct >= 0 ? 'text-ink-800' : 'text-accent-red'}
+            sub={`${worstPerformer._lifetime_gain_pct >= 0 ? '+' : ''}${worstPerformer._lifetime_gain_pct.toFixed(1)}%`}
+            valueColor={worstPerformer._lifetime_gain_pct >= 0 ? 'text-ink-800' : 'text-accent-red'}
           />
         )}
       </div>
@@ -396,9 +461,9 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
           <Kpi
             label="Total Return"
             tooltip={`Total unrealized gain or loss across ${selectedGroup} positions.`}
-            value={`${activeGain >= 0 ? '+' : ''}${formatCurrency(activeGain)}`}
-            sub={`${activeGainPct >= 0 ? '+' : ''}${activeGainPct.toFixed(1)}% overall`}
-            valueColor={activeGain >= 0 ? 'text-accent-green' : 'text-accent-red'}
+            value={`${activeLifetimeGain >= 0 ? '+' : ''}${formatCurrency(activeLifetimeGain)}`}
+            sub={`${activeLifetimeGainPct >= 0 ? '+' : ''}${activeLifetimeGainPct.toFixed(1)}% overall`}
+            valueColor={activeLifetimeGain >= 0 ? 'text-accent-green' : 'text-accent-red'}
           />
           <Kpi
             label="Cost Basis"
@@ -408,15 +473,15 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
           <Kpi
             label="Avg Return"
             tooltip={`Weighted average return across ${selectedGroup} positions.`}
-            value={`${activeGainPct >= 0 ? '+' : ''}${activeGainPct.toFixed(1)}%`}
-            valueColor={activeGainPct >= 0 ? 'text-accent-green' : 'text-accent-red'}
+            value={`${activeLifetimeGainPct >= 0 ? '+' : ''}${activeLifetimeGainPct.toFixed(1)}%`}
+            valueColor={activeLifetimeGainPct >= 0 ? 'text-accent-green' : 'text-accent-red'}
           />
           {activeBest && (
             <Kpi
               label="Best Performer"
               tooltip={`Highest-returning ${selectedGroup} position by % gain.`}
               value={activeBest.symbol || activeBest.description || '—'}
-              sub={`+${activeBest._gain_pct.toFixed(1)}%`}
+              sub={`+${activeBest._lifetime_gain_pct.toFixed(1)}%`}
               valueColor="text-accent-green"
             />
           )}
@@ -425,8 +490,8 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
               label="Worst Performer"
               tooltip={`Lowest-returning ${selectedGroup} position by % gain.`}
               value={activeWorst.symbol || activeWorst.description || '—'}
-              sub={`${activeWorst._gain_pct >= 0 ? '+' : ''}${activeWorst._gain_pct.toFixed(1)}%`}
-              valueColor={activeWorst._gain_pct >= 0 ? 'text-ink-800' : 'text-accent-red'}
+              sub={`${activeWorst._lifetime_gain_pct >= 0 ? '+' : ''}${activeWorst._lifetime_gain_pct.toFixed(1)}%`}
+              valueColor={activeWorst._lifetime_gain_pct >= 0 ? 'text-ink-800' : 'text-accent-red'}
             />
           )}
         </div>
@@ -448,9 +513,13 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
                   <p className="font-mono text-xs font-medium text-ink-700">{formatCurrency(g.mv)}</p>
                   <p className="text-[10px] text-ink-400">{g.portfolioPct.toFixed(1)}% of portfolio</p>
                 </div>
-                <div className={`col-span-4 sm:col-span-3 text-right font-mono text-xs font-medium ${g.gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                  {g.gain >= 0 ? '+' : ''}{formatCurrency(g.gain)}
-                  <span className="ml-1 opacity-70">({g.gainPct >= 0 ? '+' : ''}{g.gainPct.toFixed(1)}%)</span>
+                <div className={`col-span-4 sm:col-span-3 text-right font-mono text-xs font-medium ${g.gain == null ? 'text-ink-300' : g.gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                  {g.gain == null ? '—' : (
+                    <>
+                      {g.gain >= 0 ? '+' : ''}{formatCurrency(g.gain)}
+                      {g.gainPct != null && <span className="ml-1 opacity-70">({g.gainPct >= 0 ? '+' : ''}{g.gainPct.toFixed(1)}%)</span>}
+                    </>
+                  )}
                 </div>
                 <div className="hidden sm:block col-span-3">
                   <div className="flex-1 h-1.5 bg-sand-100 rounded-full overflow-hidden">
@@ -462,6 +531,53 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
         </div>
       )}
 
+      {/* Performance range selector — scopes the Gain/Loss column to a time window */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400 mr-1">
+          Performance
+        </span>
+        {PRESETS.map((p) => (
+          <button
+            key={p.key}
+            onClick={() => setRange(p.key)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              range === p.key ? 'bg-ink-800 text-white' : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+        <button
+          onClick={() => setRange('custom')}
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            range === 'custom' ? 'bg-ink-800 text-white' : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
+          }`}
+        >
+          Custom
+        </button>
+        {range === 'custom' && priceDates.length > 0 && (
+          <span className="flex items-center gap-1.5 text-xs text-ink-500 ml-1">
+            <input
+              type="date"
+              value={customFrom}
+              min={firstDate}
+              max={customTo}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400"
+            />
+            <span>→</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom}
+              max={lastDate}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400"
+            />
+          </span>
+        )}
+      </div>
+
       {/* Holdings table */}
       <div className="card p-0">
         {/* Desktop header */}
@@ -472,9 +588,13 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
           <div className="col-span-2 flex justify-end"><ColHeader label="Market value" col="market_value" tooltip="Current value of your position at today's market price." tooltipAlign="right" /></div>
           <div className="col-span-2 flex justify-end items-center gap-1">
             <span className="relative group/gainTip inline-flex items-center cursor-default">
-              <span className="text-xs font-medium uppercase tracking-wider text-ink-400">Gain/Loss</span>
-              <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-56 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/gainTip:opacity-100 transition-opacity z-50 shadow-lg normal-case font-normal tracking-normal">
-                Unrealized gain or loss — the difference between current market value and cost basis. Not locked in until you sell.
+              <span className="text-xs font-medium uppercase tracking-wider text-ink-400">
+                {range === 'all' ? 'Gain/Loss' : `Δ ${rangeLabel}`}
+              </span>
+              <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-60 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/gainTip:opacity-100 transition-opacity z-50 shadow-lg normal-case font-normal tracking-normal">
+                {range === 'all'
+                  ? 'Unrealized gain or loss since purchase — current market value minus cost basis. Not locked in until you sell.'
+                  : `Change in this position's value over ${rangeLabel.toLowerCase()}, estimated from historical prices × current shares. "—" means no price history for this holding.`}
                 <span className="absolute top-full right-4 border-4 border-transparent border-t-ink-800" />
               </span>
             </span>
@@ -509,9 +629,13 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
               <div className="col-span-1 text-right font-mono text-sm text-ink-600">{Number(h.shares).toFixed(2)}</div>
               <div className="col-span-2 text-right font-mono text-sm text-ink-600">{formatCurrency(h._cost_basis)}</div>
               <div className="col-span-2 text-right font-mono text-sm font-medium text-ink-700">{formatCurrency(h._market_value)}</div>
-              <div className={`col-span-2 text-right font-mono text-sm font-medium ${h._gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {h._gain >= 0 ? '+' : ''}{formatCurrency(h._gain)}
-                <span className="text-xs ml-1 opacity-70">({h._gain_pct >= 0 ? '+' : ''}{h._gain_pct.toFixed(1)}%)</span>
+              <div className={`col-span-2 text-right font-mono text-sm font-medium ${h._gain == null ? 'text-ink-300' : h._gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {h._gain == null ? '—' : (
+                  <>
+                    {h._gain >= 0 ? '+' : ''}{formatCurrency(h._gain)}
+                    {h._gain_pct != null && <span className="text-xs ml-1 opacity-70">({h._gain_pct >= 0 ? '+' : ''}{h._gain_pct.toFixed(1)}%)</span>}
+                  </>
+                )}
               </div>
               <div className="col-span-2 flex flex-col items-end gap-1">
                 <span className="font-mono text-xs text-ink-600">{h._portfolio_pct.toFixed(1)}%</span>
@@ -528,8 +652,8 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
               </div>
               <div className="text-right shrink-0">
                 <p className="font-mono text-sm font-medium text-ink-700">{formatCurrency(h._market_value)}</p>
-                <p className={`font-mono text-xs font-medium ${h._gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                  {h._gain >= 0 ? '+' : ''}{formatCurrency(h._gain)} ({h._gain_pct >= 0 ? '+' : ''}{h._gain_pct.toFixed(1)}%)
+                <p className={`font-mono text-xs font-medium ${h._gain == null ? 'text-ink-300' : h._gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                  {h._gain == null ? '—' : `${h._gain >= 0 ? '+' : ''}${formatCurrency(h._gain)}${h._gain_pct != null ? ` (${h._gain_pct >= 0 ? '+' : ''}${h._gain_pct.toFixed(1)}%)` : ''}`}
                 </p>
               </div>
             </div>
@@ -544,9 +668,13 @@ export default function HoldingsTable({ holdings, totalHoldingsValue }: Holdings
           <div className="col-span-1" />
           <div className="col-span-2 text-right font-mono text-sm text-ink-600">{formatCurrency(activeCost)}</div>
           <div className="col-span-2 text-right font-mono text-sm font-semibold text-ink-800">{formatCurrency(activeValue)}</div>
-          <div className={`col-span-2 text-right font-mono text-sm font-semibold ${activeGain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {activeGain >= 0 ? '+' : ''}{formatCurrency(activeGain)}
-            <span className="text-xs ml-1 opacity-70">({activeGainPct >= 0 ? '+' : ''}{activeGainPct.toFixed(1)}%)</span>
+          <div className={`col-span-2 text-right font-mono text-sm font-semibold ${activeGain == null ? 'text-ink-300' : activeGain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+            {activeGain == null ? '—' : (
+              <>
+                {activeGain >= 0 ? '+' : ''}{formatCurrency(activeGain)}
+                {activeGainPct != null && <span className="text-xs ml-1 opacity-70">({activeGainPct >= 0 ? '+' : ''}{activeGainPct.toFixed(1)}%)</span>}
+              </>
+            )}
           </div>
           <div className="col-span-2 text-right font-mono text-xs text-ink-400">
             {selectedGroup ? `${activePortfolioPct.toFixed(1)}%` : '100%'}

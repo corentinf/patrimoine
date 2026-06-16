@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/app/lib/supabase';
 import { formatCurrency } from '@/app/lib/utils';
+import { getDailyCloses } from '@/app/lib/prices';
 import HoldingsTable from './HoldingsTable';
 import HoldingsInsights from './HoldingsInsights';
 import InvestmentProgress from './InvestmentProgress';
@@ -63,6 +64,43 @@ async function getInvestmentData() {
   return { series, currentValue };
 }
 
+// Reconstruct each holding's value over the past ~year from historical close
+// prices × current shares. Returns a shared ascending date axis plus a value
+// array per holding aligned to it (last-known close carried forward; null
+// before a holding's price history begins or when no price data exists).
+async function getHoldingPriceSeries(holdings: { id: string; symbol: string | null; shares: number | string }[]) {
+  const symbols = holdings.map((h) => h.symbol).filter((s): s is string => !!s);
+  const closes = await getDailyCloses(symbols);
+
+  const dateSet = new Set<string>();
+  for (const sym of Object.keys(closes)) {
+    for (const c of closes[sym]) dateSet.add(c.date);
+  }
+  const dates = Array.from(dateSet).sort();
+  const dateIndex = new Map(dates.map((d, i) => [d, i]));
+
+  const series: Record<string, (number | null)[]> = {};
+  for (const h of holdings) {
+    const hist = h.symbol ? closes[h.symbol] : undefined;
+    if (!hist || hist.length === 0) continue;
+    const shares = Number(h.shares || 0);
+    const values: (number | null)[] = new Array(dates.length).fill(null);
+    // Place each close at its axis index, then forward-fill.
+    for (const c of hist) {
+      const i = dateIndex.get(c.date);
+      if (i !== undefined) values[i] = c.close * shares;
+    }
+    let last: number | null = null;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] !== null) last = values[i];
+      else values[i] = last;
+    }
+    series[h.id] = values;
+  }
+
+  return { dates, series };
+}
+
 export default async function NetWorthPage() {
   const [holdings, investment] = await Promise.all([
     getHoldings(),
@@ -70,6 +108,7 @@ export default async function NetWorthPage() {
   ]);
   const totalHoldingsValue = holdings.reduce((sum, h) => sum + Number(h.market_value || 0), 0);
   const totalInvestmentValue = investment.currentValue;
+  const priceSeries = await getHoldingPriceSeries(holdings);
 
   if (holdings.length === 0 && totalInvestmentValue === 0) {
     return (
@@ -114,7 +153,12 @@ export default async function NetWorthPage() {
               is in accounts that don’t report individual holdings (e.g. 401k, HSA).
             </p>
           )}
-          <HoldingsTable holdings={holdings} totalHoldingsValue={totalHoldingsValue} />
+          <HoldingsTable
+            holdings={holdings}
+            totalHoldingsValue={totalHoldingsValue}
+            priceDates={priceSeries.dates}
+            priceSeries={priceSeries.series}
+          />
         </div>
       )}
       <HoldingsInsights />

@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { format, subDays, startOfYear } from 'date-fns';
+import { format } from 'date-fns';
 import { formatCurrency, amountColor } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
+import { PRESETS, isoDate, resolveStart, type RangeKey } from '@/app/lib/investmentRange';
 
 interface Point {
   date: string; // YYYY-MM-DD
@@ -18,18 +19,7 @@ interface InvestmentProgressProps {
   currentValue: number;
 }
 
-type RangeKey = 'today' | '7d' | '30d' | '3m' | 'year' | 'all' | 'custom';
-
-const PRESETS: { key: RangeKey; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: '7d', label: 'Last 7 days' },
-  { key: '30d', label: 'Last 30 days' },
-  { key: '3m', label: '3 months' },
-  { key: 'year', label: 'This year' },
-  { key: 'all', label: 'All time' },
-];
-
-const iso = (d: Date) => format(d, 'yyyy-MM-dd');
+const iso = isoDate;
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -76,27 +66,9 @@ export default function InvestmentProgress({ series, currentValue }: InvestmentP
 
   // Resolve [start, end] for the active range.
   const { start, end } = useMemo(() => {
-    const now = new Date();
-    switch (range) {
-      case 'today': {
-        // Baseline = the snapshot just before the latest point.
-        const prev = data.length >= 2 ? data[data.length - 2].date : data[0]?.date;
-        return { start: prev ?? firstDate, end: lastDate };
-      }
-      case '7d':
-        return { start: iso(subDays(now, 7)), end: lastDate };
-      case '30d':
-        return { start: iso(subDays(now, 30)), end: lastDate };
-      case '3m':
-        return { start: iso(subDays(now, 90)), end: lastDate };
-      case 'year':
-        return { start: iso(startOfYear(now)), end: lastDate };
-      case 'custom':
-        return { start: customFrom, end: customTo };
-      case 'all':
-      default:
-        return { start: firstDate, end: lastDate };
-    }
+    const prevDate = data.length >= 2 ? data[data.length - 2].date : data[0]?.date;
+    const start = resolveStart(range, { now: new Date(), firstDate, prevDate, customFrom });
+    return { start, end: range === 'custom' ? customTo : lastDate };
   }, [range, data, firstDate, lastDate, customFrom, customTo]);
 
   // Baseline = last point on or before `start` (value at the period start).
