@@ -19,20 +19,24 @@ async function getHoldings() {
   return data || [];
 }
 
-// Derive a daily time series of total investment value from net-worth snapshots.
-// There is no per-holding history, but each snapshot stores a per-account balance
-// breakdown keyed `"<institution> — <name>"` (see captureNetWorthSnapshot in lib/sync.ts).
-// Summing the entries belonging to investment accounts reconstructs the trend.
-async function getInvestmentSeries() {
+// Total investment value = the combined balance of every investment account
+// (brokerages, 401k, HSA, …), not just the holdings that report per-line detail.
+// There is no per-holding history, but each net-worth snapshot stores a per-account
+// balance breakdown keyed `"<institution> — <name>"` (see captureNetWorthSnapshot in
+// lib/sync.ts), so summing the investment-account entries reconstructs the trend.
+async function getInvestmentData() {
   const supabase = createServiceClient();
 
   const { data: invAccounts } = await supabase
     .from('accounts')
-    .select('institution, name')
-    .eq('account_type', 'investment');
+    .select('institution, name, balance')
+    .eq('account_type', 'investment')
+    .eq('is_hidden', false);
 
-  const keys = (invAccounts ?? []).map((a) => `${a.institution} — ${a.name}`);
-  if (keys.length === 0) return [];
+  const accounts = invAccounts ?? [];
+  const currentValue = accounts.reduce((sum, a) => sum + Number(a.balance ?? 0), 0);
+  const keys = accounts.map((a) => `${a.institution} — ${a.name}`);
+  if (keys.length === 0) return { series: [], currentValue: 0 };
 
   const { data: snapshots } = await supabase
     .from('networth_snapshots')
@@ -54,17 +58,18 @@ async function getInvestmentSeries() {
     // Skip days before any investment account existed (avoids phantom zeros).
     if (matched) series.push({ date: snap.snapshot_date, value });
   }
-  return series;
+  return { series, currentValue };
 }
 
 export default async function NetWorthPage() {
-  const [holdings, investmentSeries] = await Promise.all([
+  const [holdings, investment] = await Promise.all([
     getHoldings(),
-    getInvestmentSeries(),
+    getInvestmentData(),
   ]);
   const totalHoldingsValue = holdings.reduce((sum, h) => sum + Number(h.market_value || 0), 0);
+  const totalInvestmentValue = investment.currentValue;
 
-  if (holdings.length === 0) {
+  if (holdings.length === 0 && totalInvestmentValue === 0) {
     return (
       <div className="space-y-8">
         <div>
@@ -91,13 +96,25 @@ export default async function NetWorthPage() {
         </div>
         <div className="sm:text-right">
           <p className="stat-label">Total value</p>
-          <p className="stat-value" data-sensitive>{formatCurrency(totalHoldingsValue)}</p>
+          <p className="stat-value" data-sensitive>{formatCurrency(totalInvestmentValue)}</p>
         </div>
       </div>
 
-      <InvestmentProgress series={investmentSeries} currentValue={totalHoldingsValue} />
+      <InvestmentProgress series={investment.series} currentValue={totalInvestmentValue} />
 
-      <HoldingsTable holdings={holdings} totalHoldingsValue={totalHoldingsValue} />
+      {holdings.length > 0 && (
+        <div className="space-y-2">
+          {totalInvestmentValue - totalHoldingsValue > 1 && (
+            <p className="text-xs text-ink-400">
+              Line items below cover{' '}
+              <span data-sensitive>{formatCurrency(totalHoldingsValue)}</span>. The remaining{' '}
+              <span data-sensitive>{formatCurrency(totalInvestmentValue - totalHoldingsValue)}</span>{' '}
+              is in accounts that don’t report individual holdings (e.g. 401k, HSA).
+            </p>
+          )}
+          <HoldingsTable holdings={holdings} totalHoldingsValue={totalHoldingsValue} />
+        </div>
+      )}
       <HoldingsInsights />
     </div>
   );
