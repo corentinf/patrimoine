@@ -63,6 +63,38 @@ async function getMonthlySpending() {
   return data || [];
 }
 
+// Daily total spending (expenses are stored as negative amounts) across visible
+// accounts, for the "Spending over time" chart. Bounded to ~24 months.
+async function getDailySpending(): Promise<{ date: string; amount: number }[]> {
+  const supabase = createServiceClient();
+  const visibleIds = await getVisibleAccountIds(supabase);
+  if (!visibleIds.length) return [];
+
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - 24);
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('amount, posted_at')
+    .in('account_id', visibleIds)
+    .lt('amount', 0)
+    .eq('is_transfer', false)
+    .gte('posted_at', startDate.toISOString())
+    .order('posted_at', { ascending: true })
+    .limit(10000);
+
+  if (error) throw error;
+
+  const byDay = new Map<string, number>();
+  for (const t of data ?? []) {
+    const day = new Date(t.posted_at).toISOString().slice(0, 10);
+    byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(Number(t.amount ?? 0)));
+  }
+  return Array.from(byDay.entries())
+    .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 async function getMonthlyIncome(): Promise<number> {
   try {
     const supabase = createServiceClient();
@@ -163,7 +195,7 @@ async function getIncomeCategories() {
 }
 
 export default async function SpendingPage() {
-  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets] = await Promise.all([
+  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets, dailySpending] = await Promise.all([
     getSpendingTransactions(12),
     getMonthlySpending(),
     getAllCategories(),
@@ -171,6 +203,7 @@ export default async function SpendingPage() {
     getSubscriptionOverrides(),
     getMonthlyIncome(),
     getBudgets(),
+    getDailySpending(),
   ]);
 
   return (
@@ -182,6 +215,7 @@ export default async function SpendingPage() {
       subscriptionOverrides={subscriptionOverrides}
       monthlyIncome={monthlyIncome}
       budgets={budgets}
+      dailySpending={dailySpending}
     />
   );
 }

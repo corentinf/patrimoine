@@ -25,19 +25,43 @@ async function getHoldings() {
 // There is no per-holding history, but each net-worth snapshot stores a per-account
 // balance breakdown keyed `"<institution> — <name>"` (see captureNetWorthSnapshot in
 // lib/sync.ts), so summing the investment-account entries reconstructs the trend.
+export interface InvestmentAccountSeries {
+  id: string;
+  institution: string;
+  name: string;
+  key: string;                 // breakdown key "institution — name"
+  values: (number | null)[];   // aligned to `dates`; null before the account first appears
+  currentValue: number;
+  costBasis: number | null;    // sum of holdings cost basis for this account (null if none reported)
+}
+
+// Per-investment-account balance history, reconstructed from the per-account
+// breakdown stored in each net-worth snapshot. The chart sums whichever accounts
+// the user selects; cost basis (when known, i.e. brokerage holdings) powers the
+// gain/loss-vs-cost-basis tooltip line.
 async function getInvestmentData() {
   const supabase = createServiceClient();
 
   const { data: invAccounts } = await supabase
     .from('accounts')
-    .select('institution, name, balance')
+    .select('id, institution, name, balance')
     .eq('account_type', 'investment')
-    .eq('is_hidden', false);
+    .eq('is_hidden', false)
+    .order('balance', { ascending: false });
 
   const accounts = invAccounts ?? [];
-  const currentValue = accounts.reduce((sum, a) => sum + Number(a.balance ?? 0), 0);
-  const keys = accounts.map((a) => `${a.institution} — ${a.name}`);
-  if (keys.length === 0) return { series: [], currentValue: 0 };
+  if (accounts.length === 0) return { dates: [], accounts: [] as InvestmentAccountSeries[] };
+
+  // Cost basis per account (only brokerage accounts that report holdings have it).
+  const { data: holdingRows } = await supabase
+    .from('holdings')
+    .select('account_id, cost_basis');
+  const costByAccount = new Map<string, number>();
+  for (const h of holdingRows ?? []) {
+    const cb = Number(h.cost_basis ?? 0);
+    if (!h.account_id || !cb) continue;
+    costByAccount.set(h.account_id, (costByAccount.get(h.account_id) ?? 0) + cb);
+  }
 
   const { data: snapshots } = await supabase
     .from('networth_snapshots')
@@ -45,23 +69,35 @@ async function getInvestmentData() {
     .order('snapshot_date', { ascending: true })
     .limit(365);
 
-  // Build the series from a consistent basket: carry forward each account's last
-  // known balance, and only start emitting points once *every* tracked account has
-  // appeared at least once. This prevents a misleading jump when an account (e.g. a
-  // 401k) is linked partway through the history.
-  const lastKnown: Record<string, number> = {};
-  const series: { date: string; value: number }[] = [];
-  for (const snap of snapshots ?? []) {
-    const breakdown = (snap.breakdown ?? {}) as Record<string, number>;
-    for (const key of keys) {
-      if (key in breakdown) lastKnown[key] = Number(breakdown[key] ?? 0);
-    }
-    if (keys.every((key) => key in lastKnown)) {
-      const value = keys.reduce((sum, key) => sum + lastKnown[key], 0);
-      series.push({ date: snap.snapshot_date, value });
-    }
-  }
-  return { series, currentValue };
+  // Keep only snapshot dates where at least one investment account is present.
+  const keyByAccount = new Map(accounts.map((a) => [a.id, `${a.institution} — ${a.name}`]));
+  const rows = (snapshots ?? []).filter((snap) => {
+    const b = (snap.breakdown ?? {}) as Record<string, number>;
+    return accounts.some((a) => keyByAccount.get(a.id)! in b);
+  });
+  const dates = rows.map((r) => r.snapshot_date);
+
+  const series: InvestmentAccountSeries[] = accounts.map((a) => {
+    const key = keyByAccount.get(a.id)!;
+    const values: (number | null)[] = new Array(dates.length).fill(null);
+    let last: number | null = null;
+    rows.forEach((snap, i) => {
+      const b = (snap.breakdown ?? {}) as Record<string, number>;
+      if (key in b) last = Number(b[key] ?? 0);
+      values[i] = last; // carry forward; stays null until the account first appears
+    });
+    return {
+      id: a.id,
+      institution: a.institution,
+      name: a.name,
+      key,
+      values,
+      currentValue: Number(a.balance ?? 0),
+      costBasis: costByAccount.get(a.id) ?? null,
+    };
+  });
+
+  return { dates, accounts: series };
 }
 
 // Reconstruct each holding's value over the past ~year from historical close
@@ -107,7 +143,7 @@ export default async function NetWorthPage() {
     getInvestmentData(),
   ]);
   const totalHoldingsValue = holdings.reduce((sum, h) => sum + Number(h.market_value || 0), 0);
-  const totalInvestmentValue = investment.currentValue;
+  const totalInvestmentValue = investment.accounts.reduce((sum, a) => sum + a.currentValue, 0);
   const priceSeries = await getHoldingPriceSeries(holdings);
 
   if (holdings.length === 0 && totalInvestmentValue === 0) {
@@ -141,7 +177,7 @@ export default async function NetWorthPage() {
         </div>
       </div>
 
-      <InvestmentProgress series={investment.series} currentValue={totalInvestmentValue} />
+      <InvestmentProgress dates={investment.dates} accounts={investment.accounts} />
 
       {holdings.length > 0 && (
         <div className="space-y-2">

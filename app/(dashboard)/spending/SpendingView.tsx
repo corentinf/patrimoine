@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { formatCurrency } from '@/app/lib/utils';
 import SpendingCharts from './SpendingCharts';
+import SpendingProgress from './SpendingProgress';
 import SpendingTransactions from './SpendingTransactions';
 import CategoryManager, { type Category } from './CategoryManager';
 import AICategorizeButton from './AICategorizeButton';
@@ -45,6 +46,7 @@ interface SpendingViewProps {
   subscriptionOverrides: Record<string, 'confirmed' | 'dismissed'>;
   monthlyIncome: number;
   budgets: Record<string, number>;
+  dailySpending: { date: string; amount: number }[];
 }
 
 export type DateFilter =
@@ -284,7 +286,7 @@ export function DateNav({ filter, onChange }: { filter: DateFilter; onChange: (f
   );
 }
 
-export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets }: SpendingViewProps) {
+export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, dailySpending }: SpendingViewProps) {
   const now = new Date();
   const [dateFilter, setDateFilter] = useState<DateFilter>({
     mode: 'month',
@@ -620,6 +622,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       })()}
 
       <>
+
+      {/* Spending over time */}
+      <SpendingProgress data={dailySpending} />
 
       {/* Spending + savings rate combined card */}
       <SavingsRateModule
