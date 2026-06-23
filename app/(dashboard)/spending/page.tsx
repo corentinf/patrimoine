@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/app/lib/supabase';
 import SpendingView from './SpendingView';
 
-export const revalidate = 300;
+export const dynamic = 'force-dynamic';
 
 async function getVisibleAccountIds(supabase: ReturnType<typeof createServiceClient>) {
   const { data } = await supabase
