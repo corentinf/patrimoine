@@ -15,6 +15,7 @@ export interface FullTransaction {
   memo: string | null;
   posted_at: string;
   is_transfer: boolean;
+  is_reimbursable: boolean;
   account: { name: string; institution: string } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }

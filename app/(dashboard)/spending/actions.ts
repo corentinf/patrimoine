@@ -56,6 +56,16 @@ export async function toggleTransfer(id: string, value: boolean) {
   revalidatePath('/spending');
 }
 
+export async function markReimbursable(ids: string[], value: boolean) {
+  const { supabase } = await getSupabaseAndUser();
+  const { error } = await supabase
+    .from('transactions')
+    .update({ is_reimbursable: value })
+    .in('id', ids);
+  if (error) throw new Error(error.message);
+  revalidatePath('/spending');
+}
+
 export async function assignTransactionCategory(
   transactionId: string,
   categoryId: string,

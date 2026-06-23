@@ -41,6 +41,10 @@ interface TransactionRowProps {
   knownVenmoNames: string[];
   localCategory: Category | null;
   localIsTransfer: boolean;
+  isReimbursable: boolean;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
   onCategoryChange: (txId: string, cat: Category) => void;
   onTransferChange: (txId: string, value: boolean) => void;
   onRowClick: () => void;
@@ -53,6 +57,10 @@ export default function TransactionRow({
   knownVenmoNames,
   localCategory,
   localIsTransfer,
+  isReimbursable,
+  selectMode,
+  selected,
+  onToggleSelect,
   onCategoryChange,
   onTransferChange,
   onRowClick,
@@ -169,12 +177,26 @@ export default function TransactionRow({
       )}
       {/* Main row */}
       <div
-        className={`flex items-center gap-4 px-5 py-3.5 transition-colors cursor-pointer group ${isTransfer ? 'bg-sand-50/60' : 'hover:bg-sand-50'}`}
-        onClick={onRowClick}
+        className={`flex items-center gap-4 px-5 py-3.5 transition-colors cursor-pointer group ${
+          selected ? 'bg-sand-100' : isTransfer ? 'bg-sand-50/60' : 'hover:bg-sand-50'
+        }`}
+        onClick={selectMode ? onToggleSelect : onRowClick}
       >
+        {/* Checkbox — select mode only */}
+        {selectMode && (
+          <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              className="w-4 h-4 rounded accent-ink-800 cursor-pointer"
+            />
+          </div>
+        )}
+
         {/* Category emoji — click to change */}
         <button
-          onClick={(e) => { e.stopPropagation(); setShowCatPicker((v) => !v); setShowVenmoForm(false); }}
+          onClick={(e) => { e.stopPropagation(); if (!selectMode) { setShowCatPicker((v) => !v); setShowVenmoForm(false); } }}
           className="text-lg w-8 text-center flex-shrink-0 hover:scale-110 transition-transform"
           title="Change category"
         >
@@ -201,6 +223,11 @@ export default function TransactionRow({
                   {catName}
                 </span>
               </button>
+            )}
+            {isReimbursable && (
+              <span className="text-[10px] font-medium px-1.5 py-px rounded bg-emerald-50 text-emerald-600 border border-emerald-100">
+                ↩ reimb.
+              </span>
             )}
             {tx.account && (
               <span className="text-xs text-ink-300 truncate">

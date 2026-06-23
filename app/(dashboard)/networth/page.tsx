@@ -5,7 +5,7 @@ import HoldingsTable from './HoldingsTable';
 import HoldingsInsights from './HoldingsInsights';
 import InvestmentProgress from './InvestmentProgress';
 
-export const revalidate = 300;
+export const dynamic = 'force-dynamic';
 
 async function getHoldings() {
   const supabase = createServiceClient();
@@ -142,11 +142,24 @@ export default async function NetWorthPage() {
     getHoldings(),
     getInvestmentData(),
   ]);
-  const totalHoldingsValue = holdings.reduce((sum, h) => sum + Number(h.market_value || 0), 0);
-  const totalInvestmentValue = investment.accounts.reduce((sum, a) => sum + a.currentValue, 0);
   const priceSeries = await getHoldingPriceSeries(holdings);
 
-  if (holdings.length === 0 && totalInvestmentValue === 0) {
+  // Override each holding's DB-stored market_value with the live price (shares × latest
+  // Yahoo close). Series values are already shares × close, so we take the last non-null
+  // entry. Holdings with no symbol (cash, etc.) keep their DB value.
+  const liveHoldings = holdings.map((h) => {
+    const vals = priceSeries.series[h.id];
+    if (!vals) return h;
+    let live: number | null = null;
+    for (const v of vals) if (v !== null) live = v;
+    if (live === null) return h;
+    return { ...h, market_value: live };
+  });
+
+  const totalHoldingsValue = liveHoldings.reduce((sum, h) => sum + Number(h.market_value || 0), 0);
+  const totalInvestmentValue = investment.accounts.reduce((sum, a) => sum + a.currentValue, 0);
+
+  if (liveHoldings.length === 0 && totalInvestmentValue === 0) {
     return (
       <div className="space-y-8">
         <div>
@@ -179,7 +192,7 @@ export default async function NetWorthPage() {
 
       <InvestmentProgress dates={investment.dates} accounts={investment.accounts} />
 
-      {holdings.length > 0 && (
+      {liveHoldings.length > 0 && (
         <div className="space-y-2">
           {totalInvestmentValue - totalHoldingsValue > 1 && (
             <p className="text-xs text-ink-400">
@@ -190,7 +203,7 @@ export default async function NetWorthPage() {
             </p>
           )}
           <HoldingsTable
-            holdings={holdings}
+            holdings={liveHoldings}
             totalHoldingsValue={totalHoldingsValue}
             priceDates={priceSeries.dates}
             priceSeries={priceSeries.series}

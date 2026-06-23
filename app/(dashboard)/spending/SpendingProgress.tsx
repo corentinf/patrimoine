@@ -35,13 +35,6 @@ function CustomTooltip({ active, payload, label, mode }: any) {
   );
 }
 
-// Bucket granularity for the per-interval view, chosen from the window span.
-function granularityFor(spanDays: number): 'day' | 'week' | 'month' {
-  if (spanDays <= 45) return 'day';
-  if (spanDays <= 180) return 'week';
-  return 'month';
-}
-
 function bucketKey(date: string, gran: 'day' | 'week' | 'month'): string {
   if (gran === 'month') return date.slice(0, 7);
   if (gran === 'week') {
@@ -64,6 +57,7 @@ export default function SpendingProgress({ data }: SpendingProgressProps) {
   const { blurred } = usePrivacy();
   const [range, setRange] = useState<RangeKey>('30d');
   const [mode, setMode] = useState<ViewMode>('cumulative');
+  const [gran, setGran] = useState<'day' | 'week' | 'month'>('week');
 
   const todayIso = iso(new Date());
   const firstDate = data[0]?.date ?? todayIso;
@@ -94,7 +88,6 @@ export default function SpendingProgress({ data }: SpendingProgressProps) {
         return { label: format(new Date(d.date + 'T12:00:00'), 'MMM d'), value: Math.round(run) };
       });
     }
-    const gran = granularityFor(spanDays);
     const byBucket = new Map<string, number>();
     for (const d of inRange) {
       const k = bucketKey(d.date, gran);
@@ -103,7 +96,7 @@ export default function SpendingProgress({ data }: SpendingProgressProps) {
     return Array.from(byBucket.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([k, v]) => ({ label: bucketLabel(k, gran), value: Math.round(v) }));
-  }, [inRange, mode, spanDays]);
+  }, [inRange, mode, gran]);
 
   const pill = (active: boolean) =>
     `px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -144,20 +137,36 @@ export default function SpendingProgress({ data }: SpendingProgressProps) {
         </div>
       </div>
 
-      {/* View toggle */}
-      <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
-        <button
-          onClick={() => setMode('cumulative')}
-          className={`px-3 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-        >
-          Cumulative
-        </button>
-        <button
-          onClick={() => setMode('interval')}
-          className={`px-3 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-        >
-          Per period
-        </button>
+      {/* View toggle + granularity */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
+          <button
+            onClick={() => setMode('cumulative')}
+            className={`px-3 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
+          >
+            Cumulative
+          </button>
+          <button
+            onClick={() => setMode('interval')}
+            className={`px-3 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
+          >
+            Per period
+          </button>
+        </div>
+
+        {mode === 'interval' && (
+          <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
+            {(['day', 'week', 'month'] as const).map((g) => (
+              <button
+                key={g}
+                onClick={() => setGran(g)}
+                className={`px-3 py-1 rounded-md transition-colors capitalize ${gran === g ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {range === 'custom' && (

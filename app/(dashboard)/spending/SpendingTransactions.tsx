@@ -318,6 +318,7 @@ function AccountDropdown({
 import TransactionDetail, { type FullTransaction } from './TransactionDetail';
 import TransactionRow from './TransactionRow';
 import type { Category } from './CategoryManager';
+import { markReimbursable } from './actions';
 
 interface Transaction extends FullTransaction {
   account_id: string;
@@ -406,6 +407,14 @@ export default function SpendingTransactions({
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, Category>>({});
   const [payeeOverrides, setPayeeOverrides] = useState<Record<string, string>>({});
   const [transferOverrides, setTransferOverrides] = useState<Record<string, boolean>>({});
+  const [reimbursableOverrides, setReimbursableOverrides] = useState<Record<string, boolean>>({});
+
+  // Bulk select
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [tripStart, setTripStart] = useState('');
+  const [tripEnd, setTripEnd] = useState('');
+  const [markingReimbursable, setMarkingReimbursable] = useState(false);
 
   // Detail panel
   const [detailTxId, setDetailTxId] = useState<string | null>(null);
@@ -416,6 +425,77 @@ export default function SpendingTransactions({
 
   function getEffectivePayee(tx: Transaction): string {
     return payeeOverrides[tx.id] ?? tx.payee ?? tx.description ?? 'Unknown';
+  }
+
+  function getEffectiveReimbursable(tx: Transaction): boolean {
+    return reimbursableOverrides[tx.id] ?? tx.is_reimbursable;
+  }
+
+  function enterSelectMode() {
+    setSelectMode(true);
+    setSelectedIds(new Set());
+    setTripStart('');
+    setTripEnd('');
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setTripStart('');
+    setTripEnd('');
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((tx) => tx.id)));
+    }
+  }
+
+  function applyTripRange() {
+    if (!tripStart || !tripEnd) return;
+    const ids = new Set(
+      filtered
+        .filter((tx) => {
+          const d = tx.posted_at.slice(0, 10);
+          return d >= tripStart && d <= tripEnd;
+        })
+        .map((tx) => tx.id),
+    );
+    setSelectedIds(ids);
+  }
+
+  async function handleMarkReimbursable() {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setMarkingReimbursable(true);
+    setReimbursableOverrides((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = true;
+      return next;
+    });
+    try {
+      await markReimbursable(ids, true);
+      exitSelectMode();
+    } catch {
+      setReimbursableOverrides((prev) => {
+        const next = { ...prev };
+        for (const id of ids) delete next[id];
+        return next;
+      });
+    } finally {
+      setMarkingReimbursable(false);
+    }
   }
 
   const chipCategories = useMemo(() => {
@@ -637,13 +717,24 @@ export default function SpendingTransactions({
             )}
             Transfers: <span className={showTransfers ? 'text-ink-700' : 'text-ink-300'}>{showTransfers ? 'ON' : 'OFF'}</span>
           </button>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <DateControl
               dateFilter={dateFilter}
               dateFilterActive={dateFilterActive}
               onChange={handleDateFilterChange}
               onClear={clearDateFilter}
             />
+            {!selectMode && (
+              <button
+                onClick={enterSelectMode}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-white border border-sand-200 text-ink-500 hover:border-sand-300 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Select
+              </button>
+            )}
           </div>
         </div>
 
@@ -825,6 +916,67 @@ export default function SpendingTransactions({
           )}
         </div>
 
+        {/* Bulk select toolbar */}
+        {selectMode && (
+          <div className="rounded-xl border border-ink-200 bg-sand-50 px-4 py-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Select all */}
+              <label className="flex items-center gap-2 text-xs font-medium text-ink-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size > 0 && selectedIds.size === filtered.length}
+                  ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length; }}
+                  onChange={toggleAll}
+                  className="w-4 h-4 rounded accent-ink-800 cursor-pointer"
+                />
+                {selectedIds.size === 0 ? 'Select all' : `${selectedIds.size} selected`}
+              </label>
+
+              {/* Trip date range */}
+              <div className="flex items-center gap-1.5 text-xs text-ink-500">
+                <span className="font-medium">Trip:</span>
+                <input
+                  type="date"
+                  value={tripStart}
+                  onChange={(e) => setTripStart(e.target.value)}
+                  className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400 text-xs"
+                />
+                <span>→</span>
+                <input
+                  type="date"
+                  value={tripEnd}
+                  min={tripStart}
+                  onChange={(e) => setTripEnd(e.target.value)}
+                  className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400 text-xs"
+                />
+                <button
+                  onClick={applyTripRange}
+                  disabled={!tripStart || !tripEnd}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white border border-sand-300 text-ink-600 hover:border-ink-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={handleMarkReimbursable}
+                  disabled={selectedIds.size === 0 || markingReimbursable}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ↩ Mark Reimbursable{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+                </button>
+                <button
+                  onClick={exitSelectMode}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-ink-500 hover:text-ink-700 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Transaction list */}
         <div className="card p-0">
           {filtered.length === 0 ? (
@@ -841,6 +993,10 @@ export default function SpendingTransactions({
                 knownVenmoNames={knownVenmoNames}
                 localCategory={categoryOverrides[tx.id] ?? null}
                 localIsTransfer={transferOverrides[tx.id] ?? tx.is_transfer}
+                isReimbursable={getEffectiveReimbursable(tx)}
+                selectMode={selectMode}
+                selected={selectedIds.has(tx.id)}
+                onToggleSelect={() => toggleOne(tx.id)}
                 onCategoryChange={(txId, cat) => {
                   const source = transactions.find((t) => t.id === txId);
                   setCategoryOverrides((prev) => {

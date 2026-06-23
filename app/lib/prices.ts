@@ -36,8 +36,7 @@ async function fetchYahoo(symbol: string): Promise<Close[]> {
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      // Prices change at most once a day; cache to avoid hammering Yahoo.
-      next: { revalidate: 86_400 },
+      next: { revalidate: 300 }, // 5 min — fresh enough for live market values
     });
     if (!res.ok) return [];
     const json: any = await res.json();
