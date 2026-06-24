@@ -293,7 +293,10 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     year: now.getFullYear(),
     month: now.getMonth(),
   });
-  const [barSelected, setBarSelected] = useState(false);
+  const [txFilter, setTxFilter] = useState<{ filter: DateFilter; active: boolean }>({
+    filter: { mode: 'month', year: now.getFullYear(), month: now.getMonth() },
+    active: false,
+  });
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
 
@@ -626,7 +629,16 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       <>
 
       {/* Spending over time */}
-      <SpendingProgress data={dailySpending} />
+      <SpendingProgress
+        data={dailySpending}
+        onPeriodSelect={(range) => {
+          if (!range) {
+            setTxFilter((prev) => ({ ...prev, active: false }));
+          } else {
+            setTxFilter({ filter: { mode: 'custom', start: range.start, end: range.end }, active: true });
+          }
+        }}
+      />
 
       {/* Spending + savings rate combined card */}
       <SavingsRateModule
@@ -652,12 +664,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             ? `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`
             : null;
           if (currentSelected === monthKey) {
-            setBarSelected(false);
+            setTxFilter((prev) => ({ ...prev, active: false }));
             setDateFilter({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
           } else {
-            setBarSelected(true);
             const [year, month] = monthKey.split('-').map(Number);
-            setDateFilter({ mode: 'month', year, month: month - 1 });
+            const filter: DateFilter = { mode: 'month', year, month: month - 1 };
+            setTxFilter({ filter, active: true });
+            setDateFilter(filter);
           }
           setShowCustom(false);
         }}
@@ -897,8 +910,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               accounts={accounts}
               selectedAccount={selectedAccount}
               onAccountChange={setSelectedAccount}
-              externalDateFilter={dateFilter}
-              externalDateFilterActive={barSelected}
+              externalDateFilter={txFilter.filter}
+              externalDateFilterActive={txFilter.active}
             />
           ) : (
             <div className="card text-center py-16">

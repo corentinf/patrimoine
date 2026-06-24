@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { formatCurrency } from '@/app/lib/utils';
@@ -10,7 +10,10 @@ import { usePrivacy } from '@/app/lib/privacy';
 import { PRESETS, isoDate, resolveStart, type RangeKey } from '@/app/lib/investmentRange';
 
 interface DailySpend { date: string; amount: number }
-interface SpendingProgressProps { data: DailySpend[] }
+interface SpendingProgressProps {
+  data: DailySpend[];
+  onPeriodSelect?: (range: { start: string; end: string } | null) => void;
+}
 
 type ViewMode = 'cumulative' | 'interval';
 
@@ -53,11 +56,30 @@ function bucketLabel(key: string, gran: 'day' | 'week' | 'month'): string {
 
 const SPEND = '#B85450';
 
-export default function SpendingProgress({ data }: SpendingProgressProps) {
+function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: string; end: string } {
+  if (gran === 'day') return { start: key, end: key };
+  if (gran === 'month') {
+    const [y, m] = key.split('-').map(Number);
+    const end = new Date(y, m, 0).toISOString().slice(0, 10);
+    return { start: key + '-01', end };
+  }
+  const d = new Date(key + 'T12:00:00');
+  d.setDate(d.getDate() + 6);
+  return { start: key, end: iso(d) };
+}
+
+export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgressProps) {
   const { blurred } = usePrivacy();
   const [range, setRange] = useState<RangeKey>('30d');
   const [mode, setMode] = useState<ViewMode>('cumulative');
   const [gran, setGran] = useState<'day' | 'week' | 'month'>('week');
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedKey(null);
+    onPeriodSelect?.(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, gran, mode]);
 
   const todayIso = iso(new Date());
   const firstDate = data[0]?.date ?? todayIso;
@@ -95,7 +117,7 @@ export default function SpendingProgress({ data }: SpendingProgressProps) {
     }
     return Array.from(byBucket.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([k, v]) => ({ label: bucketLabel(k, gran), value: Math.round(v) }));
+      .map(([k, v]) => ({ label: bucketLabel(k, gran), key: k, value: Math.round(v) }));
   }, [inRange, mode, gran]);
 
   const pill = (active: boolean) =>
@@ -213,12 +235,39 @@ export default function SpendingProgress({ data }: SpendingProgressProps) {
               <Area type="monotone" dataKey="value" name="Spending" stroke={SPEND} strokeWidth={2} fill="url(#spendFill)" dot={false} activeDot={{ r: 4, fill: SPEND }} />
             </AreaChart>
           ) : (
-            <BarChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+            <BarChart
+              data={chartData}
+              margin={{ top: 5, right: 5, bottom: 0, left: -10 }}
+              style={{ cursor: onPeriodSelect ? 'pointer' : 'default' }}
+              onClick={(d: any) => {
+                const key = d?.activePayload?.[0]?.payload?.key;
+                if (!key || !onPeriodSelect) return;
+                if (selectedKey === key) {
+                  setSelectedKey(null);
+                  onPeriodSelect(null);
+                } else {
+                  setSelectedKey(key);
+                  onPeriodSelect(bucketRange(key, gran));
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8F897E' }} axisLine={{ stroke: '#E2D9CA' }} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
               <YAxis axisLine={false} tickLine={false} tick={(props) => <BlurredYTick {...props} blurred={blurred} />} />
               <Tooltip content={<CustomTooltip mode={mode} />} cursor={{ fill: '#F0EBE1', opacity: 0.5 }} />
-              <Bar dataKey="value" name="Spending" fill={SPEND} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="value" name="Spending" radius={[3, 3, 0, 0]}>
+                {chartData.map((entry, i) => {
+                  const isSelected = !!selectedKey && (entry as any).key === selectedKey;
+                  const hasSelection = !!selectedKey;
+                  return (
+                    <Cell
+                      key={i}
+                      fill={SPEND}
+                      fillOpacity={hasSelection ? (isSelected ? 1 : 0.3) : 1}
+                    />
+                  );
+                })}
+              </Bar>
             </BarChart>
           )}
         </ResponsiveContainer>
