@@ -30,6 +30,7 @@ interface Props {
   transactions: RawTransaction[];
   categories: IncomeCategory[];
   dateFilter: DateFilter;
+  onDateFilterChange?: (filter: DateFilter) => void;
 }
 
 function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
@@ -44,7 +45,7 @@ function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
   return txs.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
 }
 
-export default function IncomeView({ transactions, categories, dateFilter }: Props) {
+export default function IncomeView({ transactions, categories, dateFilter, onDateFilterChange }: Props) {
   const now = new Date();
   const [search, setSearch] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -104,12 +105,24 @@ export default function IncomeView({ transactions, categories, dateFilter }: Pro
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     return Object.entries(byMonth)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, total]) => ({
-        month: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      .map(([monthKey, total]) => ({
+        month: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        monthKey,
         total: Math.round(total),
-        isCurrentMonth: month === currentMonthKey,
+        isCurrentMonth: monthKey === currentMonthKey,
       }));
   }, [transactions, now]);
+
+  const selectedMonth = useMemo(() => {
+    if (dateFilter.mode !== 'month') return null;
+    return `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`;
+  }, [dateFilter]);
+
+  function handleBarClick(monthKey: string) {
+    if (!onDateFilterChange) return;
+    const [year, month] = monthKey.split('-').map(Number);
+    onDateFilterChange({ mode: 'month', year, month: month - 1 });
+  }
 
   const visibleTransactions = useMemo(() => {
     let result = filtered;
@@ -197,6 +210,8 @@ export default function IncomeView({ transactions, categories, dateFilter }: Pro
         onCategoryClick={(id) => setSelectedCategoryId((prev) => prev === id ? null : id)}
         barColor="#16A34A"
         barLabel="Monthly income"
+        onBarClick={onDateFilterChange ? handleBarClick : undefined}
+        selectedMonth={selectedMonth}
       />
 
       {/* Transaction list */}

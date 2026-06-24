@@ -18,6 +18,7 @@ interface SpendingChartsProps {
   }>;
   monthlyData: Array<{
     month: string;
+    monthKey?: string;
     total: number;
     isCurrentMonth?: boolean;
   }>;
@@ -26,6 +27,8 @@ interface SpendingChartsProps {
   onCategoryClick?: (id: string) => void;
   barColor?: string;
   barLabel?: string;
+  onBarClick?: (monthKey: string) => void;
+  selectedMonth?: string | null;
 }
 
 function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
@@ -45,6 +48,8 @@ export default function SpendingCharts({
   onCategoryClick,
   barColor = '#B85450',
   barLabel = 'Monthly spending',
+  onBarClick,
+  selectedMonth,
 }: SpendingChartsProps) {
   const { blurred } = usePrivacy();
   // Take top 8 categories for pie chart, group rest as "Other"
@@ -88,7 +93,15 @@ export default function SpendingCharts({
             {barLabel}
           </h4>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={monthlyData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+            <BarChart
+              data={monthlyData}
+              margin={{ top: 0, right: 0, bottom: 0, left: -20 }}
+              style={{ cursor: onBarClick ? 'pointer' : 'default' }}
+              onClick={(chartData: any) => {
+                const monthKey = chartData?.activePayload?.[0]?.payload?.monthKey;
+                if (monthKey && onBarClick) onBarClick(monthKey);
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
               <XAxis
                 dataKey="month"
@@ -103,13 +116,14 @@ export default function SpendingCharts({
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: '#FAF7F2' }} />
               <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                {monthlyData.map((entry, i) => (
-                  <Cell
-                    key={i}
-                    fill={barColor}
-                    fillOpacity={entry.isCurrentMonth ? 0.4 : 1}
-                  />
-                ))}
+                {monthlyData.map((entry, i) => {
+                  const isSelected = !!selectedMonth && entry.monthKey === selectedMonth;
+                  const hasSelection = !!selectedMonth;
+                  const fillOpacity = hasSelection
+                    ? (isSelected ? 1 : 0.3)
+                    : (entry.isCurrentMonth ? 0.4 : 1);
+                  return <Cell key={i} fill={barColor} fillOpacity={fillOpacity} />;
+                })}
               </Bar>
             </BarChart>
           </ResponsiveContainer>

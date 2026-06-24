@@ -45,7 +45,7 @@ export default function IncomePageClient({
         <p className="text-sm text-ink-400">Where your money comes from</p>
         <DateNav filter={dateFilter} onChange={setDateFilter} />
       </div>
-      <IncomeView transactions={transactions} categories={categories} dateFilter={dateFilter} />
+      <IncomeView transactions={transactions} categories={categories} dateFilter={dateFilter} onDateFilterChange={setDateFilter} />
     </div>
   );
 }
