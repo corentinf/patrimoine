@@ -293,6 +293,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     year: now.getFullYear(),
     month: now.getMonth(),
   });
+  const [barSelected, setBarSelected] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
 
@@ -651,8 +652,10 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             ? `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`
             : null;
           if (currentSelected === monthKey) {
+            setBarSelected(false);
             setDateFilter({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
           } else {
+            setBarSelected(true);
             const [year, month] = monthKey.split('-').map(Number);
             setDateFilter({ mode: 'month', year, month: month - 1 });
           }
@@ -895,6 +898,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               selectedAccount={selectedAccount}
               onAccountChange={setSelectedAccount}
               externalDateFilter={dateFilter}
+              externalDateFilterActive={barSelected}
             />
           ) : (
             <div className="card text-center py-16">
