@@ -445,10 +445,11 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
     return Object.entries(byMonth)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, total]) => ({
-        month: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      .map(([monthKey, total]) => ({
+        month: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        monthKey,
         total: Math.round(total),
-        isCurrentMonth: month === currentMonthKey,
+        isCurrentMonth: monthKey === currentMonthKey,
       }));
   }, [monthlyRaw, selectedAccount, transactions, now]);
 
@@ -645,6 +646,16 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           setSelectedCategoryKey((prev) => prev === id ? null : id);
           setActiveTab('transactions');
         }}
+        onBarClick={(monthKey) => {
+          const [year, month] = monthKey.split('-').map(Number);
+          setDateFilter({ mode: 'month', year, month: month - 1 });
+          setShowCustom(false);
+        }}
+        selectedMonth={
+          dateFilter.mode === 'month'
+            ? `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`
+            : null
+        }
       />
 
       {/* Section tabs */}
