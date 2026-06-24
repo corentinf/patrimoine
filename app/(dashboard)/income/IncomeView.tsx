@@ -120,8 +120,12 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
 
   function handleBarClick(monthKey: string) {
     if (!onDateFilterChange) return;
-    const [year, month] = monthKey.split('-').map(Number);
-    onDateFilterChange({ mode: 'month', year, month: month - 1 });
+    if (selectedMonth === monthKey) {
+      onDateFilterChange({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
+    } else {
+      const [year, month] = monthKey.split('-').map(Number);
+      onDateFilterChange({ mode: 'month', year, month: month - 1 });
+    }
   }
 
   const visibleTransactions = useMemo(() => {

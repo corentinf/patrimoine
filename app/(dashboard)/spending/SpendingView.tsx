@@ -647,8 +647,15 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           setActiveTab('transactions');
         }}
         onBarClick={(monthKey) => {
-          const [year, month] = monthKey.split('-').map(Number);
-          setDateFilter({ mode: 'month', year, month: month - 1 });
+          const currentSelected = dateFilter.mode === 'month'
+            ? `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`
+            : null;
+          if (currentSelected === monthKey) {
+            setDateFilter({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
+          } else {
+            const [year, month] = monthKey.split('-').map(Number);
+            setDateFilter({ mode: 'month', year, month: month - 1 });
+          }
           setShowCustom(false);
         }}
         selectedMonth={
