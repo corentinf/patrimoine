@@ -428,33 +428,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return { sortedCategories: sorted, totalSpending: sorted.reduce((s, c) => s + c.total, 0) };
   }, [filteredTransactions, subCatToParent, catMeta]);
 
-  const monthlyChartData = useMemo(() => {
-    const src = selectedAccount
-      ? monthlyRaw.filter((tx) => tx.account_id === selectedAccount)
-      : monthlyRaw;
-    const byMonth: Record<string, number> = {};
-    for (const tx of src) {
-      const month = tx.posted_at.substring(0, 7);
-      byMonth[month] = (byMonth[month] || 0) + Math.abs(Number(tx.amount));
-    }
-
-    // Always include the current month using the full transactions dataset,
-    // which is more up-to-date than the separately-fetched monthlyRaw query.
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const currentMonthTotal = (selectedAccount ? transactions.filter((t) => t.account_id === selectedAccount) : transactions)
-      .filter((t) => t.posted_at.substring(0, 7) === currentMonthKey)
-      .reduce((sum, t) => (isExcludedFromSpending(t) ? sum : sum + Math.abs(Number(t.amount))), 0);
-    if (currentMonthTotal > 0) byMonth[currentMonthKey] = currentMonthTotal;
-
-    return Object.entries(byMonth)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([monthKey, total]) => ({
-        month: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-        monthKey,
-        total: Math.round(total),
-        isCurrentMonth: monthKey === currentMonthKey,
-      }));
-  }, [monthlyRaw, selectedAccount, transactions, now]);
 
   const saveBudget = async (categoryId: string) => {
     const val = parseFloat(budgetDraft);
@@ -656,33 +629,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       {/* Charts — always visible above tabs */}
       <SpendingCharts
         categories={sortedCategories}
-        monthlyData={monthlyChartData}
+        monthlyData={[]}
         totalSpending={totalSpending}
         selectedCategoryKey={selectedCategoryKey}
         onCategoryClick={(id) => {
           setSelectedCategoryKey((prev) => prev === id ? null : id);
           setActiveTab('transactions');
         }}
-        onBarClick={(monthKey) => {
-          const currentSelected = dateFilter.mode === 'month'
-            ? `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`
-            : null;
-          if (currentSelected === monthKey) {
-            setTxFilter((prev) => ({ ...prev, active: false }));
-            setDateFilter({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
-          } else {
-            const [year, month] = monthKey.split('-').map(Number);
-            const filter: DateFilter = { mode: 'month', year, month: month - 1 };
-            setTxFilter({ filter, active: true });
-            setDateFilter(filter);
-          }
-          setShowCustom(false);
-        }}
-        selectedMonth={
-          dateFilter.mode === 'month'
-            ? `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`
-            : null
-        }
       />
 
       {/* Section tabs */}

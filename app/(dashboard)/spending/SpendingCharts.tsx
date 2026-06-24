@@ -85,7 +85,7 @@ export default function SpendingCharts({
   if (!categories.length && !monthlyData.length) return null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className={monthlyData.length > 0 ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : ''}>
       {/* Monthly spending bar chart */}
       {monthlyData.length > 0 && (
         <div className="card">
