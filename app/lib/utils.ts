@@ -1,4 +1,4 @@
-import { format, subDays, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
+import { format, parseISO, subDays, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
 
 /**
  * Format a number as USD currency.
@@ -28,14 +28,18 @@ export function formatCurrencyPrecise(amount: number): string {
  * Format a date for display.
  */
 export function formatDate(date: Date | string): string {
-  return format(new Date(date), 'MMM d, yyyy');
+  // Slice to date-only before parsing so timezone offsets in the string don't
+  // shift the calendar date (e.g. "2026-06-19T00:30:00+02:00" → Jun 19, not Jun 18).
+  const d = typeof date === 'string' ? parseISO(date.slice(0, 10)) : date;
+  return format(d, 'MMM d, yyyy');
 }
 
 /**
  * Format a short date.
  */
 export function formatShortDate(date: Date | string): string {
-  return format(new Date(date), 'MMM d');
+  const d = typeof date === 'string' ? parseISO(date.slice(0, 10)) : date;
+  return format(d, 'MMM d');
 }
 
 /**

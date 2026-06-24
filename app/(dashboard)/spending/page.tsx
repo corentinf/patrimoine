@@ -88,7 +88,7 @@ async function getDailySpending(): Promise<{ date: string; amount: number }[]> {
 
   const byDay = new Map<string, number>();
   for (const t of data ?? []) {
-    const day = new Date(t.posted_at).toISOString().slice(0, 10);
+    const day = t.posted_at.slice(0, 10);
     byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(Number(t.amount ?? 0)));
   }
   return Array.from(byDay.entries())
