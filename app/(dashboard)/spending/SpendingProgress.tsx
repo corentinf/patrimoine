@@ -115,6 +115,15 @@ export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgr
       const k = bucketKey(d.date, gran);
       byBucket.set(k, (byBucket.get(k) ?? 0) + d.amount);
     }
+    // Fill every bucket in the visible range with 0 so gaps (days with no
+    // spending) still render as bars and don't silently disappear.
+    const cur = new Date(start + 'T12:00:00');
+    const endDate = new Date(end + 'T12:00:00');
+    while (cur <= endDate) {
+      const k = bucketKey(iso(cur), gran);
+      if (!byBucket.has(k)) byBucket.set(k, 0);
+      cur.setDate(cur.getDate() + 1);
+    }
     return Array.from(byBucket.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([k, v]) => ({ label: bucketLabel(k, gran), key: k, value: Math.round(v) }));
