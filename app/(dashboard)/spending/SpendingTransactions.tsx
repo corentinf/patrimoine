@@ -575,9 +575,8 @@ export default function SpendingTransactions({
     if (dateFilterActive) {
       let start: string, end: string;
       if (dateFilter.mode === 'month') {
-        start = new Date(dateFilter.year, dateFilter.month, 1).toISOString();
-        end = new Date(dateFilter.year, dateFilter.month + 1, 0, 23, 59, 59, 999).toISOString();
-        result = result.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
+        const monthStr = `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`;
+        result = result.filter((tx) => tx.posted_at.substring(0, 7) === monthStr);
       } else {
         // Compare date portions only — avoids timezone/format string mismatches
         // (matches how the chart groups daily spending data)

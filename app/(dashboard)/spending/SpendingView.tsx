@@ -53,21 +53,15 @@ export type DateFilter =
   | { mode: 'month'; year: number; month: number }
   | { mode: 'custom'; start: string; end: string };
 
-function getMonthBounds(year: number, month: number) {
-  const start = new Date(year, month, 1).toISOString();
-  const end = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
-  return { start, end };
-}
-
 function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
-  let start: string, end: string;
   if (filter.mode === 'month') {
-    ({ start, end } = getMonthBounds(filter.year, filter.month));
-  } else {
-    start = filter.start + 'T00:00:00.000Z';
-    end = filter.end + 'T23:59:59.999Z';
+    const monthStr = `${filter.year}-${String(filter.month + 1).padStart(2, '0')}`;
+    return txs.filter((tx) => tx.posted_at.substring(0, 7) === monthStr);
   }
-  return txs.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
+  return txs.filter((tx) => {
+    const d = tx.posted_at.slice(0, 10);
+    return d >= filter.start && d <= filter.end;
+  });
 }
 
 function formatMonthLabel(year: number, month: number) {
@@ -345,10 +339,17 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     );
   }, [transactions]);
 
+  // When a bar/period is selected (SpendingProgress or monthly bar), use that as the
+  // display filter for the pie chart, category rows, and savings stats.
+  const viewFilter = useMemo<DateFilter>(
+    () => (txFilter.active ? txFilter.filter : dateFilter),
+    [txFilter, dateFilter],
+  );
+
   const dateFiltered = useMemo(() => {
     setSelectedCategoryKey(null);
-    return applyDateFilter(transactions, dateFilter);
-  }, [transactions, dateFilter]);
+    return applyDateFilter(transactions, viewFilter);
+  }, [transactions, viewFilter]);
 
   const filteredTransactions = useMemo(() => {
     if (!selectedAccount) return dateFiltered;
@@ -383,10 +384,10 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   }, [allAccountFiltered, selectedCategoryKey, childIdsByParent]);
 
   const prevFiltered = useMemo(() => {
-    const prev = applyDateFilter(transactions, getPrevPeriodFilter(dateFilter));
+    const prev = applyDateFilter(transactions, getPrevPeriodFilter(viewFilter));
     if (!selectedAccount) return prev;
     return prev.filter((tx) => tx.account_id === selectedAccount);
-  }, [transactions, dateFilter, selectedAccount]);
+  }, [transactions, viewFilter, selectedAccount]);
 
   const categoryRows = useMemo(() =>
     buildCategoryRows(
@@ -403,12 +404,12 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   [prevFiltered]);
 
   const periodDays = useMemo(() => {
-    if (dateFilter.mode === 'month') {
-      return new Date(dateFilter.year, dateFilter.month + 1, 0).getDate();
+    if (viewFilter.mode === 'month') {
+      return new Date(viewFilter.year, viewFilter.month + 1, 0).getDate();
     }
-    const ms = new Date(dateFilter.end).getTime() - new Date(dateFilter.start).getTime();
+    const ms = new Date(viewFilter.end).getTime() - new Date(viewFilter.start).getTime();
     return Math.max(1, Math.round(ms / 86_400_000) + 1);
-  }, [dateFilter]);
+  }, [viewFilter]);
 
   const { sortedCategories, totalSpending } = useMemo(() => {
     const rolled = sumByCategory(filteredTransactions, subCatToParent, catMeta);
@@ -440,10 +441,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     // Always include the current month using the full transactions dataset,
     // which is more up-to-date than the separately-fetched monthlyRaw query.
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
     const currentMonthTotal = (selectedAccount ? transactions.filter((t) => t.account_id === selectedAccount) : transactions)
-      .filter((t) => t.posted_at >= currentMonthStart && t.posted_at <= currentMonthEnd)
+      .filter((t) => t.posted_at.substring(0, 7) === currentMonthKey)
       .reduce((sum, t) => (isExcludedFromSpending(t) ? sum : sum + Math.abs(Number(t.amount))), 0);
     if (currentMonthTotal > 0) byMonth[currentMonthKey] = currentMonthTotal;
 
@@ -508,10 +507,15 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     const dayOfMonth = now.getDate();
     const daysInMonth = new Date(dateFilter.year, dateFilter.month + 1, 0).getDate();
     if (dayOfMonth >= daysInMonth - 1) return null;
+    const monthStr = `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`;
+    const currentMonthTxs = (selectedAccount
+      ? transactions.filter((tx) => tx.account_id === selectedAccount)
+      : transactions
+    ).filter((tx) => tx.posted_at.substring(0, 7) === monthStr);
     const LARGE_THRESHOLD = 500;
     let recurringSpend = 0;
     let largeSpend = 0;
-    for (const tx of filteredTransactions) {
+    for (const tx of currentMonthTxs) {
       if (isExcludedFromSpending(tx)) continue;
       const amount = Math.abs(Number(tx.amount));
       if (amount >= LARGE_THRESHOLD) largeSpend += amount;
@@ -519,7 +523,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     }
     const paced = Math.round((recurringSpend / dayOfMonth) * daysInMonth);
     return { paced, largeTotal: Math.round(largeSpend) };
-  }, [dateFilter, filteredTransactions, now]);
+  }, [dateFilter, transactions, selectedAccount, now]);
 
   const goMonth = (delta: number) => {
     if (dateFilter.mode !== 'month') return;

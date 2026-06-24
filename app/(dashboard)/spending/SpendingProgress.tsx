@@ -147,48 +147,47 @@ export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgr
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map((p) => (
-            <button key={p.key} onClick={() => setRange(p.key)} className={pill(range === p.key)}>
-              {p.label}
-            </button>
-          ))}
-          <button onClick={() => setRange('custom')} className={pill(range === 'custom')}>
-            Custom
-          </button>
-        </div>
-      </div>
-
-      {/* View toggle + granularity */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
-          <button
-            onClick={() => setMode('cumulative')}
-            className={`px-3 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-          >
-            Cumulative
-          </button>
-          <button
-            onClick={() => setMode('interval')}
-            className={`px-3 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-          >
-            Per period
-          </button>
-        </div>
-
-        {mode === 'interval' && (
-          <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
-            {(['day', 'week', 'month'] as const).map((g) => (
-              <button
-                key={g}
-                onClick={() => setGran(g)}
-                className={`px-3 py-1 rounded-md transition-colors capitalize ${gran === g ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-              >
-                {g}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap gap-1.5 justify-end">
+            {PRESETS.map((p) => (
+              <button key={p.key} onClick={() => setRange(p.key)} className={pill(range === p.key)}>
+                {p.label}
               </button>
             ))}
+            <button onClick={() => setRange('custom')} className={pill(range === 'custom')}>
+              Custom
+            </button>
           </div>
-        )}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
+              <button
+                onClick={() => setMode('cumulative')}
+                className={`px-3 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
+              >
+                Cumulative
+              </button>
+              <button
+                onClick={() => setMode('interval')}
+                className={`px-3 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
+              >
+                Per period
+              </button>
+            </div>
+            {mode === 'interval' && (
+              <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
+                {(['day', 'week', 'month'] as const).map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setGran(g)}
+                    className={`px-3 py-1 rounded-md transition-colors capitalize ${gran === g ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {range === 'custom' && (
