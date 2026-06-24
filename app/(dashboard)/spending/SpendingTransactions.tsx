@@ -577,11 +577,15 @@ export default function SpendingTransactions({
       if (dateFilter.mode === 'month') {
         start = new Date(dateFilter.year, dateFilter.month, 1).toISOString();
         end = new Date(dateFilter.year, dateFilter.month + 1, 0, 23, 59, 59, 999).toISOString();
+        result = result.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
       } else {
-        start = dateFilter.start + 'T00:00:00.000Z';
-        end = dateFilter.end + 'T23:59:59.999Z';
+        // Compare date portions only — avoids timezone/format string mismatches
+        // (matches how the chart groups daily spending data)
+        result = result.filter((tx) => {
+          const d = tx.posted_at.slice(0, 10);
+          return d >= dateFilter.start && d <= dateFilter.end;
+        });
       }
-      result = result.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
     }
 
     if (filterCategories.length > 0) {
