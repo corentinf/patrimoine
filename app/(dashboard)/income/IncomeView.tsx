@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrency, formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
 import SpendingCharts from '../spending/SpendingCharts';
 import type { DateFilter } from '../spending/SpendingView';
@@ -51,6 +51,10 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'category'>('date');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [tableFilterActive, setTableFilterActive] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(50);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   const filtered = useMemo(() => applyDateFilter(transactions, dateFilter), [transactions, dateFilter]);
 
@@ -121,15 +125,41 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
   function handleBarClick(monthKey: string) {
     if (!onDateFilterChange) return;
     if (selectedMonth === monthKey) {
+      setTableFilterActive(false);
       onDateFilterChange({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
     } else {
+      setTableFilterActive(true);
       const [year, month] = monthKey.split('-').map(Number);
       onDateFilterChange({ mode: 'month', year, month: month - 1 });
     }
   }
 
+  const tableBase = useMemo(
+    () => (tableFilterActive ? filtered : transactions),
+    [tableFilterActive, filtered, transactions],
+  );
+
+  useEffect(() => { setVisibleCount(50); }, [tableBase, selectedCategoryId, search]);
+
+  useEffect(() => {
+    const handler = () => setShowScrollTop(window.scrollY > 500);
+    window.addEventListener('scroll', handler, { passive: true });
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisibleCount((n) => n + 50); },
+      { rootMargin: '300px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   const visibleTransactions = useMemo(() => {
-    let result = filtered;
+    let result = tableBase;
     if (selectedCategoryId) result = result.filter((tx) => tx.category?.id === selectedCategoryId);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -146,7 +176,7 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
       else if (sortBy === 'category') cmp = (a.category?.name ?? '').localeCompare(b.category?.name ?? '');
       return sortDir === 'desc' ? -cmp : cmp;
     });
-  }, [filtered, selectedCategoryId, search, sortBy, sortDir]);
+  }, [tableBase, selectedCategoryId, search, sortBy, sortDir]);
 
   function toggleSort(field: typeof sortBy) {
     if (sortBy === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -219,36 +249,38 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
       />
 
       {/* Transaction list */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-ink-400 shrink-0">Sort by</span>
-          {(['date', 'amount', 'category'] as const).map((field) => (
-            <button
-              key={field}
-              onClick={() => toggleSort(field)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                sortBy === field ? 'bg-ink-800 text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-              }`}
-            >
-              {field.charAt(0).toUpperCase() + field.slice(1)}
-              {sortBy === field && (
-                <svg className={`w-3 h-3 transition-transform ${sortDir === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              )}
-            </button>
-          ))}
-          <div className="relative ml-auto">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-300 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1 bg-white border border-sand-200 rounded-lg text-xs text-ink-700 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-sand-300 w-40"
-            />
+      <div>
+        <div className="sticky top-14 z-10 bg-sand-50 pb-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-ink-400 shrink-0">Sort by</span>
+            {(['date', 'amount', 'category'] as const).map((field) => (
+              <button
+                key={field}
+                onClick={() => toggleSort(field)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  sortBy === field ? 'bg-ink-800 text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                }`}
+              >
+                {field.charAt(0).toUpperCase() + field.slice(1)}
+                {sortBy === field && (
+                  <svg className={`w-3 h-3 transition-transform ${sortDir === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </button>
+            ))}
+            <div className="relative ml-auto">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-300 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 pr-3 py-1 bg-white border border-sand-200 rounded-lg text-xs text-ink-700 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-sand-300 w-40"
+              />
+            </div>
           </div>
         </div>
 
@@ -256,7 +288,7 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
           {visibleTransactions.length === 0 ? (
             <div className="py-12 text-center text-ink-400 text-sm">No income transactions for this period.</div>
           ) : (
-            visibleTransactions.map((tx) => {
+            visibleTransactions.slice(0, visibleCount).map((tx) => {
               const displayName = tx.payee ?? tx.description ?? 'Unknown';
               const catColor = tx.category?.color ?? '#D1D5DB';
               const catName = tx.category?.name ?? 'Uncategorized';
@@ -287,13 +319,27 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
           )}
         </div>
 
+        <div ref={sentinelRef} className="h-1" />
+
         {visibleTransactions.length > 0 && (
-          <p className="text-xs text-ink-400 text-center">
-            {visibleTransactions.length} transaction{visibleTransactions.length !== 1 ? 's' : ''}
-            {(search || selectedCategoryId) && ` · filtered from ${filtered.length}`}
+          <p className="text-xs text-ink-400 text-center mt-3">
+            {Math.min(visibleCount, visibleTransactions.length)} of {visibleTransactions.length} transaction{visibleTransactions.length !== 1 ? 's' : ''}
+            {(search || selectedCategoryId || tableFilterActive) && ` · filtered from ${transactions.length}`}
           </p>
         )}
       </div>
+
+      {showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-8 right-8 z-30 w-10 h-10 rounded-full bg-ink-800 text-white shadow-lg flex items-center justify-center hover:bg-ink-700 transition-colors"
+          aria-label="Scroll to top"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

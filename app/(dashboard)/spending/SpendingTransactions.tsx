@@ -419,6 +419,10 @@ export default function SpendingTransactions({
   // Detail panel
   const [detailTxId, setDetailTxId] = useState<string | null>(null);
 
+  const [visibleCount, setVisibleCount] = useState(50);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
   function getEffectiveCategory(tx: Transaction): Transaction['category'] {
     return (categoryOverrides[tx.id] as any) ?? tx.category;
   }
@@ -618,6 +622,25 @@ export default function SpendingTransactions({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions, dateFilter, dateFilterActive, filterCategories, search, sortBy, sortDir, categoryOverrides, payeeOverrides, transferOverrides, showTransfers]);
 
+  useEffect(() => { setVisibleCount(50); }, [filtered]);
+
+  useEffect(() => {
+    const handler = () => setShowScrollTop(window.scrollY > 500);
+    window.addEventListener('scroll', handler, { passive: true });
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisibleCount((n) => n + 50); },
+      { rootMargin: '300px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   function toggleSort(field: SortField) {
     if (sortBy === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -637,7 +660,8 @@ export default function SpendingTransactions({
 
   return (
     <>
-      <div className="space-y-3">
+      <div>
+        <div className="sticky top-14 z-10 bg-sand-50 space-y-3 pb-3">
         {/* Search */}
         <div className="relative">
           <svg
@@ -976,6 +1000,7 @@ export default function SpendingTransactions({
             </div>
           </div>
         )}
+        </div>{/* /sticky controls */}
 
         {/* Transaction list */}
         <div className="card p-0">
@@ -984,7 +1009,7 @@ export default function SpendingTransactions({
               No transactions match your search.
             </div>
           ) : (
-            filtered.map((tx) => (
+            filtered.slice(0, visibleCount).map((tx) => (
               <TransactionRow
                 key={tx.id}
                 tx={{ ...tx, payee: getEffectivePayee(tx) }}
@@ -1019,13 +1044,27 @@ export default function SpendingTransactions({
           )}
         </div>
 
+        <div ref={sentinelRef} className="h-1" />
+
         {filtered.length > 0 && (
-          <p className="text-xs text-ink-400 text-center">
-            {filtered.length} transaction{filtered.length !== 1 ? 's' : ''}
+          <p className="text-xs text-ink-400 text-center mt-3">
+            {Math.min(visibleCount, filtered.length)} of {filtered.length} transaction{filtered.length !== 1 ? 's' : ''}
             {hasFilters && ` · filtered from ${transactions.length}`}
           </p>
         )}
       </div>
+
+      {showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-8 right-8 z-30 w-10 h-10 rounded-full bg-ink-800 text-white shadow-lg flex items-center justify-center hover:bg-ink-700 transition-colors"
+          aria-label="Scroll to top"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        </button>
+      )}
 
       {/* Transaction detail panel */}
       {detailTx && (
