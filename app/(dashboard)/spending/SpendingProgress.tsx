@@ -71,8 +71,8 @@ function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: stri
 export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgressProps) {
   const { blurred } = usePrivacy();
   const [range, setRange] = useState<RangeKey>('30d');
-  const [mode, setMode] = useState<ViewMode>('cumulative');
-  const [gran, setGran] = useState<'day' | 'week' | 'month'>('week');
+  const [mode, setMode] = useState<ViewMode>('interval');
+  const [gran, setGran] = useState<'day' | 'week' | 'month'>('day');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   useEffect(() => {
