@@ -190,17 +190,15 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
               </button>
             </div>
             {mode === 'interval' && (
-              <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
-                {(['day', 'week', 'month'] as const).map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setGran(g)}
-                    className={`px-3 py-1 rounded-md transition-colors capitalize ${gran === g ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-                  >
-                    {g}
-                  </button>
-                ))}
-              </div>
+              <select
+                value={gran}
+                onChange={(e) => setGran(e.target.value as 'day' | 'week' | 'month')}
+                className="px-3 py-1 rounded-lg bg-sand-100 text-xs font-medium text-ink-700 border-0 focus:outline-none focus:ring-1 focus:ring-sand-400 cursor-pointer capitalize"
+              >
+                <option value="day">Day</option>
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+              </select>
             )}
           </div>
         </div>
