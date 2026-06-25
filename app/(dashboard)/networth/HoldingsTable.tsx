@@ -537,31 +537,35 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
       )}
 
       {/* Performance range selector — scopes the Gain/Loss column to a time window */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400 mr-1">
+      <div className="space-y-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400">
           Performance
         </span>
-        {PRESETS.map((p) => (
+        <div className="overflow-x-auto scrollbar-none pb-0.5">
+          <div className="flex gap-1.5 w-max md:w-auto md:flex-wrap items-center">
+          {PRESETS.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => setRange(p.key)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                range === p.key ? 'bg-ink-800 text-white' : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
           <button
-            key={p.key}
-            onClick={() => setRange(p.key)}
+            onClick={() => setRange('custom')}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-              range === p.key ? 'bg-ink-800 text-white' : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
+              range === 'custom' ? 'bg-ink-800 text-white' : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
             }`}
           >
-            {p.label}
+            Custom
           </button>
-        ))}
-        <button
-          onClick={() => setRange('custom')}
-          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-            range === 'custom' ? 'bg-ink-800 text-white' : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
-          }`}
-        >
-          Custom
-        </button>
+          </div>
+        </div>
         {range === 'custom' && priceDates.length > 0 && (
-          <span className="flex items-center gap-1.5 text-xs text-ink-500 ml-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
             <input
               type="date"
               value={customFrom}
@@ -579,7 +583,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
               onChange={(e) => setCustomTo(e.target.value)}
               className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400"
             />
-          </span>
+          </div>
         )}
       </div>
 

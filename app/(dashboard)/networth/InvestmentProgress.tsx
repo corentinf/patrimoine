@@ -161,7 +161,7 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
 
   return (
     <div className="card space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
             Progress over time
@@ -186,7 +186,8 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+        <div className="overflow-x-auto scrollbar-none pb-0.5">
+          <div className="flex gap-1.5 w-max md:w-auto md:flex-wrap">
           {PRESETS.map((p) => (
             <button key={p.key} onClick={() => setRange(p.key)} className={pill(range === p.key)}>
               {p.label}
@@ -195,6 +196,7 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
           <button onClick={() => setRange('custom')} className={pill(range === 'custom')}>
             Custom
           </button>
+          </div>
         </div>
       </div>
 

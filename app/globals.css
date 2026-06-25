@@ -59,6 +59,15 @@
   }
 }
 
+/* Hide scrollbar while keeping scroll functionality */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Privacy / blur mode */
 .privacy-mode .font-mono,
 .privacy-mode .stat-value,

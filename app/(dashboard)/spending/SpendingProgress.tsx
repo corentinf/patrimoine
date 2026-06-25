@@ -141,7 +141,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
 
   return (
     <div className="card space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
             {label}
@@ -159,18 +159,22 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
           </p>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex flex-wrap gap-1.5 justify-end">
-            {PRESETS.map((p) => (
-              <button key={p.key} onClick={() => setRange(p.key)} className={pill(range === p.key)}>
-                {p.label}
+        <div className="w-full md:w-auto flex flex-col items-start md:items-end gap-2">
+          {/* Presets: single scrollable row on mobile, wrapping on desktop */}
+          <div className="overflow-x-auto scrollbar-none w-full md:w-auto pb-0.5">
+            <div className="flex gap-1.5 w-max md:w-auto md:flex-wrap md:justify-end">
+              {PRESETS.map((p) => (
+                <button key={p.key} onClick={() => setRange(p.key)} className={pill(range === p.key)}>
+                  {p.label}
+                </button>
+              ))}
+              <button onClick={() => setRange('custom')} className={pill(range === 'custom')}>
+                Custom
               </button>
-            ))}
-            <button onClick={() => setRange('custom')} className={pill(range === 'custom')}>
-              Custom
-            </button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Toggles: always one row */}
+          <div className="flex items-center gap-2">
             <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
               <button
                 onClick={() => setMode('cumulative')}
