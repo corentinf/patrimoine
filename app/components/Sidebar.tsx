@@ -2,9 +2,6 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { type SidebarAccount } from './AccountsPanel';
-
-export type { SidebarAccount };
 
 const navItems = [
   { href: '/home', label: 'Home' },
@@ -22,7 +19,6 @@ function shortNum(n: number): string {
 }
 
 interface SidebarProps {
-  accounts: SidebarAccount[];
   netWorth?: number;
   spending?: number;
   income?: number;
@@ -41,7 +37,10 @@ export default function Sidebar({ netWorth = 0, spending = 0, income = 0, invest
   };
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-sand-200 z-40 flex">
+    <nav
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-sand-200 z-50 flex"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       {navItems.map((item) => {
         const isActive = pathname.startsWith(item.href);
         const stat = tabStats[item.href];
@@ -49,23 +48,19 @@ export default function Sidebar({ netWorth = 0, spending = 0, income = 0, invest
           <Link
             key={item.href}
             href={item.href}
-            className={`flex-1 flex flex-col items-center gap-0.5 pt-2.5 pb-4 transition-colors ${
+            className={`flex-1 flex flex-col items-center gap-0.5 pt-2.5 pb-3 transition-colors ${
               isActive ? 'text-ink-800' : 'text-ink-400'
             }`}
           >
             <span className={`text-xs font-semibold leading-tight ${isActive ? 'text-ink-800' : 'text-ink-400'}`}>
               {item.label}
             </span>
-            {stat !== null ? (
-              <span
-                className={`text-[10px] font-mono ${isActive ? 'text-ink-500' : 'text-ink-300'}`}
-                data-sensitive
-              >
-                {shortNum(stat)}
-              </span>
-            ) : (
-              <span className="text-[10px] text-transparent select-none">—</span>
-            )}
+            <span
+              className={`text-[10px] font-mono ${isActive ? 'text-ink-500' : 'text-ink-300'}`}
+              data-sensitive
+            >
+              {stat !== null ? shortNum(stat) : ''}
+            </span>
           </Link>
         );
       })}

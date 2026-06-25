@@ -30,7 +30,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="fixed bottom-[4.5rem] right-4 md:bottom-6 md:right-6 z-40 flex flex-col items-end gap-3">
+    <div className="fixed bottom-[4.5rem] right-4 md:bottom-6 md:right-6 z-30 md:z-40 flex flex-col items-end gap-3">
       {open && (
         <div
           className="fixed sm:static bottom-[4.5rem] left-0 right-0 sm:bottom-auto sm:left-auto sm:right-auto w-full sm:w-96 flex flex-col bg-white sm:rounded-2xl shadow-2xl border-t sm:border border-sand-200 overflow-hidden z-40"

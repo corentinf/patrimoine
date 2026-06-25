@@ -59,14 +59,13 @@ export default async function DashboardLayout({
           </div>
         </div>
 
+        <Chat />
         <Sidebar
-          accounts={accounts}
           netWorth={netWorth}
           spending={monthStats.spending}
           income={monthStats.income}
           investmentTotal={investmentTotal}
         />
-        <Chat />
       </div>
     </PrivacyProvider>
   );
