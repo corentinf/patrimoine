@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -58,6 +58,50 @@ function bucketLabel(key: string, gran: 'day' | 'week' | 'month'): string {
 }
 
 const DEFAULT_COLOR = '#B85450';
+
+const GRAN_LABELS: Record<'day' | 'week' | 'month', string> = { day: 'Day', week: 'Week', month: 'Month' };
+
+function GranDropdown({ value, onChange }: { value: 'day' | 'week' | 'month'; onChange: (v: 'day' | 'week' | 'month') => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sand-100 text-xs font-medium text-ink-700 hover:bg-sand-200 transition-colors"
+      >
+        {GRAN_LABELS[value]}
+        <svg className="w-3 h-3 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 bg-white border border-sand-200 rounded-lg shadow-md py-0.5 z-20 min-w-[80px]">
+          {(['day', 'week', 'month'] as const).map((g) => (
+            <button
+              key={g}
+              onClick={() => { onChange(g); setOpen(false); }}
+              className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors ${
+                g === value ? 'text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50 hover:text-ink-700'
+              }`}
+            >
+              {GRAN_LABELS[g]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: string; end: string } {
   if (gran === 'day') return { start: key, end: key };
@@ -190,15 +234,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
               </button>
             </div>
             {mode === 'interval' && (
-              <select
-                value={gran}
-                onChange={(e) => setGran(e.target.value as 'day' | 'week' | 'month')}
-                className="px-3 py-1 rounded-lg bg-sand-100 text-xs font-medium text-ink-700 border-0 focus:outline-none focus:ring-1 focus:ring-sand-400 cursor-pointer capitalize"
-              >
-                <option value="day">Day</option>
-                <option value="week">Week</option>
-                <option value="month">Month</option>
-              </select>
+              <GranDropdown value={gran} onChange={setGran} />
             )}
           </div>
         </div>
