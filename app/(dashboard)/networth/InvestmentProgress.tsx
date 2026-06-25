@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
@@ -22,6 +22,7 @@ interface AccountSeries {
 interface InvestmentProgressProps {
   dates: string[];
   accounts: AccountSeries[];
+  onRangeChange?: (key: RangeKey) => void;
 }
 
 interface Point { date: string; value: number }
@@ -54,9 +55,14 @@ function BlurredYTick({ x, y, payload, blurred }: any) {
   );
 }
 
-export default function InvestmentProgress({ dates, accounts }: InvestmentProgressProps) {
+export default function InvestmentProgress({ dates, accounts, onRangeChange }: InvestmentProgressProps) {
   const { blurred } = usePrivacy();
   const [range, setRange] = useState<RangeKey>('30d');
+
+  useEffect(() => {
+    if (range !== 'custom') onRangeChange?.(range);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(accounts.map((a) => a.id)));
 
   const selectedAccounts = accounts.filter((a) => selected.has(a.id));

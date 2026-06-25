@@ -238,20 +238,22 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
       </div>
 
       {/* Income over time + By Category side by side */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-6 items-start">
         <SpendingProgress
           data={dailyIncome}
           label="Income over time"
           color="#16A34A"
           valueLabel="earned"
         />
-        <SpendingCharts
-          categories={categoryRows.map((c) => ({ id: c.id, name: c.name, color: c.color, icon: c.icon, total: c.total, count: c.count }))}
-          monthlyData={[]}
-          totalSpending={totalIncome}
-          selectedCategoryKey={selectedCategoryId}
-          onCategoryClick={(id) => setSelectedCategoryId((prev) => prev === id ? null : id)}
-        />
+        <div className="w-72 flex-shrink-0">
+          <SpendingCharts
+            categories={categoryRows.map((c) => ({ id: c.id, name: c.name, color: c.color, icon: c.icon, total: c.total, count: c.count }))}
+            monthlyData={[]}
+            totalSpending={totalIncome}
+            selectedCategoryKey={selectedCategoryId}
+            onCategoryClick={(id) => setSelectedCategoryId((prev) => prev === id ? null : id)}
+          />
+        </div>
       </div>
 
       {/* Transaction list */}

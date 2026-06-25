@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { formatCurrency } from '@/app/lib/utils';
 import {
   PRESETS, resolveStart, idxAtOrBefore, type RangeKey,
@@ -53,6 +53,7 @@ interface HoldingsTableProps {
   totalHoldingsValue: number;
   priceDates: string[];
   priceSeries: Record<string, (number | null)[]>;
+  externalRange?: RangeKey;
 }
 
 function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'center' | 'left' | 'right' }) {
@@ -213,11 +214,15 @@ function NoteCell({ holdingId }: { holdingId: string }) {
   );
 }
 
-export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates, priceSeries }: HoldingsTableProps) {
+export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates, priceSeries, externalRange }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('market_value');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [range, setRange] = useState<RangeKey>('all');
+
+  useEffect(() => {
+    if (externalRange !== undefined) setRange(externalRange);
+  }, [externalRange]);
   const firstDate = priceDates[0] ?? '';
   const lastDate = priceDates[priceDates.length - 1] ?? '';
   const [customFrom, setCustomFrom] = useState(firstDate);

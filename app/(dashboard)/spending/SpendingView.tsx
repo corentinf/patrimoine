@@ -608,7 +608,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       <>
 
       {/* Spending over time + By Category side by side */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-6 items-start">
         <SpendingProgress
           data={dailySpending}
           onPeriodSelect={(range) => {
@@ -619,16 +619,18 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             }
           }}
         />
-        <SpendingCharts
-          categories={sortedCategories}
-          monthlyData={[]}
-          totalSpending={totalSpending}
-          selectedCategoryKey={selectedCategoryKey}
-          onCategoryClick={(id) => {
-            setSelectedCategoryKey((prev) => prev === id ? null : id);
-            setActiveTab('transactions');
-          }}
-        />
+        <div className="w-72 flex-shrink-0">
+          <SpendingCharts
+            categories={sortedCategories}
+            monthlyData={[]}
+            totalSpending={totalSpending}
+            selectedCategoryKey={selectedCategoryKey}
+            onCategoryClick={(id) => {
+              setSelectedCategoryKey((prev) => prev === id ? null : id);
+              setActiveTab('transactions');
+            }}
+          />
+        </div>
       </div>
 
       {/* Spending + savings rate combined card */}

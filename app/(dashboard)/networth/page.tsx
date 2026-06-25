@@ -1,9 +1,8 @@
 import { createServiceClient } from '@/app/lib/supabase';
 import { formatCurrency } from '@/app/lib/utils';
 import { getDailyCloses } from '@/app/lib/prices';
-import HoldingsTable from './HoldingsTable';
 import HoldingsInsights from './HoldingsInsights';
-import InvestmentProgress from './InvestmentProgress';
+import InvestmentClient from './InvestmentClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -190,26 +189,15 @@ export default async function NetWorthPage() {
         </div>
       </div>
 
-      <InvestmentProgress dates={investment.dates} accounts={investment.accounts} />
-
-      {liveHoldings.length > 0 && (
-        <div className="space-y-2">
-          {totalInvestmentValue - totalHoldingsValue > 1 && (
-            <p className="text-xs text-ink-400">
-              Line items below cover{' '}
-              <span data-sensitive>{formatCurrency(totalHoldingsValue)}</span>. The remaining{' '}
-              <span data-sensitive>{formatCurrency(totalInvestmentValue - totalHoldingsValue)}</span>{' '}
-              is in accounts that don’t report individual holdings (e.g. 401k, HSA).
-            </p>
-          )}
-          <HoldingsTable
-            holdings={liveHoldings}
-            totalHoldingsValue={totalHoldingsValue}
-            priceDates={priceSeries.dates}
-            priceSeries={priceSeries.series}
-          />
-        </div>
-      )}
+      <InvestmentClient
+        dates={investment.dates}
+        accounts={investment.accounts}
+        liveHoldings={liveHoldings}
+        totalHoldingsValue={totalHoldingsValue}
+        totalInvestmentValue={totalInvestmentValue}
+        priceDates={priceSeries.dates}
+        priceSeries={priceSeries.series}
+      />
       <HoldingsInsights />
     </div>
   );
