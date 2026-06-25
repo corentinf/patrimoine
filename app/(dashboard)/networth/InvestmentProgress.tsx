@@ -156,28 +156,44 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
 
   return (
     <div className="card space-y-5">
-      <div>
-        <h4 className="text-xs font-semibold text-ink-400 uppercase tracking-wider">
-          Progress over time
-        </h4>
-        <div className="mt-1.5 flex items-baseline gap-3">
-          <span className={`text-2xl font-mono font-medium ${amountColor(change)}`} data-sensitive>
-            {up ? '+' : ''}{formatCurrency(change)}
-          </span>
-          <span className={`text-sm font-mono ${amountColor(change)}`}>
-            {up ? '+' : ''}{pct.toFixed(2)}%
-          </span>
-        </div>
-        <p className="text-xs text-ink-400 mt-0.5">
-          <span data-sensitive>{formatCurrency(startValue)}</span>
-          {' → '}
-          <span data-sensitive>{formatCurrency(endValue)}</span>
-          {costBasis != null && (
-            <span className="ml-2 text-ink-300">
-              · cost basis <span data-sensitive>{formatCurrency(costBasis)}</span>
+      {/* Header: stats left, presets right (desktop) */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h4 className="text-xs font-semibold text-ink-400 uppercase tracking-wider">
+            Progress over time
+          </h4>
+          <div className="mt-1.5 flex items-baseline gap-3">
+            <span className={`text-2xl font-mono font-medium ${amountColor(change)}`} data-sensitive>
+              {up ? '+' : ''}{formatCurrency(change)}
             </span>
-          )}
-        </p>
+            <span className={`text-sm font-mono ${amountColor(change)}`}>
+              {up ? '+' : ''}{pct.toFixed(2)}%
+            </span>
+          </div>
+          <p className="text-xs text-ink-400 mt-0.5">
+            <span data-sensitive>{formatCurrency(startValue)}</span>
+            {' → '}
+            <span data-sensitive>{formatCurrency(endValue)}</span>
+            {costBasis != null && (
+              <span className="ml-2 text-ink-300">
+                · cost basis <span data-sensitive>{formatCurrency(costBasis)}</span>
+              </span>
+            )}
+          </p>
+        </div>
+        {/* Presets: desktop only — top-right above chart */}
+        <div className="hidden md:flex items-center gap-3 flex-shrink-0">
+          {PRESETS.map((p) => (
+            <button key={p.key} onClick={() => setRange(p.key)}
+              className={`text-xs font-medium transition-colors ${range === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
+              {p.label}
+            </button>
+          ))}
+          <button onClick={() => setRange('custom')}
+            className={`text-xs font-medium transition-colors ${range === 'custom' ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
+            Custom
+          </button>
+        </div>
       </div>
 
       {/* Account filter */}
@@ -291,8 +307,8 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
         </div>
       )}
 
-      {/* Time range selector — below chart, full width, text only */}
-      <div className="flex items-center justify-between border-t border-sand-100 pt-3">
+      {/* Time range selector — mobile only, below chart */}
+      <div className="flex md:hidden items-center justify-between border-t border-sand-100 pt-3">
         {PRESETS.map((p) => (
           <button key={p.key} onClick={() => setRange(p.key)}
             className={`text-xs font-medium transition-colors ${range === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>

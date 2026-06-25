@@ -183,7 +183,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
 
   return (
     <div className="card space-y-4">
-      {/* Header: stats left, toggles right */}
+      {/* Header: stats left, controls right */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h4 className="text-xs font-semibold text-ink-400 uppercase tracking-wider">
@@ -201,24 +201,30 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
             {mode === 'cumulative' ? `Cumulative ${valueLabel} over the selected period` : `${valueLabel.charAt(0).toUpperCase() + valueLabel.slice(1)} per period`}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
-            <button
-              onClick={() => setMode('cumulative')}
-              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-            >
-              Total
-            </button>
-            <button
-              onClick={() => setMode('interval')}
-              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-            >
-              Period
-            </button>
+        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+          {/* Presets: desktop only — shown above chart in header */}
+          <div className="hidden md:flex items-center gap-3">
+            {PRESETS.map((p) => (
+              <button key={p.key} onClick={() => setRange(p.key)} className={rangeBtn(range === p.key)}>
+                {p.label}
+              </button>
+            ))}
+            <button onClick={() => setRange('custom')} className={rangeBtn(range === 'custom')}>Custom</button>
           </div>
-          {mode === 'interval' && (
-            <GranDropdown value={gran} onChange={setGran} />
-          )}
+          {/* Mode + gran toggles */}
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
+              <button onClick={() => setMode('cumulative')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}>
+                Total
+              </button>
+              <button onClick={() => setMode('interval')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}>
+                Period
+              </button>
+            </div>
+            {mode === 'interval' && <GranDropdown value={gran} onChange={setGran} />}
+          </div>
         </div>
       </div>
 
@@ -298,8 +304,8 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
         </div>
       )}
 
-      {/* Time range selector — below chart, full width, text only */}
-      <div className="flex items-center justify-between border-t border-sand-100 pt-3">
+      {/* Time range selector — mobile only, below chart */}
+      <div className="flex md:hidden items-center justify-between border-t border-sand-100 pt-3">
         {PRESETS.map((p) => (
           <button key={p.key} onClick={() => setRange(p.key)} className={rangeBtn(range === p.key)}>
             {p.label}
