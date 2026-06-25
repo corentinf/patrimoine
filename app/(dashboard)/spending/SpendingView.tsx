@@ -84,10 +84,9 @@ function getPrevPeriodFilter(filter: DateFilter): DateFilter {
 }
 
 function isExcludedFromSpending(tx: RawTransaction): boolean {
-  // Exclude true inter-account transfers (flagged by Plaid/SimpleFin) and income.
-  // Do NOT exclude based on category name — "Personal Payments" and similar P2P
-  // categories should count as spending even though they look like transfers.
-  return tx.is_transfer || !!tx.category?.is_income;
+  // "Transfer" category = investment/brokerage transfers, credit card payments → excluded.
+  // "Personal Payments" category = Venmo/Zelle P2P → included (not named "Transfer").
+  return tx.is_transfer || !!tx.category?.is_income || tx.category?.name === 'Transfer';
 }
 
 // Rolls sub-categories up to their parent for aggregation.
