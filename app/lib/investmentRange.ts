@@ -7,12 +7,12 @@ import { subDays, startOfYear, format } from 'date-fns';
 export type RangeKey = 'today' | '7d' | '30d' | '3m' | 'year' | 'all' | 'custom';
 
 export const PRESETS: { key: RangeKey; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: '7d', label: 'Last 7 days' },
-  { key: '30d', label: 'Last 30 days' },
-  { key: '3m', label: '3 months' },
-  { key: 'year', label: 'This year' },
-  { key: 'all', label: 'All time' },
+  { key: 'today', label: '1D' },
+  { key: '7d',   label: '1W' },
+  { key: '30d',  label: '1M' },
+  { key: '3m',   label: '3M' },
+  { key: 'year', label: 'YTD' },
+  { key: 'all',  label: 'All' },
 ];
 
 export const isoDate = (d: Date) => format(d, 'yyyy-MM-dd');

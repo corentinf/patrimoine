@@ -143,11 +143,6 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
   const up = change >= 0;
 
-  const pill = (active: boolean) =>
-    `px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-      active ? 'bg-ink-800 text-white' : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
-    }`;
-
   function toggleAccount(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -161,43 +156,28 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
 
   return (
     <div className="card space-y-5">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
-            Progress over time
-          </h4>
-          <div className="mt-2 flex items-baseline gap-3">
-            <span className={`text-2xl font-mono font-medium ${amountColor(change)}`} data-sensitive>
-              {up ? '+' : ''}{formatCurrency(change)}
-            </span>
-            <span className={`text-sm font-mono ${amountColor(change)}`}>
-              {up ? '+' : ''}{pct.toFixed(2)}%
-            </span>
-          </div>
-          <p className="text-xs text-ink-400 mt-1">
-            <span data-sensitive>{formatCurrency(startValue)}</span>
-            {' → '}
-            <span data-sensitive>{formatCurrency(endValue)}</span>
-            {costBasis != null && (
-              <span className="ml-2 text-ink-300">
-                · cost basis <span data-sensitive>{formatCurrency(costBasis)}</span>
-              </span>
-            )}
-          </p>
+      <div>
+        <h4 className="text-xs font-semibold text-ink-400 uppercase tracking-wider">
+          Progress over time
+        </h4>
+        <div className="mt-1.5 flex items-baseline gap-3">
+          <span className={`text-2xl font-mono font-medium ${amountColor(change)}`} data-sensitive>
+            {up ? '+' : ''}{formatCurrency(change)}
+          </span>
+          <span className={`text-sm font-mono ${amountColor(change)}`}>
+            {up ? '+' : ''}{pct.toFixed(2)}%
+          </span>
         </div>
-
-        <div className="overflow-x-auto scrollbar-none pb-0.5">
-          <div className="flex gap-1.5 w-max md:w-auto md:flex-wrap">
-          {PRESETS.map((p) => (
-            <button key={p.key} onClick={() => setRange(p.key)} className={pill(range === p.key)}>
-              {p.label}
-            </button>
-          ))}
-          <button onClick={() => setRange('custom')} className={pill(range === 'custom')}>
-            Custom
-          </button>
-          </div>
-        </div>
+        <p className="text-xs text-ink-400 mt-0.5">
+          <span data-sensitive>{formatCurrency(startValue)}</span>
+          {' → '}
+          <span data-sensitive>{formatCurrency(endValue)}</span>
+          {costBasis != null && (
+            <span className="ml-2 text-ink-300">
+              · cost basis <span data-sensitive>{formatCurrency(costBasis)}</span>
+            </span>
+          )}
+        </p>
       </div>
 
       {/* Account filter */}
@@ -310,6 +290,20 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
           </p>
         </div>
       )}
+
+      {/* Time range selector — below chart, full width, text only */}
+      <div className="flex items-center justify-between border-t border-sand-100 pt-3">
+        {PRESETS.map((p) => (
+          <button key={p.key} onClick={() => setRange(p.key)}
+            className={`text-xs font-medium transition-colors ${range === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
+            {p.label}
+          </button>
+        ))}
+        <button onClick={() => setRange('custom')}
+          className={`text-xs font-medium transition-colors ${range === 'custom' ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
+          Custom
+        </button>
+      </div>
     </div>
   );
 }

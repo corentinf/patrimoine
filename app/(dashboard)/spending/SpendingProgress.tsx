@@ -176,21 +176,20 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
       .map(([k, v]) => ({ label: bucketLabel(k, gran), key: k, value: Math.round(v) }));
   }, [inRange, mode, gran]);
 
-  const pill = (active: boolean) =>
-    `px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-      active ? 'bg-ink-800 text-white' : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
-    }`;
+  const rangeBtn = (active: boolean) =>
+    `text-xs font-medium transition-colors ${active ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`;
 
   const hasData = chartData.length >= 2;
 
   return (
-    <div className="card space-y-5">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+    <div className="card space-y-4">
+      {/* Header: stats left, toggles right */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
+          <h4 className="text-xs font-semibold text-ink-400 uppercase tracking-wider">
             {label}
           </h4>
-          <div className="mt-2 flex items-baseline gap-3">
+          <div className="mt-1.5 flex items-baseline gap-3">
             <span className="text-2xl font-mono font-medium text-ink-800" data-sensitive>
               {formatCurrency(total)}
             </span>
@@ -198,45 +197,28 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
               <span data-sensitive>{formatCurrency(avgPerDay)}</span>/day
             </span>
           </div>
-          <p className="text-xs text-ink-400 mt-1">
+          <p className="text-xs text-ink-400 mt-0.5">
             {mode === 'cumulative' ? `Cumulative ${valueLabel} over the selected period` : `${valueLabel.charAt(0).toUpperCase() + valueLabel.slice(1)} per period`}
           </p>
         </div>
-
-        <div className="w-full md:w-auto flex flex-col items-start md:items-end gap-2">
-          {/* Presets: single scrollable row on mobile, wrapping on desktop */}
-          <div className="overflow-x-auto scrollbar-none w-full md:w-auto pb-0.5">
-            <div className="flex gap-1.5 w-max md:w-auto md:flex-wrap md:justify-end">
-              {PRESETS.map((p) => (
-                <button key={p.key} onClick={() => setRange(p.key)} className={pill(range === p.key)}>
-                  {p.label}
-                </button>
-              ))}
-              <button onClick={() => setRange('custom')} className={pill(range === 'custom')}>
-                Custom
-              </button>
-            </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
+            <button
+              onClick={() => setMode('cumulative')}
+              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
+            >
+              Total
+            </button>
+            <button
+              onClick={() => setMode('interval')}
+              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
+            >
+              Period
+            </button>
           </div>
-          {/* Toggles: always one row */}
-          <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
-              <button
-                onClick={() => setMode('cumulative')}
-                className={`px-3 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-              >
-                Cumulative
-              </button>
-              <button
-                onClick={() => setMode('interval')}
-                className={`px-3 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}
-              >
-                Per period
-              </button>
-            </div>
-            {mode === 'interval' && (
-              <GranDropdown value={gran} onChange={setGran} />
-            )}
-          </div>
+          {mode === 'interval' && (
+            <GranDropdown value={gran} onChange={setGran} />
+          )}
         </div>
       </div>
 
@@ -244,25 +226,15 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-500">
           <label className="flex items-center gap-1.5">
             From
-            <input
-              type="date"
-              value={customFrom}
-              min={firstDate}
-              max={customTo}
+            <input type="date" value={customFrom} min={firstDate} max={customTo}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400"
-            />
+              className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400" />
           </label>
           <label className="flex items-center gap-1.5">
             To
-            <input
-              type="date"
-              value={customTo}
-              min={customFrom}
-              max={lastDate}
+            <input type="date" value={customTo} min={customFrom} max={lastDate}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400"
-            />
+              className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400" />
           </label>
         </div>
       )}
@@ -325,6 +297,18 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
           No spending in this range.
         </div>
       )}
+
+      {/* Time range selector — below chart, full width, text only */}
+      <div className="flex items-center justify-between border-t border-sand-100 pt-3">
+        {PRESETS.map((p) => (
+          <button key={p.key} onClick={() => setRange(p.key)} className={rangeBtn(range === p.key)}>
+            {p.label}
+          </button>
+        ))}
+        <button onClick={() => setRange('custom')} className={rangeBtn(range === 'custom')}>
+          Custom
+        </button>
+      </div>
     </div>
   );
 }
