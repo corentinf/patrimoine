@@ -53,7 +53,7 @@ export default async function DashboardLayout({
 
         <div className="flex-1 pt-14">
           <div className="max-w-screen-xl mx-auto px-6 lg:px-10 py-8">
-            <main className="max-w-4xl">
+            <main>
               {children}
             </main>
           </div>
