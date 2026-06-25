@@ -38,7 +38,7 @@ export default function Sidebar({ netWorth = 0, spending = 0, income = 0, invest
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-sand-200 z-50 flex"
+      className="md:hidden fixed bottom-0 left-0 w-screen bg-white/95 backdrop-blur border-t border-sand-200 z-50 flex"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {navItems.map((item) => {

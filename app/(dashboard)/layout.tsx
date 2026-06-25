@@ -51,7 +51,7 @@ export default async function DashboardLayout({
           investmentTotal={investmentTotal}
         />
 
-        <div className="flex-1 pt-0 md:pt-14">
+        <div className="flex-1 pt-0 md:pt-14 overflow-x-hidden">
           <div className="max-w-screen-xl mx-auto px-4 md:px-6 lg:px-10 py-6 md:py-8 pb-24 md:pb-8">
             <main>
               {children}

@@ -644,7 +644,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
 
       {/* Section tabs */}
-      <div className="flex items-center gap-0 border-b border-sand-200">
+      <div className="flex items-center gap-0 border-b border-sand-200 overflow-x-auto">
         {(['transactions', 'categories', 'subscriptions'] as const).map((tab) => (
           <button
             key={tab}
