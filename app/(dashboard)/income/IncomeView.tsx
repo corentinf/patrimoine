@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrency, formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
 import SpendingCharts from '../spending/SpendingCharts';
+import SpendingProgress from '../spending/SpendingProgress';
 import type { DateFilter } from '../spending/SpendingView';
 
 interface RawTransaction {
@@ -31,6 +32,7 @@ interface Props {
   categories: IncomeCategory[];
   dateFilter: DateFilter;
   onDateFilterChange?: (filter: DateFilter) => void;
+  dailyIncome?: { date: string; amount: number }[];
 }
 
 function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
@@ -45,7 +47,7 @@ function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
   return txs.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
 }
 
-export default function IncomeView({ transactions, categories, dateFilter, onDateFilterChange }: Props) {
+export default function IncomeView({ transactions, categories, dateFilter, onDateFilterChange, dailyIncome = [] }: Props) {
   const now = new Date();
   const [search, setSearch] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -235,18 +237,22 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
         )}
       </div>
 
-      {/* Charts */}
-      <SpendingCharts
-        categories={categoryRows.map((c) => ({ id: c.id, name: c.name, color: c.color, icon: c.icon, total: c.total, count: c.count }))}
-        monthlyData={monthlyChartData}
-        totalSpending={totalIncome}
-        selectedCategoryKey={selectedCategoryId}
-        onCategoryClick={(id) => setSelectedCategoryId((prev) => prev === id ? null : id)}
-        barColor="#16A34A"
-        barLabel="Monthly income"
-        onBarClick={onDateFilterChange ? handleBarClick : undefined}
-        selectedMonth={selectedMonth}
-      />
+      {/* Income over time + By Category side by side */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <SpendingProgress
+          data={dailyIncome}
+          label="Income over time"
+          color="#16A34A"
+          valueLabel="earned"
+        />
+        <SpendingCharts
+          categories={categoryRows.map((c) => ({ id: c.id, name: c.name, color: c.color, icon: c.icon, total: c.total, count: c.count }))}
+          monthlyData={[]}
+          totalSpending={totalIncome}
+          selectedCategoryKey={selectedCategoryId}
+          onCategoryClick={(id) => setSelectedCategoryId((prev) => prev === id ? null : id)}
+        />
+      </div>
 
       {/* Transaction list */}
       <div>

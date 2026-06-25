@@ -43,11 +43,43 @@ async function getIncomeCategories() {
   return data ?? [];
 }
 
+async function getDailyIncome(): Promise<{ date: string; amount: number }[]> {
+  const supabase = createServiceClient();
+  const visibleIds = await getVisibleAccountIds(supabase);
+  if (!visibleIds.length) return [];
+
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - 24);
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('amount, posted_at, category:categories(is_income)')
+    .in('account_id', visibleIds)
+    .gt('amount', 0)
+    .eq('is_transfer', false)
+    .gte('posted_at', startDate.toISOString())
+    .order('posted_at', { ascending: true })
+    .limit(10000);
+
+  if (error) throw error;
+
+  const byDay = new Map<string, number>();
+  for (const t of (data ?? []) as any[]) {
+    if (!t.category?.is_income) continue;
+    const day = t.posted_at.slice(0, 10);
+    byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(Number(t.amount ?? 0)));
+  }
+  return Array.from(byDay.entries())
+    .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export default async function IncomePage() {
-  const [transactions, categories] = await Promise.all([
+  const [transactions, categories, dailyIncome] = await Promise.all([
     getIncomeTransactions(12),
     getIncomeCategories(),
+    getDailyIncome(),
   ]);
 
-  return <IncomePageClient transactions={transactions as any} categories={categories} />;
+  return <IncomePageClient transactions={transactions as any} categories={categories} dailyIncome={dailyIncome} />;
 }

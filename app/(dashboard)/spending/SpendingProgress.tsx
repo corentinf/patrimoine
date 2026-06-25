@@ -9,10 +9,13 @@ import { formatCurrency } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
 import { PRESETS, isoDate, resolveStart, type RangeKey } from '@/app/lib/investmentRange';
 
-interface DailySpend { date: string; amount: number }
+export interface DailySpend { date: string; amount: number }
 interface SpendingProgressProps {
   data: DailySpend[];
   onPeriodSelect?: (range: { start: string; end: string } | null) => void;
+  label?: string;
+  color?: string;
+  valueLabel?: string;
 }
 
 type ViewMode = 'cumulative' | 'interval';
@@ -28,12 +31,12 @@ function BlurredYTick({ x, y, payload, blurred }: any) {
   );
 }
 
-function CustomTooltip({ active, payload, label, mode }: any) {
+function CustomTooltip({ active, payload, label, mode, valueLabel }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-0.5">
       <p className="font-medium text-sand-300">{label}</p>
-      <p className="font-mono">{formatCurrency(payload[0].value)}{mode === 'cumulative' ? ' total' : ' spent'}</p>
+      <p className="font-mono">{formatCurrency(payload[0].value)}{mode === 'cumulative' ? ' total' : ` ${valueLabel ?? 'spent'}`}</p>
     </div>
   );
 }
@@ -54,7 +57,7 @@ function bucketLabel(key: string, gran: 'day' | 'week' | 'month'): string {
   return format(new Date(key + 'T12:00:00'), 'MMM d');
 }
 
-const SPEND = '#B85450';
+const DEFAULT_COLOR = '#B85450';
 
 function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: string; end: string } {
   if (gran === 'day') return { start: key, end: key };
@@ -68,7 +71,7 @@ function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: stri
   return { start: key, end: iso(d) };
 }
 
-export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgressProps) {
+export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent' }: SpendingProgressProps) {
   const { blurred } = usePrivacy();
   const [range, setRange] = useState<RangeKey>('30d');
   const [mode, setMode] = useState<ViewMode>('interval');
@@ -141,7 +144,7 @@ export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgr
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
-            Spending over time
+            {label}
           </h4>
           <div className="mt-2 flex items-baseline gap-3">
             <span className="text-2xl font-mono font-medium text-ink-800" data-sensitive>
@@ -152,7 +155,7 @@ export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgr
             </span>
           </div>
           <p className="text-xs text-ink-400 mt-1">
-            {mode === 'cumulative' ? 'Cumulative spend over the selected period' : 'Spend per period'}
+            {mode === 'cumulative' ? `Cumulative ${valueLabel} over the selected period` : `${valueLabel.charAt(0).toUpperCase() + valueLabel.slice(1)} per period`}
           </p>
         </div>
 
@@ -232,15 +235,15 @@ export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgr
             <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
               <defs>
                 <linearGradient id="spendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={SPEND} stopOpacity={0.18} />
-                  <stop offset="100%" stopColor={SPEND} stopOpacity={0} />
+                  <stop offset="0%" stopColor={color} stopOpacity={0.18} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8F897E' }} axisLine={{ stroke: '#E2D9CA' }} tickLine={false} interval="preserveStartEnd" minTickGap={24} />
               <YAxis axisLine={false} tickLine={false} domain={['auto', 'auto']} tick={(props) => <BlurredYTick {...props} blurred={blurred} />} />
               <Tooltip content={<CustomTooltip mode={mode} />} />
-              <Area type="monotone" dataKey="value" name="Spending" stroke={SPEND} strokeWidth={2} fill="url(#spendFill)" dot={false} activeDot={{ r: 4, fill: SPEND }} />
+              <Area type="monotone" dataKey="value" name="Spending" stroke={color} strokeWidth={2} fill="url(#spendFill)" dot={false} activeDot={{ r: 4, fill: color }} />
             </AreaChart>
           ) : (
             <BarChart
@@ -262,7 +265,7 @@ export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgr
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8F897E' }} axisLine={{ stroke: '#E2D9CA' }} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
               <YAxis axisLine={false} tickLine={false} tick={(props) => <BlurredYTick {...props} blurred={blurred} />} />
-              <Tooltip content={<CustomTooltip mode={mode} />} cursor={{ fill: '#F0EBE1', opacity: 0.5 }} />
+              <Tooltip content={<CustomTooltip mode={mode} valueLabel={valueLabel} />} cursor={{ fill: '#F0EBE1', opacity: 0.5 }} />
               <Bar dataKey="value" name="Spending" radius={[3, 3, 0, 0]}>
                 {chartData.map((entry, i) => {
                   const isSelected = !!selectedKey && (entry as any).key === selectedKey;
@@ -270,7 +273,7 @@ export default function SpendingProgress({ data, onPeriodSelect }: SpendingProgr
                   return (
                     <Cell
                       key={i}
-                      fill={SPEND}
+                      fill={color}
                       fillOpacity={hasSelection ? (isSelected ? 1 : 0.3) : 1}
                     />
                   );

@@ -28,9 +28,11 @@ interface IncomeCategory {
 export default function IncomePageClient({
   transactions,
   categories,
+  dailyIncome = [],
 }: {
   transactions: RawTransaction[];
   categories: IncomeCategory[];
+  dailyIncome?: { date: string; amount: number }[];
 }) {
   const now = new Date();
   const [dateFilter, setDateFilter] = useState<DateFilter>({
@@ -45,7 +47,7 @@ export default function IncomePageClient({
         <p className="text-sm text-ink-400">Where your money comes from</p>
         <DateNav filter={dateFilter} onChange={setDateFilter} />
       </div>
-      <IncomeView transactions={transactions} categories={categories} dateFilter={dateFilter} onDateFilterChange={setDateFilter} />
+      <IncomeView transactions={transactions} categories={categories} dateFilter={dateFilter} onDateFilterChange={setDateFilter} dailyIncome={dailyIncome} />
     </div>
   );
 }
