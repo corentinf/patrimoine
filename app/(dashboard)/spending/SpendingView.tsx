@@ -607,17 +607,29 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
       <>
 
-      {/* Spending over time */}
-      <SpendingProgress
-        data={dailySpending}
-        onPeriodSelect={(range) => {
-          if (!range) {
-            setTxFilter((prev) => ({ ...prev, active: false }));
-          } else {
-            setTxFilter({ filter: { mode: 'custom', start: range.start, end: range.end }, active: true });
-          }
-        }}
-      />
+      {/* Spending over time + By Category side by side */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <SpendingProgress
+          data={dailySpending}
+          onPeriodSelect={(range) => {
+            if (!range) {
+              setTxFilter((prev) => ({ ...prev, active: false }));
+            } else {
+              setTxFilter({ filter: { mode: 'custom', start: range.start, end: range.end }, active: true });
+            }
+          }}
+        />
+        <SpendingCharts
+          categories={sortedCategories}
+          monthlyData={[]}
+          totalSpending={totalSpending}
+          selectedCategoryKey={selectedCategoryKey}
+          onCategoryClick={(id) => {
+            setSelectedCategoryKey((prev) => prev === id ? null : id);
+            setActiveTab('transactions');
+          }}
+        />
+      </div>
 
       {/* Spending + savings rate combined card */}
       <SavingsRateModule
@@ -628,17 +640,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         pacedTotal={pacedTotal}
       />
 
-      {/* Charts — always visible above tabs */}
-      <SpendingCharts
-        categories={sortedCategories}
-        monthlyData={[]}
-        totalSpending={totalSpending}
-        selectedCategoryKey={selectedCategoryKey}
-        onCategoryClick={(id) => {
-          setSelectedCategoryKey((prev) => prev === id ? null : id);
-          setActiveTab('transactions');
-        }}
-      />
 
       {/* Section tabs */}
       <div className="flex items-center gap-0 border-b border-sand-200">
