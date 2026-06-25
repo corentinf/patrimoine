@@ -671,7 +671,7 @@ export default function SpendingTransactions({
   return (
     <>
       <div>
-        <div className="sticky top-14 z-10 bg-sand-50 space-y-3 pb-3">
+        <div className="sticky top-0 md:top-14 z-10 bg-sand-50 space-y-3 pb-3">
         {/* Search */}
         <div className="relative">
           <svg

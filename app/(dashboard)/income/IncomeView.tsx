@@ -258,7 +258,7 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
 
       {/* Transaction list */}
       <div>
-        <div className="sticky top-14 z-10 bg-sand-50 pb-2">
+        <div className="sticky top-0 md:top-14 z-10 bg-sand-50 pb-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs text-ink-400 shrink-0">Sort by</span>
             {(['date', 'amount', 'category'] as const).map((field) => (
