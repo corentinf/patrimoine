@@ -217,7 +217,7 @@ export default function TransactionRow({
                 className="inline-block hover:opacity-70 transition-opacity"
               >
                 <span
-                  className="inline-block px-1.5 py-px rounded text-[10px] font-medium"
+                  className="inline-block px-1.5 py-px rounded text-[10px] font-medium whitespace-nowrap"
                   style={{ backgroundColor: catColor + '20', color: catColor }}
                 >
                   {catName}
