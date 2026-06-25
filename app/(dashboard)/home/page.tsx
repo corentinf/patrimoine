@@ -123,12 +123,11 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* Hero */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl text-ink-800">Net worth</h2>
-          <p className="text-sm text-ink-400 mt-1">Your financial picture over time</p>
         </div>
         {latest && (
           <div className="sm:text-right">

@@ -42,9 +42,8 @@ export default function IncomePageClient({
   });
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-sm text-ink-400">Where your money comes from</p>
+    <div className="space-y-5">
+      <div className="flex justify-end">
         <DateNav filter={dateFilter} onChange={setDateFilter} />
       </div>
       <IncomeView transactions={transactions} categories={categories} dateFilter={dateFilter} onDateFilterChange={setDateFilter} dailyIncome={dailyIncome} />

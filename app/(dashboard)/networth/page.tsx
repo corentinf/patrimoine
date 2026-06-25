@@ -177,11 +177,10 @@ export default async function NetWorthPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-2xl text-ink-800">Investment holdings</h2>
-          <p className="text-sm text-ink-400 mt-1">Your portfolio breakdown</p>
         </div>
         <div className="sm:text-right">
           <p className="stat-label">Total value</p>

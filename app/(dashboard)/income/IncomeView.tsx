@@ -186,7 +186,7 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* Summary card */}
       <div className="card flex flex-wrap gap-x-10 gap-y-4 items-center">
         <div>
@@ -238,7 +238,7 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
       </div>
 
       {/* Income over time + By Category side by side */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-start">
         <SpendingProgress
           data={dailyIncome}
           label="Income over time"

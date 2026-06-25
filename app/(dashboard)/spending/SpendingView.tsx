@@ -531,7 +531,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {(() => {
         const dateNav = showCustom && dateFilter.mode === 'custom' ? (
           <div className="flex items-center gap-1">
@@ -598,8 +598,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         );
 
         return (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-ink-400">Where your money goes</p>
+          <div className="flex justify-end">
             <div>{dateNav}</div>
           </div>
         );
@@ -608,7 +607,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       <>
 
       {/* Spending over time + By Category side by side */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-start">
         <SpendingProgress
           data={dailySpending}
           onPeriodSelect={(range) => {
