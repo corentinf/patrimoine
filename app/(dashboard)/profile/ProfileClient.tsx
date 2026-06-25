@@ -124,7 +124,7 @@ export default function ProfileClient({ accounts, netWorth }: Props) {
               Privacy mode
             </span>
             <span className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${blurred ? 'bg-ink-700' : 'bg-sand-300'}`}>
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${blurred ? 'translate-x-6' : 'translate-x-1'}`} />
+              <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${blurred ? 'translate-x-5' : 'translate-x-0'}`} />
             </span>
           </button>
 
