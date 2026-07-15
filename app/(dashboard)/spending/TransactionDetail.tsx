@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrencyPrecise, formatDate, groupAndSortCategories } from '@/app/lib/utils';
+import { formatCurrencyPrecise, formatDate, groupAndSortCategories, filterCategoryGroups } from '@/app/lib/utils';
 import { assignTransactionCategory, updateTransactionPayee } from './actions';
 import type { Category } from './CategoryManager';
 import VenmoSection from './VenmoSection';
@@ -43,6 +43,7 @@ export default function TransactionDetail({
   const [editingPayee, setEditingPayee] = useState(false);
   const [payeeDraft, setPayeeDraft] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [catSearch, setCatSearch] = useState('');
 
   const [enrichment, setEnrichment] = useState<{
     businessName: string;
@@ -55,6 +56,7 @@ export default function TransactionDetail({
 
   const displayPayee = localPayee ?? tx.payee ?? tx.description ?? 'Unknown';
   const effectiveCategory = localCategory ?? tx.category;
+  const filteredCatGroups = filterCategoryGroups(groupAndSortCategories(allCategories), catSearch);
 
   // Secondary line: show description only if it differs from the displayed payee
   const secondaryLine = (() => {
@@ -87,6 +89,7 @@ export default function TransactionDetail({
     setLocalCategory(cat);
     onCategoryChange(tx.id, cat);
     setShowCategoryPicker(false);
+    setCatSearch('');
     startTransition(async () => {
       await assignTransactionCategory(tx.id, cat.id);
       router.refresh();
@@ -288,7 +291,7 @@ export default function TransactionDetail({
                 </div>
               </div>
               <button
-                onClick={() => setShowCategoryPicker((v) => !v)}
+                onClick={() => { setShowCategoryPicker((v) => !v); setCatSearch(''); }}
                 className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
                   showCategoryPicker
                     ? 'bg-ink-800 text-white'
@@ -301,8 +304,19 @@ export default function TransactionDetail({
 
             {/* Inline picker — grouped by parent, sorted A→Z */}
             {showCategoryPicker && (
-              <div className="mt-3 border border-sand-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
-                {groupAndSortCategories(allCategories).map(({ parent, children }) => {
+              <div className="mt-3 border border-sand-200 rounded-xl overflow-hidden flex flex-col max-h-80">
+                <div className="p-2 border-b border-sand-100 flex-shrink-0">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={catSearch}
+                    onChange={(e) => setCatSearch(e.target.value)}
+                    placeholder="Search categories…"
+                    className="w-full text-sm px-3 py-1.5 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700 placeholder:text-ink-300"
+                  />
+                </div>
+                <div className="overflow-y-auto">
+                {filteredCatGroups.map(({ parent, children }) => {
                   const isParentActive = effectiveCategory?.id === parent.id;
                   return (
                     <div key={parent.id} className="border-b border-sand-100 last:border-0">
@@ -340,6 +354,10 @@ export default function TransactionDetail({
                     </div>
                   );
                 })}
+                {filteredCatGroups.length === 0 && (
+                  <p className="px-4 py-3 text-sm text-ink-300 text-center">No categories found</p>
+                )}
+                </div>
               </div>
             )}
           </div>

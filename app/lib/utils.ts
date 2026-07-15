@@ -91,3 +91,24 @@ export function groupAndSortCategories<T extends { id: string; name: string; par
     return { parent, children };
   });
 }
+
+/**
+ * Filters grouped categories by a search query, matching against parent and child names.
+ * If a parent matches, all of its children are kept; otherwise only matching children are kept.
+ */
+export function filterCategoryGroups<T extends { id: string; name: string; parent_id: string | null }>(
+  groups: GroupedCategory<T>[],
+  query: string,
+): GroupedCategory<T>[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return groups;
+  const result: GroupedCategory<T>[] = [];
+  for (const { parent, children } of groups) {
+    const parentMatches = parent.name.toLowerCase().includes(q);
+    const matchedChildren = parentMatches ? children : children.filter((c) => c.name.toLowerCase().includes(q));
+    if (parentMatches || matchedChildren.length > 0) {
+      result.push({ parent, children: matchedChildren });
+    }
+  }
+  return result;
+}

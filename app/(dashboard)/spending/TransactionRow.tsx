@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrencyPrecise, formatShortDate, amountColor, groupAndSortCategories } from '@/app/lib/utils';
+import { formatCurrencyPrecise, formatShortDate, amountColor, groupAndSortCategories, filterCategoryGroups } from '@/app/lib/utils';
 import { assignTransactionCategory, toggleTransfer } from './actions';
 import type { Category } from './CategoryManager';
 import type { FullTransaction } from './TransactionDetail';
@@ -77,6 +77,8 @@ export default function TransactionRow({
 
   // Category picker
   const [showCatPicker, setShowCatPicker] = useState(false);
+  const [catSearch, setCatSearch] = useState('');
+  const filteredCatGroups = filterCategoryGroups(groupAndSortCategories(allCategories), catSearch);
 
   // Venmo
   const [venmo, setVenmo] = useState<VenmoRequest | null>(initialVenmo);
@@ -99,6 +101,7 @@ export default function TransactionRow({
     e.stopPropagation();
     onCategoryChange(tx.id, cat);
     setShowCatPicker(false);
+    setCatSearch('');
     startTransition(async () => {
       await assignTransactionCategory(tx.id, cat.id);
       router.refresh();
@@ -172,7 +175,7 @@ export default function TransactionRow({
       {anyPickerOpen && (
         <div
           className="fixed inset-0 z-20"
-          onClick={() => { setShowCatPicker(false); setShowVenmoForm(false); }}
+          onClick={() => { setShowCatPicker(false); setCatSearch(''); setShowVenmoForm(false); }}
         />
       )}
       {/* Main row */}
@@ -196,7 +199,7 @@ export default function TransactionRow({
 
         {/* Category emoji — click to change */}
         <button
-          onClick={(e) => { e.stopPropagation(); if (!selectMode) { setShowCatPicker((v) => !v); setShowVenmoForm(false); } }}
+          onClick={(e) => { e.stopPropagation(); if (!selectMode) { setShowCatPicker((v) => !v); setCatSearch(''); setShowVenmoForm(false); } }}
           className="text-lg w-8 text-center flex-shrink-0 hover:scale-110 transition-transform"
           title="Change category"
         >
@@ -213,7 +216,7 @@ export default function TransactionRow({
               <span className="text-xs text-ink-300">↔ Transfer</span>
             ) : (
               <button
-                onClick={(e) => { e.stopPropagation(); setShowCatPicker((v) => !v); setShowVenmoForm(false); }}
+                onClick={(e) => { e.stopPropagation(); setShowCatPicker((v) => !v); setCatSearch(''); setShowVenmoForm(false); }}
                 className="inline-block hover:opacity-70 transition-opacity"
               >
                 <span
@@ -271,7 +274,7 @@ export default function TransactionRow({
             </div>
           ) : (
             <button
-              onClick={(e) => { e.stopPropagation(); setShowVenmoForm((v) => !v); setShowCatPicker(false); }}
+              onClick={(e) => { e.stopPropagation(); setShowVenmoForm((v) => !v); setShowCatPicker(false); setCatSearch(''); }}
               className="w-6 h-6 flex items-center justify-center"
               title="Request via Venmo"
             >
@@ -305,10 +308,21 @@ export default function TransactionRow({
       {/* Category picker dropdown */}
       {showCatPicker && (
         <div
-          className="absolute left-5 right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 max-h-56 overflow-y-auto"
+          className="absolute left-5 right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 flex flex-col max-h-72"
           onClick={(e) => e.stopPropagation()}
         >
-          {groupAndSortCategories(allCategories).map(({ parent, children }) => {
+          <div className="p-2 border-b border-sand-100 flex-shrink-0">
+            <input
+              autoFocus
+              type="text"
+              value={catSearch}
+              onChange={(e) => setCatSearch(e.target.value)}
+              placeholder="Search categories…"
+              className="w-full text-sm px-3 py-1.5 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700 placeholder:text-ink-300"
+            />
+          </div>
+          <div className="overflow-y-auto">
+          {filteredCatGroups.map(({ parent, children }) => {
             const parentActive = effectiveCategory?.id === parent.id;
             return (
               <div key={parent.id} className="border-b border-sand-100 last:border-0">
@@ -346,6 +360,10 @@ export default function TransactionRow({
               </div>
             );
           })}
+          {filteredCatGroups.length === 0 && (
+            <p className="px-4 py-3 text-sm text-ink-300 text-center">No categories found</p>
+          )}
+          </div>
         </div>
       )}
 
