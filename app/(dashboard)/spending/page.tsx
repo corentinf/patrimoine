@@ -140,10 +140,11 @@ async function getSubscriptionOverrides(): Promise<Record<string, 'confirmed' | 
 
 async function getVenmoRequests() {
   const supabase = createServiceClient();
+  // Load every status (incl. settled) so the transaction list can tag rows
+  // and the Venmo status filter can match all states.
   const { data } = await supabase
     .from('venmo_requests')
-    .select('id, transaction_id, person_name, amount, status')
-    .neq('status', 'settled');
+    .select('id, transaction_id, person_name, amount, status');
   return data || [];
 }
 

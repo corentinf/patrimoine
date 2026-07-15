@@ -315,6 +315,100 @@ function AccountDropdown({
     </div>
   );
 }
+type VenmoFilter = 'all' | 'any' | 'pending' | 'requested' | 'settled';
+
+const VENMO_FILTER_OPTIONS: { value: VenmoFilter; label: string; hint: string }[] = [
+  { value: 'any', label: 'Any Venmo', hint: 'Tracked transactions' },
+  { value: 'pending', label: 'To request', hint: 'Not yet requested' },
+  { value: 'requested', label: 'Requested', hint: 'Awaiting payment' },
+  { value: 'settled', label: 'Settled', hint: 'Paid back' },
+];
+
+function VenmoDropdown({
+  value,
+  onChange,
+}: {
+  value: VenmoFilter;
+  onChange: (v: VenmoFilter) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const active = value !== 'all';
+  const label = active ? VENMO_FILTER_OPTIONS.find((o) => o.value === value)?.label ?? 'Venmo' : 'Venmo';
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+          active
+            ? 'bg-ink-800 text-white'
+            : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+        }`}
+      >
+        <img
+          src="/venmo.svg"
+          alt=""
+          className="w-3.5 h-3.5"
+          style={{
+            filter: active
+              ? 'brightness(0) invert(1)'
+              : 'brightness(0) saturate(100%) invert(70%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(95%)',
+          }}
+        />
+        {label}
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg overflow-hidden min-w-[180px]">
+          <button
+            onClick={() => { onChange('all'); setOpen(false); }}
+            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left border-b border-sand-100 transition-colors ${
+              value === 'all' ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
+            }`}
+          >
+            All transactions
+            {value === 'all' && (
+              <svg className="w-3.5 h-3.5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+          {VENMO_FILTER_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left border-b border-sand-50 last:border-0 transition-colors ${
+                value === o.value ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
+              }`}
+            >
+              <span>
+                <span className="block text-ink-700">{o.label}</span>
+                <span className="text-xs text-ink-300">{o.hint}</span>
+              </span>
+              {value === o.value && (
+                <svg className="w-3.5 h-3.5 text-ink-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 import TransactionDetail, { type FullTransaction } from './TransactionDetail';
 import TransactionRow from './TransactionRow';
 import type { Category } from './CategoryManager';
@@ -406,6 +500,7 @@ export default function SpendingTransactions({
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [showTransfers, setShowTransfers] = useState(true);
+  const [venmoFilter, setVenmoFilter] = useState<VenmoFilter>('all');
   const [expandedParent, setExpandedParent] = useState<string | null>(null);
   const [hoveredChip, setHoveredChip] = useState<string | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -616,6 +711,13 @@ export default function SpendingTransactions({
       });
     }
 
+    if (venmoFilter !== 'all') {
+      result = result.filter((tx) => {
+        const v = venmoByTxId.get(tx.id);
+        return venmoFilter === 'any' ? !!v : v?.status === venmoFilter;
+      });
+    }
+
     return [...result].sort((a, b) => {
       let cmp = 0;
       if (sortBy === 'date') {
@@ -630,7 +732,7 @@ export default function SpendingTransactions({
       return sortDir === 'desc' ? -cmp : cmp;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, dateFilter, dateFilterActive, filterCategories, search, sortBy, sortDir, categoryOverrides, payeeOverrides, transferOverrides, showTransfers]);
+  }, [transactions, dateFilter, dateFilterActive, filterCategories, search, sortBy, sortDir, categoryOverrides, payeeOverrides, transferOverrides, showTransfers, venmoFilter, venmoByTxId]);
 
   useEffect(() => { setVisibleCount(50); }, [filtered]);
 
@@ -665,7 +767,8 @@ export default function SpendingTransactions({
     !!search.trim() ||
     !!selectedAccount ||
     dateFilterActive ||
-    !showTransfers;
+    !showTransfers ||
+    venmoFilter !== 'all';
   const detailTx = detailTxId ? transactions.find((t) => t.id === detailTxId) : null;
 
   return (
@@ -751,6 +854,7 @@ export default function SpendingTransactions({
             )}
             Transfers: <span className={showTransfers ? 'text-ink-700' : 'text-ink-300'}>{showTransfers ? 'ON' : 'OFF'}</span>
           </button>
+          <VenmoDropdown value={venmoFilter} onChange={setVenmoFilter} />
           <div className="ml-auto flex items-center gap-2">
             <DateControl
               dateFilter={dateFilter}
@@ -942,6 +1046,7 @@ export default function SpendingTransactions({
                 onAccountChange?.(null);
                 clearDateFilter();
                 setShowTransfers(true);
+                setVenmoFilter('all');
               }}
               className="shrink-0 text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap"
             >
