@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatShortDate, amountColor, groupAndSortCategories, filterCategoryGroups } from '@/app/lib/utils';
 import { assignTransactionCategory, toggleTransfer } from './actions';
@@ -76,9 +76,23 @@ export default function TransactionRow({
   const isTransfer = localIsTransfer;
 
   // Category picker
+  const rowRef = useRef<HTMLDivElement>(null);
   const [showCatPicker, setShowCatPicker] = useState(false);
+  const [catPickerUp, setCatPickerUp] = useState(false);
   const [catSearch, setCatSearch] = useState('');
   const filteredCatGroups = filterCategoryGroups(groupAndSortCategories(allCategories), catSearch);
+
+  function toggleCatPicker(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (selectMode) return;
+    if (!showCatPicker) {
+      const rect = rowRef.current?.getBoundingClientRect();
+      setCatPickerUp(!!rect && window.innerHeight - rect.bottom < 320);
+    }
+    setShowCatPicker((v) => !v);
+    setCatSearch('');
+    setShowVenmoForm(false);
+  }
 
   // Venmo
   const [venmo, setVenmo] = useState<VenmoRequest | null>(initialVenmo);
@@ -170,7 +184,7 @@ export default function TransactionRow({
   }
 
   return (
-    <div className="relative border-b border-sand-100 last:border-0">
+    <div ref={rowRef} className="relative border-b border-sand-100 last:border-0">
       {/* Backdrop — closes any open picker when clicking outside */}
       {anyPickerOpen && (
         <div
@@ -199,7 +213,7 @@ export default function TransactionRow({
 
         {/* Category emoji — click to change */}
         <button
-          onClick={(e) => { e.stopPropagation(); if (!selectMode) { setShowCatPicker((v) => !v); setCatSearch(''); setShowVenmoForm(false); } }}
+          onClick={toggleCatPicker}
           className="text-lg w-8 text-center flex-shrink-0 hover:scale-110 transition-transform"
           title="Change category"
         >
@@ -216,7 +230,7 @@ export default function TransactionRow({
               <span className="text-xs text-ink-300">↔ Transfer</span>
             ) : (
               <button
-                onClick={(e) => { e.stopPropagation(); setShowCatPicker((v) => !v); setCatSearch(''); setShowVenmoForm(false); }}
+                onClick={toggleCatPicker}
                 className="inline-block hover:opacity-70 transition-opacity"
               >
                 <span
@@ -308,7 +322,9 @@ export default function TransactionRow({
       {/* Category picker dropdown */}
       {showCatPicker && (
         <div
-          className="absolute left-5 right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 flex flex-col max-h-72"
+          className={`absolute left-5 right-5 bg-white border border-sand-200 rounded-xl shadow-lg z-30 flex flex-col max-h-72 ${
+            catPickerUp ? 'bottom-full' : 'top-full'
+          }`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-2 border-b border-sand-100 flex-shrink-0">
