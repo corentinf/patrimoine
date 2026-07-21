@@ -274,7 +274,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
             setSegment({ label, start: range.start, end: range.end });
           }}
         />
-        <div className="w-72 flex-shrink-0">
+        <div className="w-full xl:w-72 xl:flex-shrink-0">
           <SpendingCharts
             categories={categoryRows.map((c) => ({ id: c.id, name: c.name, color: c.color, icon: c.icon, total: c.total, count: c.count }))}
             monthlyData={[]}
@@ -381,7 +381,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
       {showScrollTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-8 right-8 z-30 w-10 h-10 rounded-full bg-ink-800 text-white shadow-lg flex items-center justify-center hover:bg-ink-700 transition-colors"
+          className="fixed bottom-24 left-4 md:bottom-8 md:left-auto md:right-8 z-30 w-10 h-10 rounded-full bg-ink-800 text-white shadow-lg flex items-center justify-center hover:bg-ink-700 transition-colors"
           aria-label="Scroll to top"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

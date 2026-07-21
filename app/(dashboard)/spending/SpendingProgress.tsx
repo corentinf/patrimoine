@@ -190,7 +190,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   return (
     <div className="card space-y-4">
       {/* Header: stats left, controls right */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h4 className="text-xs font-semibold text-ink-400 uppercase tracking-wider">
             {label}

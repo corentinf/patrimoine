@@ -573,7 +573,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   // filter row) so they can drive the charts above as well as the transaction list.
   useSetPageFilterSlot(
     <div className="flex flex-wrap items-center gap-3">
-      <div className="relative w-56">
+      <div className="relative w-full sm:w-56">
         <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-300 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
         </svg>
@@ -684,7 +684,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             setSegment({ label, start: range.start, end: range.end });
           }}
         />
-        <div className="w-72 flex-shrink-0">
+        <div className="w-full xl:w-72 xl:flex-shrink-0">
           <SpendingCharts
             categories={sortedCategories}
             monthlyData={[]}

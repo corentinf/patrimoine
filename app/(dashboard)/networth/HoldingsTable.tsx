@@ -63,7 +63,7 @@ function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'center
   const translateX = align === 'left' ? 'left-0 -translate-x-0' : align === 'right' ? 'right-0 translate-x-0' : 'left-1/2 -translate-x-1/2';
   const arrowX = align === 'left' ? 'left-4' : align === 'right' ? 'right-4' : 'left-1/2 -translate-x-1/2';
   return (
-    <span className="relative group/tip inline-flex items-center ml-1">
+    <span className="relative group/tip hidden md:inline-flex items-center ml-1">
       <svg className="w-3 h-3 text-ink-300 group-hover/tip:text-ink-500 transition-colors cursor-default flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="10" strokeWidth={2} />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
@@ -454,7 +454,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
             >
               {g}
             </button>
-            <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-64 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/pill:opacity-100 transition-opacity z-50 shadow-lg">
+            <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-64 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/pill:opacity-100 transition-opacity z-50 shadow-lg hidden md:block">
               {GROUP_DESCRIPTIONS[g]}
               <span className="absolute top-full left-4 border-4 border-transparent border-t-ink-800" />
             </span>

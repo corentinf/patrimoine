@@ -29,7 +29,7 @@ const SYNC_STEPS: { key: SyncStep; label: string }[] = [
   { key: 'snapshot', label: 'Net worth snapshot' },
 ];
 
-function SyncDropdown() {
+export function SyncDropdown() {
   const [phase, setPhase] = useState<SyncPhase>('idle');
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -308,7 +308,7 @@ function ProfileMenu({ accounts }: { accounts: SidebarAccount[] }) {
   );
 }
 
-function FilterBar() {
+export function FilterBar() {
   const {
     dateFilter, activePreset, showCustom, rangeLabel, canStepForward, canStepBackward,
     stepPeriod, applyPreset, resetFilter, setCustomStart, setCustomEnd,
@@ -427,7 +427,7 @@ function FilterBar() {
   );
 }
 
-function PageFiltersRow() {
+export function PageFiltersRow() {
   const content = usePageFilterSlotContent();
   if (!content) return null;
   return (
