@@ -280,6 +280,113 @@ function AccountDropdown({
   );
 }
 
+const LONG_PRESS_MS = 500;
+
+// Tap: select only this category (replacing any existing selection), or
+// deselect if already active. Desktop: hover reveals a "+" to add this
+// category to the current selection instead of replacing it. Touch has no
+// hover, so a long-press does the same "add" action there.
+function CategoryPill({
+  cat, active, hasActivity, hasSelection, onSelectOnly, onDeselect, onAddToSelection,
+}: {
+  cat: { name: string; icon: string; color: string };
+  active: boolean;
+  hasActivity: boolean;
+  hasSelection: boolean;
+  onSelectOnly: () => void;
+  onDeselect: () => void;
+  onAddToSelection: () => void;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  function clearPress() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    setPressed(false);
+  }
+
+  function handleTouchStart() {
+    longPressFired.current = false;
+    setPressed(true);
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      setPressed(false);
+      onAddToSelection();
+    }, LONG_PRESS_MS);
+  }
+
+  function handleClick() {
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    if (active) onDeselect();
+    else onSelectOnly();
+  }
+
+  return (
+    <div
+      className={`relative group/catpill inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+        pressed ? 'scale-95' : ''
+      } ${
+        active
+          ? 'text-white border-transparent'
+          : hasActivity
+            ? 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
+            : 'bg-white border-sand-100 text-ink-300 hover:border-sand-200'
+      }`}
+      style={{
+        ...(active ? { backgroundColor: cat.color, borderColor: cat.color } : {}),
+        ...(!active && hasActivity ? { backgroundColor: cat.color + '14' } : {}),
+      }}
+    >
+      <button
+        onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={clearPress}
+        onTouchMove={clearPress}
+        onTouchCancel={clearPress}
+        title={
+          active
+            ? 'Remove from selection'
+            : !hasActivity
+              ? 'No spending in this category for the selected period'
+              : hasSelection
+                ? 'Switch selection to this category — hold (or hover the +) to add instead'
+                : 'Select this category'
+        }
+        className="inline-flex items-center gap-1"
+      >
+        <span className={active || hasActivity ? '' : 'opacity-40'}>{cat.icon}</span>
+        {cat.name}
+      </button>
+      {active && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDeselect(); }}
+          aria-label={`Remove ${cat.name} filter`}
+          className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-ink-800 text-white text-xs flex items-center justify-center leading-none shadow-sm hover:bg-ink-700 transition-colors"
+        >
+          ✕
+        </button>
+      )}
+      {!active && hasSelection && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddToSelection(); }}
+          aria-label={`Add ${cat.name} to filter`}
+          title="Add to selection"
+          className="hidden md:flex absolute -top-2 -right-2 w-5 h-5 rounded-full bg-ink-800 text-white text-sm items-center justify-center leading-none shadow-sm hover:bg-ink-700 transition-colors md:opacity-0 md:group-hover/catpill:opacity-100"
+        >
+          +
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, dailySpending }: SpendingViewProps) {
   const now = new Date();
   const { dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory } = useGlobalFilter();
@@ -607,52 +714,20 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         >
           All
         </button>
-        {chipCategories.map((cat) => {
-          const active = filterCategories.includes(cat.name);
-          const hasActivity = chipHasActivity.get(cat.name) ?? false;
-          const toggle = () => setFilterCategories(
-            active ? filterCategories.filter((n) => n !== cat.name) : [...filterCategories, cat.name],
-          );
-          return (
-            <div
-              key={cat.name}
-              className={`relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
-                active
-                  ? 'text-white border-transparent'
-                  : hasActivity
-                    ? 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
-                    : 'bg-white border-sand-100 text-ink-300 hover:border-sand-200'
-              }`}
-              style={{
-                ...(active ? { backgroundColor: cat.color, borderColor: cat.color } : {}),
-                ...(!active && hasActivity ? { backgroundColor: cat.color + '14' } : {}),
-              }}
-            >
-              <button
-                onClick={toggle}
-                onDoubleClick={() => setFilterCategories([cat.name])}
-                title={
-                  !active && !hasActivity
-                    ? 'No spending in this category for the selected period'
-                    : 'Double-click to select only this category'
-                }
-                className="inline-flex items-center gap-1"
-              >
-                <span className={active || hasActivity ? '' : 'opacity-40'}>{cat.icon}</span>
-                {cat.name}
-              </button>
-              {active && (
-                <button
-                  onClick={toggle}
-                  aria-label={`Remove ${cat.name} filter`}
-                  className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-ink-800 text-white text-[8px] flex items-center justify-center leading-none shadow-sm hover:bg-ink-700 transition-colors"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          );
-        })}
+        {chipCategories.map((cat) => (
+          <CategoryPill
+            key={cat.name}
+            cat={cat}
+            active={filterCategories.includes(cat.name)}
+            hasActivity={chipHasActivity.get(cat.name) ?? false}
+            hasSelection={filterCategories.length > 0}
+            onSelectOnly={() => setFilterCategories([cat.name])}
+            onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== cat.name))}
+            onAddToSelection={() => {
+              if (!filterCategories.includes(cat.name)) setFilterCategories([...filterCategories, cat.name]);
+            }}
+          />
+        ))}
         {filterCategories.length > 0 && (
           <button
             onClick={() => setFilterCategories([])}
