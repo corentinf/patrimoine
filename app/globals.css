@@ -7,10 +7,20 @@
 @layer base {
   html {
     @apply bg-sand-50 text-ink-800 antialiased;
+    /* Own both axes explicitly (rather than leaving overflow-y 'visible' here and
+       overflow-x 'hidden' on body) so there's no ambiguity in which element the
+       propagated viewport scroll behavior comes from. overflow-y: scroll keeps the
+       scrollbar track always rendered — content height changes (e.g. selecting a
+       category that shortens the transaction list) never toggle it on/off, so the
+       page never gains or loses that width. scrollbar-gutter is a modern-browser
+       layered enhancement on top of the same guarantee. */
+    overflow-x: hidden;
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
   }
 
   body {
-    @apply font-body overflow-x-hidden;
+    @apply font-body;
   }
 }
 

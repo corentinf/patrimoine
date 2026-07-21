@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrencyPrecise } from '@/app/lib/utils';
 import type { DateFilter } from './SpendingView';
 
@@ -236,85 +236,6 @@ function DateControl({
   );
 }
 
-function AccountDropdown({
-  accounts,
-  selectedAccount,
-  onChange,
-}: {
-  accounts: { id: string; name: string; institution: string }[];
-  selectedAccount: string | null;
-  onChange: (id: string | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const selected = accounts.find((a) => a.id === selectedAccount);
-  const label = selected ? (selected.institution || selected.name) : 'Account';
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-          selectedAccount
-            ? 'bg-ink-800 text-white'
-            : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-        }`}
-      >
-        {label}
-        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg overflow-hidden min-w-[160px]">
-          <button
-            onClick={() => { onChange(null); setOpen(false); }}
-            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left border-b border-sand-100 transition-colors ${
-              !selectedAccount ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
-            }`}
-          >
-            All accounts
-            {!selectedAccount && (
-              <svg className="w-3.5 h-3.5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-          </button>
-          {accounts.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => { onChange(a.id); setOpen(false); }}
-              className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left border-b border-sand-50 last:border-0 transition-colors ${
-                selectedAccount === a.id ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
-              }`}
-            >
-              <span>
-                <span className="block text-ink-700">{a.institution || a.name}</span>
-                {a.institution && a.name !== a.institution && (
-                  <span className="text-xs text-ink-300">{a.name}</span>
-                )}
-              </span>
-              {selectedAccount === a.id && (
-                <svg className="w-3.5 h-3.5 text-ink-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 type VenmoFilter = 'all' | 'any' | 'pending' | 'requested' | 'settled';
 
 const VENMO_FILTER_OPTIONS: { value: VenmoFilter; label: string; hint: string }[] = [
@@ -430,7 +351,6 @@ interface SpendingTransactionsProps {
   transactions: Transaction[];
   allCategories: Category[];
   venmoRequests?: VenmoRequestSummary[];
-  accounts?: { id: string; name: string; institution: string }[];
   selectedAccount?: string | null;
   onAccountChange?: (id: string | null) => void;
   /** External date filter (e.g. from the page-level month picker) — when it
@@ -439,6 +359,12 @@ interface SpendingTransactionsProps {
   externalDateFilter?: DateFilter;
   /** When false, clears the external filter (shows all time). */
   externalDateFilterActive?: boolean;
+  /** Search and category filters — owned by the parent (rendered in the header) so
+   *  they can also drive the page's charts, not just this list. */
+  search: string;
+  onSearchChange: (v: string) => void;
+  filterCategories: string[];
+  onFilterCategoriesChange: (v: string[]) => void;
 }
 
 type SortField = 'date' | 'amount' | 'category';
@@ -448,20 +374,23 @@ export default function SpendingTransactions({
   transactions,
   allCategories,
   venmoRequests = [],
-  accounts = [],
   selectedAccount = null,
   onAccountChange,
   externalDateFilter,
   externalDateFilterActive,
+  search,
+  onSearchChange,
+  filterCategories,
+  onFilterCategoriesChange,
 }: SpendingTransactionsProps) {
   // Local date filter — affects only the transactions list, not the page-level charts.
+  // Initialized from the external (header) filter when one is provided.
   const [dateFilter, setDateFilter] = useState<DateFilter>(() => {
+    if (externalDateFilter) return externalDateFilter;
     const n = new Date();
     return { mode: 'month', year: n.getFullYear(), month: n.getMonth() };
   });
-  const [dateFilterActive, setDateFilterActive] = useState(false);
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
-  const pillsRef = useRef<HTMLDivElement>(null);
+  const [dateFilterActive, setDateFilterActive] = useState(externalDateFilterActive ?? false);
 
   const handleDateFilterChange = (f: DateFilter) => {
     setDateFilterActive(true);
@@ -469,15 +398,10 @@ export default function SpendingTransactions({
   };
   const clearDateFilter = () => setDateFilterActive(false);
 
-  // Sync from the parent date picker when it changes (but not on first mount —
-  // we want the transactions list to default to "all time").
-  const firstRenderRef = useRef(true);
+  // Sync from the parent date picker (the header) whenever it changes. The user
+  // can still override locally via the calendar until the header changes again.
   useEffect(() => {
     if (!externalDateFilter) return;
-    if (firstRenderRef.current) {
-      firstRenderRef.current = false;
-      return;
-    }
     if (externalDateFilterActive === false) {
       setDateFilterActive(false);
     } else {
@@ -495,15 +419,10 @@ export default function SpendingTransactions({
   useEffect(() => {
     fetch('/api/venmo?names=1').then((r) => r.json()).then((d) => setKnownVenmoNames(d.names ?? []));
   }, []);
-  const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [showTransfers, setShowTransfers] = useState(true);
   const [venmoFilter, setVenmoFilter] = useState<VenmoFilter>('all');
-  const [expandedParent, setExpandedParent] = useState<string | null>(null);
-  const [hoveredChip, setHoveredChip] = useState<string | null>(null);
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   // Optimistic overrides
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, Category>>({});
@@ -604,65 +523,6 @@ export default function SpendingTransactions({
     }
   }
 
-  const chipCategories = useMemo(() => {
-    // Top-level (parent) categories only — subcategories appear on expansion.
-    const list: { id: string; name: string; icon: string; color: string }[] = allCategories
-      .filter((c) => !c.is_income && !c.parent_id)
-      .map((c) => ({ id: c.id, name: c.name, icon: c.icon || '', color: c.color || '#6B7280' }));
-
-    const knownNames = new Set(list.map((c) => c.name));
-
-    // Capture any transaction categories not yet in allCategories (treat as top-level).
-    for (const tx of transactions) {
-      const cat = getEffectiveCategory(tx);
-      const name = cat?.name || 'Uncategorized';
-      if (!knownNames.has(name) && !allCategories.find((c) => c.name === name)?.parent_id) {
-        list.push({ id: cat?.id || name, name, icon: cat?.icon || '❓', color: cat?.color || '#D1D5DB' });
-        knownNames.add(name);
-      }
-    }
-
-    return list.sort((a, b) => a.name.localeCompare(b.name));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, allCategories, categoryOverrides]);
-
-  const subChips = useMemo(() => {
-    if (!expandedParent) return [];
-    const parent = allCategories.find((c) => c.name === expandedParent);
-    if (!parent) return [];
-    return allCategories
-      .filter((c) => c.parent_id === parent.id)
-      .map((c) => ({ id: c.id, name: c.name, icon: c.icon || '', color: c.color || parent.color || '#6B7280' }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [expandedParent, allCategories]);
-
-  // Hide pills that overflow the row instead of clipping them mid-chip.
-  useEffect(() => {
-    const container = pillsRef.current;
-    if (!container) return;
-
-    function update() {
-      if (!container) return;
-      if (filtersExpanded) {
-        (Array.from(container.children) as HTMLElement[]).forEach((el) => {
-          el.style.opacity = '';
-          el.style.pointerEvents = '';
-        });
-        return;
-      }
-      const right = container.getBoundingClientRect().right;
-      (Array.from(container.children) as HTMLElement[]).forEach((el) => {
-        const fits = el.getBoundingClientRect().right <= right + 1;
-        el.style.opacity = fits ? '' : '0';
-        el.style.pointerEvents = fits ? '' : 'none';
-      });
-    }
-
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [filtersExpanded, chipCategories]);
 
   const filtered = useMemo(() => {
     let result = transactions;
@@ -774,35 +634,7 @@ export default function SpendingTransactions({
   return (
     <>
       <div>
-        <div className="sticky top-0 md:top-14 z-10 bg-sand-50 space-y-3 pb-3">
-        {/* Search */}
-        <div className="relative">
-          <svg
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-300 pointer-events-none"
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search by name, category, or amount…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-sand-200 rounded-xl text-sm text-ink-700 placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-sand-300"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-300 hover:text-ink-500"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-
+        <div className="sticky top-0 md:top-24 z-10 bg-sand-50 space-y-3 pb-3">
         {/* Row 1: Sort controls */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs text-ink-400 shrink-0">Sort by</span>
@@ -827,13 +659,6 @@ export default function SpendingTransactions({
               )}
             </button>
           ))}
-          {accounts.length > 1 && (
-            <AccountDropdown
-              accounts={accounts}
-              selectedAccount={selectedAccount}
-              onChange={onAccountChange ?? (() => {})}
-            />
-          )}
           <button
             onClick={() => setShowTransfers((v) => !v)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
@@ -855,6 +680,21 @@ export default function SpendingTransactions({
             Transfers: <span className={showTransfers ? 'text-ink-700' : 'text-ink-300'}>{showTransfers ? 'ON' : 'OFF'}</span>
           </button>
           <VenmoDropdown value={venmoFilter} onChange={setVenmoFilter} />
+          {hasFilters && (
+            <button
+              onClick={() => {
+                onFilterCategoriesChange([]);
+                onSearchChange('');
+                onAccountChange?.(null);
+                clearDateFilter();
+                setShowTransfers(true);
+                setVenmoFilter('all');
+              }}
+              className="text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap"
+            >
+              Clear
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <DateControl
               dateFilter={dateFilter}
@@ -876,184 +716,6 @@ export default function SpendingTransactions({
           </div>
         </div>
 
-        {/* Row 2: Filter controls */}
-        <div className="flex items-start gap-2 min-w-0">
-          <span className="text-xs text-ink-400 shrink-0">Filter by</span>
-
-          {/* Mobile: category dropdown */}
-          <div className="md:hidden relative shrink-0">
-            {showCategoryDropdown && (
-              <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
-            )}
-            <button
-              onClick={() => setShowCategoryDropdown((v) => !v)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                filterCategories.length > 0
-                  ? 'bg-ink-800 text-white border-ink-800'
-                  : 'bg-white border-sand-200 text-ink-600'
-              }`}
-            >
-              {filterCategories.length === 0
-                ? 'All categories'
-                : filterCategories.length === 1
-                  ? `${chipCategories.find((c) => c.name === filterCategories[0])?.icon ?? ''} ${filterCategories[0]}`
-                  : `${filterCategories.length} categories`}
-              <svg
-                className={`w-3 h-3 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-
-            {showCategoryDropdown && (
-              <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg overflow-hidden w-56 max-h-72 overflow-y-auto">
-                <button
-                  onClick={() => { setFilterCategories([]); setShowCategoryDropdown(false); }}
-                  className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors border-b border-sand-100 ${
-                    filterCategories.length === 0 ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
-                  }`}
-                >
-                  All categories
-                  {filterCategories.length === 0 && (
-                    <svg className="ml-auto w-3.5 h-3.5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </button>
-                {chipCategories.map((cat) => {
-                  const active = filterCategories.includes(cat.name);
-                  return (
-                    <button
-                      key={cat.name}
-                      onClick={() => {
-                        setFilterCategories(active ? filterCategories.filter((n) => n !== cat.name) : [cat.name]);
-                        setShowCategoryDropdown(false);
-                      }}
-                      className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors border-b border-sand-50 last:border-0 ${
-                        active ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
-                      }`}
-                    >
-                      <span>{cat.icon}</span>
-                      <span className="flex-1">{cat.name}</span>
-                      {active && (
-                        <svg className="w-3.5 h-3.5 text-ink-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Desktop: collapsible pills */}
-          <div className="hidden md:flex flex-1 min-w-0 items-start gap-1.5">
-            <div
-              ref={pillsRef}
-              className={`flex gap-2 flex-1 min-w-0 ${filtersExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'}`}
-            >
-              <button
-                onClick={() => { setFilterCategories([]); setExpandedParent(null); }}
-                className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  filterCategories.length === 0
-                    ? 'bg-ink-800 text-white'
-                    : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-                }`}
-              >
-                All
-              </button>
-              {chipCategories.map((cat) => {
-                const active = filterCategories.includes(cat.name);
-                const isExpanded = expandedParent === cat.name;
-                const children = isExpanded ? subChips : [];
-                return (
-                  <Fragment key={cat.name}>
-                    <button
-                      onClick={() => {
-                        if (isExpanded) {
-                          setFilterCategories([]);
-                          setExpandedParent(null);
-                        } else {
-                          setFilterCategories([cat.name]);
-                          setExpandedParent(cat.name);
-                        }
-                      }}
-                      className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
-                        active
-                          ? 'text-white border-transparent'
-                          : isExpanded
-                            ? 'bg-white text-ink-600'
-                            : 'bg-white border-sand-200 text-ink-500 hover:border-sand-300'
-                      }`}
-                      style={
-                        active
-                          ? { backgroundColor: cat.color, borderColor: cat.color }
-                          : isExpanded
-                            ? { borderColor: cat.color, color: cat.color }
-                            : {}
-                      }
-                    >
-                      <span>{cat.icon}</span>
-                      {cat.name}
-                    </button>
-                    {children.map((sub) => {
-                      const subActive = filterCategories.includes(sub.name);
-                      return (
-                        <button
-                          key={sub.name}
-                          onClick={() => setFilterCategories(subActive ? [cat.name] : [sub.name])}
-                          className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border-2 ${
-                            subActive ? 'text-white' : 'bg-white'
-                          }`}
-                          style={
-                            subActive
-                              ? { backgroundColor: cat.color, borderColor: cat.color }
-                              : { borderColor: cat.color, color: cat.color }
-                          }
-                        >
-                          <span className="text-[10px]">{sub.icon}</span>
-                          {sub.name}
-                        </button>
-                      );
-                    })}
-                  </Fragment>
-                );
-              })}
-            </div>
-            <button
-              onClick={() => setFiltersExpanded((v) => !v)}
-              title={filtersExpanded ? 'Show less' : 'Show all categories'}
-              className="shrink-0 p-0.5 text-ink-300 hover:text-ink-600 transition-colors"
-            >
-              <svg
-                className={`w-3.5 h-3.5 transition-transform ${filtersExpanded ? 'rotate-180' : ''}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Clear filters */}
-          {hasFilters && (
-            <button
-              onClick={() => {
-                setFilterCategories([]);
-                setExpandedParent(null);
-                setSearch('');
-                onAccountChange?.(null);
-                clearDateFilter();
-                setShowTransfers(true);
-                setVenmoFilter('all');
-              }}
-              className="shrink-0 text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap"
-            >
-              Clear
-            </button>
-          )}
-        </div>
 
         {/* Bulk select toolbar */}
         {selectMode && (

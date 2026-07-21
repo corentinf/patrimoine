@@ -1,8 +1,6 @@
 'use client';
 
-import { useState } from 'react';
 import IncomeView from './IncomeView';
-import { DateNav, type DateFilter } from '../spending/SpendingView';
 
 interface RawTransaction {
   id: string;
@@ -34,19 +32,9 @@ export default function IncomePageClient({
   categories: IncomeCategory[];
   dailyIncome?: { date: string; amount: number }[];
 }) {
-  const now = new Date();
-  const [dateFilter, setDateFilter] = useState<DateFilter>({
-    mode: 'month',
-    year: now.getFullYear(),
-    month: now.getMonth(),
-  });
-
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
-        <DateNav filter={dateFilter} onChange={setDateFilter} />
-      </div>
-      <IncomeView transactions={transactions} categories={categories} dateFilter={dateFilter} onDateFilterChange={setDateFilter} dailyIncome={dailyIncome} />
+      <IncomeView transactions={transactions} categories={categories} dailyIncome={dailyIncome} />
     </div>
   );
 }

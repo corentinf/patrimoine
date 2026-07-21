@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { type RangeKey } from '@/app/lib/investmentRange';
+import { useGlobalFilter } from '@/app/lib/globalFilter';
 import InvestmentProgress from './InvestmentProgress';
 import HoldingsTable, { type Holding } from './HoldingsTable';
 import type { InvestmentAccountSeries } from './page';
@@ -25,14 +24,18 @@ export default function InvestmentClient({
   priceDates,
   priceSeries,
 }: InvestmentClientProps) {
-  const [syncedRange, setSyncedRange] = useState<RangeKey | undefined>(undefined);
+  const { activePreset, resolvedRange } = useGlobalFilter();
+  const range = activePreset ?? 'custom';
+  const customFrom = activePreset ? undefined : resolvedRange.start;
+  const customTo = activePreset ? undefined : resolvedRange.end;
 
   return (
     <>
       <InvestmentProgress
         dates={dates}
         accounts={accounts}
-        onRangeChange={setSyncedRange}
+        rangeStart={resolvedRange.start}
+        rangeEnd={resolvedRange.end}
       />
 
       {liveHoldings.length > 0 && (
@@ -50,7 +53,9 @@ export default function InvestmentClient({
             totalHoldingsValue={totalHoldingsValue}
             priceDates={priceDates}
             priceSeries={priceSeries}
-            externalRange={syncedRange}
+            externalRange={range}
+            externalCustomFrom={customFrom}
+            externalCustomTo={customTo}
           />
         </div>
       )}

@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { formatCurrency } from '@/app/lib/utils';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { formatCurrency, formatCurrencyPrecise } from '@/app/lib/utils';
+import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
+import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
 import SpendingCharts from './SpendingCharts';
 import SpendingProgress from './SpendingProgress';
 import SpendingTransactions from './SpendingTransactions';
@@ -49,9 +51,7 @@ interface SpendingViewProps {
   dailySpending: { date: string; amount: number }[];
 }
 
-export type DateFilter =
-  | { mode: 'month'; year: number; month: number }
-  | { mode: 'custom'; start: string; end: string };
+export type { DateFilter };
 
 function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
   if (filter.mode === 'month') {
@@ -62,10 +62,6 @@ function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
     const d = tx.posted_at.slice(0, 10);
     return d >= filter.start && d <= filter.end;
   });
-}
-
-function formatMonthLabel(year: number, month: number) {
-  return new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 function getPrevPeriodFilter(filter: DateFilter): DateFilter {
@@ -81,6 +77,37 @@ function getPrevPeriodFilter(filter: DateFilter): DateFilter {
   const prevEnd = new Date(startMs - 86_400_000).toISOString().substring(0, 10);
   const prevStart = new Date(startMs - 86_400_000 - duration).toISOString().substring(0, 10);
   return { mode: 'custom', start: prevStart, end: prevEnd };
+}
+
+// Applies the header's category-pill + search filters to a transaction list.
+// `filterCategories` holds category names; selecting a parent also matches its children.
+function applySearchAndCategoryFilter(
+  txs: RawTransaction[],
+  filterCategories: string[],
+  search: string,
+  allCategories: Category[],
+): RawTransaction[] {
+  let result = txs;
+  if (filterCategories.length > 0) {
+    const matchNames = new Set<string>(filterCategories);
+    for (const name of filterCategories) {
+      const parent = allCategories.find((c) => c.name === name && !c.parent_id);
+      if (parent) {
+        allCategories.filter((c) => c.parent_id === parent.id).forEach((c) => matchNames.add(c.name));
+      }
+    }
+    result = result.filter((tx) => matchNames.has(tx.category?.name || 'Uncategorized'));
+  }
+  if (search.trim()) {
+    const q = search.trim().toLowerCase();
+    result = result.filter((tx) => {
+      const name = (tx.payee ?? tx.description ?? 'Unknown').toLowerCase();
+      const cat = (tx.category?.name || 'Uncategorized').toLowerCase();
+      const amount = formatCurrencyPrecise(Math.abs(tx.amount)).toLowerCase();
+      return name.includes(q) || cat.includes(q) || amount.includes(q);
+    });
+  }
+  return result;
 }
 
 function isExcludedFromSpending(tx: RawTransaction): boolean {
@@ -173,128 +200,93 @@ function buildCategoryRows(current: SumByCatMap, previous: SumByCatMap): Categor
     });
 }
 
-export function DateNav({ filter, onChange }: { filter: DateFilter; onChange: (f: DateFilter) => void }) {
-  const [showCustom, setShowCustom] = useState(filter.mode === 'custom');
-  const now = new Date();
+function AccountDropdown({
+  accounts,
+  selectedAccount,
+  onChange,
+}: {
+  accounts: { id: string; name: string; institution: string }[];
+  selectedAccount: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const goMonth = (delta: number) => {
-    if (filter.mode !== 'month') return;
-    let { year, month } = filter;
-    month += delta;
-    if (month < 0) { month = 11; year--; }
-    if (month > 11) { month = 0; year++; }
-    onChange({ mode: 'month', year, month });
-  };
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
-  const isCurrentMonth =
-    filter.mode === 'month' &&
-    filter.year === now.getFullYear() &&
-    filter.month === now.getMonth();
-
-  const activateCustom = () => {
-    setShowCustom(true);
-    const today = now.toISOString().substring(0, 10);
-    const monthStart = filter.mode === 'month'
-      ? new Date(filter.year, filter.month, 1).toISOString().substring(0, 10)
-      : filter.start;
-    const monthEnd = filter.mode === 'month'
-      ? new Date(filter.year, filter.month + 1, 0).toISOString().substring(0, 10)
-      : filter.end;
-    onChange({ mode: 'custom', start: monthStart, end: monthEnd });
-  };
-
-  const backToMonth = () => {
-    setShowCustom(false);
-    onChange({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
-  };
-
-  if (showCustom && filter.mode === 'custom') {
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5 text-sm">
-          <label className="text-xs text-ink-400 whitespace-nowrap">From</label>
-          <input
-            type="date"
-            value={filter.start}
-            max={filter.end}
-            onChange={(e) => onChange({ ...filter, start: e.target.value })}
-            className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
-          />
-        </div>
-        <div className="flex items-center gap-1.5 text-sm">
-          <label className="text-xs text-ink-400 whitespace-nowrap">To</label>
-          <input
-            type="date"
-            value={filter.end}
-            min={filter.start}
-            max={now.toISOString().substring(0, 10)}
-            onChange={(e) => onChange({ ...filter, end: e.target.value })}
-            className="text-xs px-2 py-1 border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700"
-          />
-        </div>
-        <button
-          onClick={backToMonth}
-          className="text-xs text-ink-400 hover:text-ink-600 transition-colors whitespace-nowrap"
-        >
-          ← Month view
-        </button>
-      </div>
-    );
-  }
-
-  const label = filter.mode === 'month'
-    ? formatMonthLabel(filter.year, filter.month)
-    : 'Custom range';
+  const selected = accounts.find((a) => a.id === selectedAccount);
+  const label = selected ? (selected.institution || selected.name) : 'Account';
 
   return (
-    <div className="flex items-center gap-1">
+    <div ref={ref} className="relative">
       <button
-        onClick={() => goMonth(-1)}
-        className="p-1.5 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
-        aria-label="Previous month"
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+          selectedAccount
+            ? 'bg-ink-800 text-white'
+            : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+        }`}
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        {label}
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      <span className="text-sm font-medium text-ink-700 min-w-[140px] text-center">{label}</span>
-      <button
-        onClick={() => goMonth(1)}
-        disabled={isCurrentMonth}
-        className="p-1.5 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
-        aria-label="Next month"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-      <button
-        onClick={activateCustom}
-        className="ml-1 p-1.5 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
-        title="Custom date range"
-        aria-label="Custom date range"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-sand-200 rounded-xl shadow-lg overflow-hidden min-w-[160px]">
+          <button
+            onClick={() => { onChange(null); setOpen(false); }}
+            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left border-b border-sand-100 transition-colors ${
+              !selectedAccount ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
+            }`}
+          >
+            All accounts
+            {!selectedAccount && (
+              <svg className="w-3.5 h-3.5 text-ink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+          {accounts.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => { onChange(a.id); setOpen(false); }}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-sm text-left border-b border-sand-50 last:border-0 transition-colors ${
+                selectedAccount === a.id ? 'font-medium text-ink-800 bg-sand-50' : 'text-ink-500 hover:bg-sand-50'
+              }`}
+            >
+              <span>
+                <span className="block text-ink-700">{a.institution || a.name}</span>
+                {a.institution && a.name !== a.institution && (
+                  <span className="text-xs text-ink-300">{a.name}</span>
+                )}
+              </span>
+              {selectedAccount === a.id && (
+                <svg className="w-3.5 h-3.5 text-ink-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, dailySpending }: SpendingViewProps) {
   const now = new Date();
-  const [dateFilter, setDateFilter] = useState<DateFilter>({
-    mode: 'month',
-    year: now.getFullYear(),
-    month: now.getMonth(),
-  });
-  const [txFilter, setTxFilter] = useState<{ filter: DateFilter; active: boolean }>({
-    filter: { mode: 'month', year: now.getFullYear(), month: now.getMonth() },
-    active: false,
-  });
+  const { dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory } = useGlobalFilter();
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
-  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filterCategories, setFilterCategories] = useState<string[]>([]);
+  const selectedCategoryKey = category?.key ?? null;
 
   // Derived lookup maps for sub-category hierarchy
   const subCatToParent = useMemo(() => {
@@ -318,8 +310,25 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     }
     return m;
   }, [allCategories]);
+
+  // Top-level categories for the header's filter pills, plus any category name
+  // present on transactions but missing from allCategories (treated as top-level).
+  const chipCategories = useMemo(() => {
+    const list: { name: string; icon: string; color: string }[] = allCategories
+      .filter((c) => !c.is_income && !c.parent_id)
+      .map((c) => ({ name: c.name, icon: c.icon || '', color: c.color || '#6B7280' }));
+    const knownNames = new Set(list.map((c) => c.name));
+    for (const tx of transactions) {
+      const name = tx.category?.name || 'Uncategorized';
+      if (!knownNames.has(name) && !allCategories.find((c) => c.name === name)?.parent_id) {
+        list.push({ name, icon: tx.category?.icon || '❓', color: tx.category?.color || '#D1D5DB' });
+        knownNames.add(name);
+      }
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [transactions, allCategories]);
+
   const [showCategoryManager, setShowCategoryManager] = useState(false);
-  const [showCustom, setShowCustom] = useState(false);
   const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('transactions');
   const [budgets, setBudgets] = useState<Record<string, number>>(initialBudgets);
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
@@ -341,22 +350,86 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     );
   }, [transactions]);
 
-  // When a bar/period is selected (SpendingProgress or monthly bar), use that as the
+  // When a bar/period is selected (SpendingProgress), use that as the
   // display filter for the pie chart, category rows, and savings stats.
   const viewFilter = useMemo<DateFilter>(
-    () => (txFilter.active ? txFilter.filter : dateFilter),
-    [txFilter, dateFilter],
+    () => (segment ? { mode: 'custom', start: segment.start, end: segment.end } : dateFilter),
+    [segment, dateFilter],
   );
 
-  const dateFiltered = useMemo(() => {
-    setSelectedCategoryKey(null);
-    return applyDateFilter(transactions, viewFilter);
-  }, [transactions, viewFilter]);
+  // Drop any category drill-down when the effective date window changes —
+  // it may no longer apply to the newly-filtered transactions.
+  useEffect(() => {
+    clearCategory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewFilter]);
 
-  const filteredTransactions = useMemo(() => {
+  const dateFiltered = useMemo(
+    () => applyDateFilter(transactions, viewFilter),
+    [transactions, viewFilter],
+  );
+
+  // Date + account filtered, but not yet narrowed by the category pills / search —
+  // used to tell which category pills have any activity in the selected time frame.
+  const dateAndAccountFiltered = useMemo(() => {
     if (!selectedAccount) return dateFiltered;
     return dateFiltered.filter((tx) => tx.account_id === selectedAccount);
   }, [dateFiltered, selectedAccount]);
+
+  const filteredTransactions = useMemo(
+    () => applySearchAndCategoryFilter(dateAndAccountFiltered, filterCategories, search, allCategories),
+    [dateAndAccountFiltered, filterCategories, search, allCategories],
+  );
+
+  // Category names with actual spending in the selected time frame (for dimming
+  // pills that have nothing to show, independent of which pill is selected).
+  const activeCategoryNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const tx of dateAndAccountFiltered) {
+      if (isExcludedFromSpending(tx)) continue;
+      names.add(tx.category?.name || 'Uncategorized');
+    }
+    return names;
+  }, [dateAndAccountFiltered]);
+
+  // Whether each top-level pill (including its rolled-up sub-categories) has
+  // any activity in the selected time frame.
+  const chipHasActivity = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const cat of chipCategories) {
+      const namesToCheck = new Set([cat.name]);
+      const parent = allCategories.find((c) => c.name === cat.name && !c.parent_id);
+      if (parent) {
+        allCategories.filter((c) => c.parent_id === parent.id).forEach((c) => namesToCheck.add(c.name));
+      }
+      map.set(cat.name, Array.from(namesToCheck).some((n) => activeCategoryNames.has(n)));
+    }
+    return map;
+  }, [chipCategories, allCategories, activeCategoryNames]);
+
+  // Effective daily series for "Spending over time": narrowed whenever a category
+  // pill, search, or the single category drill-down (donut/table click) is active;
+  // otherwise falls back to the server-computed full daily total.
+  const narrowedDailySpending = useMemo(() => {
+    const hasNarrowing = !!category || filterCategories.length > 0 || !!search.trim();
+    if (!hasNarrowing) return null;
+    const isUncategorized = category?.key === '__uncategorized__';
+    const childIds = category ? (childIdsByParent.get(category.key) ?? []) : [];
+    const allowed = category ? new Set([category.key, ...childIds]) : null;
+    const byDay = new Map<string, number>();
+    for (const tx of filteredTransactions) {
+      if (isExcludedFromSpending(tx)) continue;
+      if (allowed) {
+        const matches = isUncategorized ? !tx.category : allowed.has(tx.category?.id ?? '');
+        if (!matches) continue;
+      }
+      const day = tx.posted_at.slice(0, 10);
+      byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(Number(tx.amount)));
+    }
+    return Array.from(byDay.entries())
+      .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [category, filterCategories, search, filteredTransactions, childIdsByParent]);
 
   const visibleTransactions = useMemo(() => {
     if (!selectedCategoryKey) return filteredTransactions;
@@ -386,10 +459,10 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   }, [allAccountFiltered, selectedCategoryKey, childIdsByParent]);
 
   const prevFiltered = useMemo(() => {
-    const prev = applyDateFilter(transactions, getPrevPeriodFilter(viewFilter));
-    if (!selectedAccount) return prev;
-    return prev.filter((tx) => tx.account_id === selectedAccount);
-  }, [transactions, viewFilter, selectedAccount]);
+    let prev = applyDateFilter(transactions, getPrevPeriodFilter(viewFilter));
+    if (selectedAccount) prev = prev.filter((tx) => tx.account_id === selectedAccount);
+    return applySearchAndCategoryFilter(prev, filterCategories, search, allCategories);
+  }, [transactions, viewFilter, selectedAccount, filterCategories, search, allCategories]);
 
   const categoryRows = useMemo(() =>
     buildCategoryRows(
@@ -472,10 +545,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     }
   };
 
-  const periodLabel = dateFilter.mode === 'month'
-    ? formatMonthLabel(dateFilter.year, dateFilter.month)
-    : `${dateFilter.start} – ${dateFilter.end}`;
-
   const pacedTotal = useMemo(() => {
     if (dateFilter.mode !== 'month') return null;
     if (dateFilter.year !== now.getFullYear() || dateFilter.month !== now.getMonth()) return null;
@@ -500,122 +569,119 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return { paced, largeTotal: Math.round(largeSpend) };
   }, [dateFilter, transactions, selectedAccount, now]);
 
-  const goMonth = (delta: number) => {
-    if (dateFilter.mode !== 'month') return;
-    let { year, month } = dateFilter;
-    month += delta;
-    if (month < 0) { month = 11; year--; }
-    if (month > 11) { month = 0; year++; }
-    setDateFilter({ mode: 'month', year, month });
-  };
-
-  const isCurrentMonth =
-    dateFilter.mode === 'month' &&
-    dateFilter.year === now.getFullYear() &&
-    dateFilter.month === now.getMonth();
-
-  const activateCustom = () => {
-    setShowCustom(true);
-    const monthStart = dateFilter.mode === 'month'
-      ? new Date(dateFilter.year, dateFilter.month, 1).toISOString().substring(0, 10)
-      : (dateFilter as any).start;
-    const monthEnd = dateFilter.mode === 'month'
-      ? new Date(dateFilter.year, dateFilter.month + 1, 0).toISOString().substring(0, 10)
-      : (dateFilter as any).end;
-    setDateFilter({ mode: 'custom', start: monthStart, end: monthEnd });
-  };
-
-  const backToMonth = () => {
-    setShowCustom(false);
-    setDateFilter({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
-  };
+  // Search + category-pills filters — rendered in the shared header (below the date
+  // filter row) so they can drive the charts above as well as the transaction list.
+  useSetPageFilterSlot(
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="relative w-56">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-300 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+        </svg>
+        <input
+          type="text"
+          placeholder="Search…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-8 pr-7 py-1 bg-white border border-sand-200 rounded-lg text-xs text-ink-700 placeholder-ink-300 focus:outline-none focus:ring-1 focus:ring-sand-300"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-300 hover:text-ink-500"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+      {accounts.length > 1 && (
+        <AccountDropdown accounts={accounts} selectedAccount={selectedAccount} onChange={setSelectedAccount} />
+      )}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          onClick={() => setFilterCategories([])}
+          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+            filterCategories.length === 0 ? 'bg-ink-800 text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+          }`}
+        >
+          All
+        </button>
+        {chipCategories.map((cat) => {
+          const active = filterCategories.includes(cat.name);
+          const hasActivity = chipHasActivity.get(cat.name) ?? false;
+          const toggle = () => setFilterCategories(
+            active ? filterCategories.filter((n) => n !== cat.name) : [...filterCategories, cat.name],
+          );
+          return (
+            <div
+              key={cat.name}
+              className={`relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+                active
+                  ? 'text-white border-transparent'
+                  : hasActivity
+                    ? 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
+                    : 'bg-white border-sand-100 text-ink-300 hover:border-sand-200'
+              }`}
+              style={{
+                ...(active ? { backgroundColor: cat.color, borderColor: cat.color } : {}),
+                ...(!active && hasActivity ? { backgroundColor: cat.color + '14' } : {}),
+              }}
+            >
+              <button
+                onClick={toggle}
+                onDoubleClick={() => setFilterCategories([cat.name])}
+                title={
+                  !active && !hasActivity
+                    ? 'No spending in this category for the selected period'
+                    : 'Double-click to select only this category'
+                }
+                className="inline-flex items-center gap-1"
+              >
+                <span className={active || hasActivity ? '' : 'opacity-40'}>{cat.icon}</span>
+                {cat.name}
+              </button>
+              {active && (
+                <button
+                  onClick={toggle}
+                  aria-label={`Remove ${cat.name} filter`}
+                  className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-ink-800 text-white text-[8px] flex items-center justify-center leading-none shadow-sm hover:bg-ink-700 transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {filterCategories.length > 0 && (
+          <button
+            onClick={() => setFilterCategories([])}
+            className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
+          >
+            Deselect all
+          </button>
+        )}
+      </div>
+    </div>,
+  );
 
   return (
     <div className="space-y-5">
-      {(() => {
-        const dateNav = showCustom && dateFilter.mode === 'custom' ? (
-          <div className="flex items-center gap-1">
-            <div className="flex items-center gap-1 rounded-lg border border-sand-200 bg-white px-1 py-0.5">
-              <input
-                type="date"
-                value={dateFilter.start}
-                max={dateFilter.end}
-                onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
-                className="text-xs px-1.5 py-1 text-ink-700 bg-transparent focus:outline-none"
-              />
-              <span className="text-ink-300 text-xs select-none">–</span>
-              <input
-                type="date"
-                value={dateFilter.end}
-                min={dateFilter.start}
-                max={now.toISOString().substring(0, 10)}
-                onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
-                className="text-xs px-1.5 py-1 text-ink-700 bg-transparent focus:outline-none"
-              />
-            </div>
-            <button
-              onClick={backToMonth}
-              title="Back to month view"
-              className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-0.5">
-            <button
-              onClick={() => goMonth(-1)}
-              className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
-              aria-label="Previous month"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <span className="stat-label w-[168px] text-center">{periodLabel}</span>
-            <button
-              onClick={() => goMonth(1)}
-              disabled={isCurrentMonth}
-              className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
-              aria-label="Next month"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-            <button
-              onClick={activateCustom}
-              className="ml-0.5 p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
-              title="Custom date range"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </button>
-          </div>
-        );
-
-        return (
-          <div className="flex justify-end">
-            <div>{dateNav}</div>
-          </div>
-        );
-      })()}
-
-      <>
-
       {/* Spending over time + By Category side by side */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-start">
         <SpendingProgress
-          data={dailySpending}
+          data={narrowedDailySpending ?? dailySpending}
+          rangeStart={resolvedRange.start}
+          rangeEnd={resolvedRange.end}
           onPeriodSelect={(range) => {
             if (!range) {
-              setTxFilter((prev) => ({ ...prev, active: false }));
-            } else {
-              setTxFilter({ filter: { mode: 'custom', start: range.start, end: range.end }, active: true });
+              clearSegment();
+              return;
             }
+            const label = range.start === range.end
+              ? new Date(range.start + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : `${range.start} – ${range.end}`;
+            setSegment({ label, start: range.start, end: range.end });
           }}
         />
         <div className="w-72 flex-shrink-0">
@@ -625,7 +691,12 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             totalSpending={totalSpending}
             selectedCategoryKey={selectedCategoryKey}
             onCategoryClick={(id) => {
-              setSelectedCategoryKey((prev) => prev === id ? null : id);
+              if (category?.key === id) {
+                clearCategory();
+              } else {
+                const row = sortedCategories.find((c) => (c.id ?? '__uncategorized__') === id);
+                if (row) setCategory({ key: id, label: row.name, color: row.color, icon: row.icon });
+              }
               setActiveTab('transactions');
             }}
           />
@@ -708,7 +779,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                     {/* Main row */}
                     <button
                       onClick={() => {
-                        setSelectedCategoryKey(isSelected ? null : row.key);
+                        if (isSelected) clearCategory();
+                        else setCategory({ key: row.key, label: row.name, color: row.color, icon: row.icon });
                         setActiveTab('transactions');
                       }}
                       className="w-full px-5 pt-3 pb-1 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center text-left"
@@ -738,7 +810,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                         {row.subBreakdown.map((sub) => (
                           <button
                             key={sub.id}
-                            onClick={() => { setSelectedCategoryKey(sub.id); setActiveTab('transactions'); }}
+                            onClick={() => { setCategory({ key: sub.id, label: sub.name, color: sub.color, icon: sub.icon }); setActiveTab('transactions'); }}
                             className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-sand-100 transition-colors border-b border-sand-100/60 last:border-0"
                           >
                             <span className="text-xs w-4 text-center flex-shrink-0">{sub.icon}</span>
@@ -853,7 +925,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             return row ? (
               <div className="mt-3">
                 <button
-                  onClick={() => setSelectedCategoryKey(null)}
+                  onClick={clearCategory}
                   className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-sand-200 bg-sand-100 text-ink-600 hover:bg-sand-200 transition-colors"
                 >
                   <span style={{ color: row.color }}>{row.icon}</span>
@@ -868,11 +940,14 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               transactions={allTabTransactions as any}
               allCategories={allCategories}
               venmoRequests={venmoRequests}
-              accounts={accounts}
               selectedAccount={selectedAccount}
               onAccountChange={setSelectedAccount}
-              externalDateFilter={txFilter.filter}
-              externalDateFilterActive={txFilter.active}
+              externalDateFilter={viewFilter}
+              externalDateFilterActive={true}
+              search={search}
+              onSearchChange={setSearch}
+              filterCategories={filterCategories}
+              onFilterCategoriesChange={setFilterCategories}
             />
           ) : (
             <div className="card text-center py-16">
@@ -891,8 +966,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           onClose={() => setShowCategoryManager(false)}
         />
       )}
-
-      </>
     </div>
   );
 }

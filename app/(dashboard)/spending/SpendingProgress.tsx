@@ -16,6 +16,10 @@ interface SpendingProgressProps {
   label?: string;
   color?: string;
   valueLabel?: string;
+  /** ISO date bounds — when both are provided, the range is controlled by the parent
+   *  (built-in preset buttons are hidden) instead of the internal selector. */
+  rangeStart?: string;
+  rangeEnd?: string;
 }
 
 type ViewMode = 'cumulative' | 'interval';
@@ -115,18 +119,13 @@ function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: stri
   return { start: key, end: iso(d) };
 }
 
-export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent' }: SpendingProgressProps) {
+export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent', rangeStart, rangeEnd }: SpendingProgressProps) {
   const { blurred } = usePrivacy();
+  const controlled = rangeStart !== undefined && rangeEnd !== undefined;
   const [range, setRange] = useState<RangeKey>('30d');
   const [mode, setMode] = useState<ViewMode>('interval');
   const [gran, setGran] = useState<'day' | 'week' | 'month'>('day');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSelectedKey(null);
-    onPeriodSelect?.(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, gran, mode]);
 
   const todayIso = iso(new Date());
   const firstDate = data[0]?.date ?? todayIso;
@@ -136,9 +135,16 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   const [customTo, setCustomTo] = useState(lastDate);
 
   const { start, end } = useMemo(() => {
+    if (controlled) return { start: rangeStart!, end: rangeEnd! };
     const start = resolveStart(range, { now: new Date(), firstDate, prevDate: firstDate, customFrom });
     return { start, end: range === 'custom' ? customTo : todayIso };
-  }, [range, firstDate, customFrom, customTo, todayIso]);
+  }, [controlled, rangeStart, rangeEnd, range, firstDate, customFrom, customTo, todayIso]);
+
+  useEffect(() => {
+    setSelectedKey(null);
+    onPeriodSelect?.(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end, gran, mode]);
 
   const inRange = useMemo(
     () => data.filter((d) => d.date >= start && d.date <= end),
@@ -202,15 +208,16 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
           </p>
         </div>
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
-          {/* Presets: desktop only — shown above chart in header */}
-          <div className="hidden md:flex items-center gap-3">
-            {PRESETS.map((p) => (
-              <button key={p.key} onClick={() => setRange(p.key)} className={rangeBtn(range === p.key)}>
-                {p.label}
-              </button>
-            ))}
-            <button onClick={() => setRange('custom')} className={rangeBtn(range === 'custom')}>Custom</button>
-          </div>
+          {!controlled && (
+            <div className="hidden md:flex items-center gap-3">
+              {PRESETS.map((p) => (
+                <button key={p.key} onClick={() => setRange(p.key)} className={rangeBtn(range === p.key)}>
+                  {p.label}
+                </button>
+              ))}
+              <button onClick={() => setRange('custom')} className={rangeBtn(range === 'custom')}>Custom</button>
+            </div>
+          )}
           {/* Mode + gran toggles */}
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
@@ -228,7 +235,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
         </div>
       </div>
 
-      {range === 'custom' && (
+      {!controlled && range === 'custom' && (
         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-500">
           <label className="flex items-center gap-1.5">
             From
@@ -305,16 +312,18 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
       )}
 
       {/* Time range selector — mobile only, below chart */}
-      <div className="flex md:hidden items-center justify-between border-t border-sand-100 pt-3">
-        {PRESETS.map((p) => (
-          <button key={p.key} onClick={() => setRange(p.key)} className={rangeBtn(range === p.key)}>
-            {p.label}
+      {!controlled && (
+        <div className="flex md:hidden items-center justify-between border-t border-sand-100 pt-3">
+          {PRESETS.map((p) => (
+            <button key={p.key} onClick={() => setRange(p.key)} className={rangeBtn(range === p.key)}>
+              {p.label}
+            </button>
+          ))}
+          <button onClick={() => setRange('custom')} className={rangeBtn(range === 'custom')}>
+            Custom
           </button>
-        ))}
-        <button onClick={() => setRange('custom')} className={rangeBtn(range === 'custom')}>
-          Custom
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

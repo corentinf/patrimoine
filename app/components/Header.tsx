@@ -5,6 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createBrowserClient } from '@/app/lib/supabase';
 import { usePrivacy } from '@/app/lib/privacy';
+import { useGlobalFilter } from '@/app/lib/globalFilter';
+import { usePageFilterSlotContent } from '@/app/lib/pageFilterSlot';
+import { PRESETS } from '@/app/lib/investmentRange';
 import PlaidLinkButton from './PlaidLink';
 import SimpleFINLinkButton from './SimpleFINLink';
 import { AccountsPanel, AccountModal, type SidebarAccount } from './AccountsPanel';
@@ -305,6 +308,127 @@ function ProfileMenu({ accounts }: { accounts: SidebarAccount[] }) {
   );
 }
 
+function FilterBar() {
+  const {
+    dateFilter, activePreset, showCustom, rangeLabel, canStepForward, canStepBackward,
+    stepPeriod, applyPreset, resetFilter, setCustomStart, setCustomEnd,
+    segment, clearSegment, category, clearCategory,
+  } = useGlobalFilter();
+  const now = new Date();
+
+  return (
+    <div className="border-t border-sand-100 flex flex-wrap items-center gap-x-5 gap-y-1.5 py-2">
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => stepPeriod(-1)}
+          disabled={!canStepBackward}
+          className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
+          aria-label="Previous period"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="text-xs font-medium min-w-[92px] text-center text-ink-700">
+          {rangeLabel}
+        </span>
+        <button
+          onClick={() => stepPeriod(1)}
+          disabled={!canStepForward}
+          className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
+          aria-label="Next period"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+        <button
+          onClick={resetFilter}
+          title="Reset to current month"
+          className="ml-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors"
+        >
+          Reset
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {PRESETS.map((p) => (
+          <button
+            key={p.key}
+            onClick={() => applyPreset(p.key)}
+            className={`text-xs font-medium transition-colors ${activePreset === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}
+          >
+            {p.label}
+          </button>
+        ))}
+        <button
+          onClick={() => applyPreset('custom')}
+          className={`text-xs font-medium transition-colors ${showCustom ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}
+        >
+          Custom
+        </button>
+      </div>
+
+      {showCustom && dateFilter.mode === 'custom' && (
+        <div className="flex items-center gap-1.5 text-xs">
+          <input
+            type="date"
+            value={dateFilter.start}
+            max={dateFilter.end}
+            onChange={(e) => setCustomStart(e.target.value)}
+            className="text-xs px-1.5 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
+          />
+          <span className="text-ink-300">–</span>
+          <input
+            type="date"
+            value={dateFilter.end}
+            min={dateFilter.start}
+            max={now.toISOString().substring(0, 10)}
+            onChange={(e) => setCustomEnd(e.target.value)}
+            className="text-xs px-1.5 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
+          />
+        </div>
+      )}
+
+      {(segment || category) && (
+        <div className="flex items-center gap-1.5">
+          {segment && (
+            <button
+              onClick={clearSegment}
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-sand-200 bg-sand-100 text-ink-600 hover:bg-sand-200 transition-colors"
+              title="Clear day selection"
+            >
+              {segment.label}
+              <span className="text-ink-400">✕</span>
+            </button>
+          )}
+          {category && (
+            <button
+              onClick={clearCategory}
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-sand-200 bg-sand-100 text-ink-600 hover:bg-sand-200 transition-colors"
+              title="Clear category selection"
+            >
+              {category.icon && <span style={{ color: category.color }}>{category.icon}</span>}
+              {category.label}
+              <span className="text-ink-400">✕</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PageFiltersRow() {
+  const content = usePageFilterSlotContent();
+  if (!content) return null;
+  return (
+    <div className="border-t border-sand-100 py-2">
+      {content}
+    </div>
+  );
+}
+
 function shortNum(n: number): string {
   const abs = Math.abs(n);
   if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -331,37 +455,41 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
   };
 
   return (
-    <header className="hidden md:block fixed top-0 left-0 right-0 z-20 h-14 bg-white/95 backdrop-blur border-b border-sand-200">
-      <div className="max-w-screen-xl mx-auto px-6 lg:px-10 h-full flex items-center gap-6">
-        <h1 className="font-display text-lg text-ink-800 tracking-tight flex-shrink-0">
-          Patrimoine
-        </h1>
-        <nav className="flex items-center gap-1">
-          {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            const stat = tabStats[item.href];
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-baseline gap-1.5 ${
-                  isActive ? 'bg-sand-100 text-ink-800' : 'text-ink-400 hover:text-ink-600 hover:bg-sand-50'
-                }`}
-              >
-                {item.label}
-                {stat && (
-                  <span className={`text-[11px] font-mono ${isActive ? 'text-ink-500' : 'text-ink-300'}`} data-sensitive>
-                    {stat}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="ml-auto flex items-center gap-1">
-          <SyncDropdown />
-          <ProfileMenu accounts={accounts} />
+    <header className="hidden md:block sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200">
+      <div className="max-w-screen-xl mx-auto px-6 lg:px-10">
+        <div className="h-14 flex items-center gap-6">
+          <h1 className="font-display text-lg text-ink-800 tracking-tight flex-shrink-0">
+            Patrimoine
+          </h1>
+          <nav className="flex items-center gap-1">
+            {navItems.map((item) => {
+              const isActive = pathname.startsWith(item.href);
+              const stat = tabStats[item.href];
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-baseline gap-1.5 ${
+                    isActive ? 'bg-sand-100 text-ink-800' : 'text-ink-400 hover:text-ink-600 hover:bg-sand-50'
+                  }`}
+                >
+                  {item.label}
+                  {stat && (
+                    <span className={`text-[11px] font-mono ${isActive ? 'text-ink-500' : 'text-ink-300'}`} data-sensitive>
+                      {stat}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="ml-auto flex items-center gap-1">
+            <SyncDropdown />
+            <ProfileMenu accounts={accounts} />
+          </div>
         </div>
+        <FilterBar />
+        <PageFiltersRow />
       </div>
     </header>
   );

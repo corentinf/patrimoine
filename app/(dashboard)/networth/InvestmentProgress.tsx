@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
@@ -22,7 +22,10 @@ interface AccountSeries {
 interface InvestmentProgressProps {
   dates: string[];
   accounts: AccountSeries[];
-  onRangeChange?: (key: RangeKey) => void;
+  /** ISO date bounds — when both are provided, the range is controlled by the parent
+   *  (built-in preset buttons and custom inputs are hidden) instead of the internal selector. */
+  rangeStart?: string;
+  rangeEnd?: string;
 }
 
 interface Point { date: string; value: number }
@@ -55,14 +58,10 @@ function BlurredYTick({ x, y, payload, blurred }: any) {
   );
 }
 
-export default function InvestmentProgress({ dates, accounts, onRangeChange }: InvestmentProgressProps) {
+export default function InvestmentProgress({ dates, accounts, rangeStart, rangeEnd }: InvestmentProgressProps) {
   const { blurred } = usePrivacy();
+  const controlled = rangeStart !== undefined && rangeEnd !== undefined;
   const [range, setRange] = useState<RangeKey>('30d');
-
-  useEffect(() => {
-    if (range !== 'custom') onRangeChange?.(range);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(accounts.map((a) => a.id)));
 
   const selectedAccounts = accounts.filter((a) => selected.has(a.id));
@@ -107,10 +106,11 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
   const [customTo, setCustomTo] = useState(lastDate);
 
   const { start, end } = useMemo(() => {
+    if (controlled) return { start: rangeStart!, end: rangeEnd! };
     const prevDate = data.length >= 2 ? data[data.length - 2].date : data[0]?.date;
     const start = resolveStart(range, { now: new Date(), firstDate, prevDate, customFrom });
     return { start, end: range === 'custom' ? customTo : lastDate };
-  }, [range, data, firstDate, lastDate, customFrom, customTo]);
+  }, [controlled, rangeStart, rangeEnd, range, data, firstDate, lastDate, customFrom, customTo]);
 
   const baseline = useMemo(() => {
     let b: Point | null = null;
@@ -182,18 +182,20 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
           </p>
         </div>
         {/* Presets: desktop only — top-right above chart */}
-        <div className="hidden md:flex items-center gap-3 flex-shrink-0">
-          {PRESETS.map((p) => (
-            <button key={p.key} onClick={() => setRange(p.key)}
-              className={`text-xs font-medium transition-colors ${range === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
-              {p.label}
+        {!controlled && (
+          <div className="hidden md:flex items-center gap-3 flex-shrink-0">
+            {PRESETS.map((p) => (
+              <button key={p.key} onClick={() => setRange(p.key)}
+                className={`text-xs font-medium transition-colors ${range === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
+                {p.label}
+              </button>
+            ))}
+            <button onClick={() => setRange('custom')}
+              className={`text-xs font-medium transition-colors ${range === 'custom' ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
+              Custom
             </button>
-          ))}
-          <button onClick={() => setRange('custom')}
-            className={`text-xs font-medium transition-colors ${range === 'custom' ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
-            Custom
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Account filter */}
@@ -218,7 +220,7 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
         </div>
       )}
 
-      {range === 'custom' && (
+      {!controlled && range === 'custom' && (
         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-500">
           <label className="flex items-center gap-1.5">
             From
@@ -308,18 +310,20 @@ export default function InvestmentProgress({ dates, accounts, onRangeChange }: I
       )}
 
       {/* Time range selector — mobile only, below chart */}
-      <div className="flex md:hidden items-center justify-between border-t border-sand-100 pt-3">
-        {PRESETS.map((p) => (
-          <button key={p.key} onClick={() => setRange(p.key)}
-            className={`text-xs font-medium transition-colors ${range === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
-            {p.label}
+      {!controlled && (
+        <div className="flex md:hidden items-center justify-between border-t border-sand-100 pt-3">
+          {PRESETS.map((p) => (
+            <button key={p.key} onClick={() => setRange(p.key)}
+              className={`text-xs font-medium transition-colors ${range === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
+              {p.label}
+            </button>
+          ))}
+          <button onClick={() => setRange('custom')}
+            className={`text-xs font-medium transition-colors ${range === 'custom' ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
+            Custom
           </button>
-        ))}
-        <button onClick={() => setRange('custom')}
-          className={`text-xs font-medium transition-colors ${range === 'custom' ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
-          Custom
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

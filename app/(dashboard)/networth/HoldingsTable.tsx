@@ -54,6 +54,9 @@ interface HoldingsTableProps {
   priceDates: string[];
   priceSeries: Record<string, (number | null)[]>;
   externalRange?: RangeKey;
+  /** Used when externalRange === 'custom' to seed the period window instead of the table's own date inputs. */
+  externalCustomFrom?: string;
+  externalCustomTo?: string;
 }
 
 function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'center' | 'left' | 'right' }) {
@@ -214,7 +217,7 @@ function NoteCell({ holdingId }: { holdingId: string }) {
   );
 }
 
-export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates, priceSeries, externalRange }: HoldingsTableProps) {
+export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates, priceSeries, externalRange, externalCustomFrom, externalCustomTo }: HoldingsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('market_value');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
@@ -227,6 +230,11 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
   const lastDate = priceDates[priceDates.length - 1] ?? '';
   const [customFrom, setCustomFrom] = useState(firstDate);
   const [customTo, setCustomTo] = useState(lastDate);
+
+  useEffect(() => {
+    if (externalRange === 'custom' && externalCustomFrom !== undefined) setCustomFrom(externalCustomFrom);
+    if (externalRange === 'custom' && externalCustomTo !== undefined) setCustomTo(externalCustomTo);
+  }, [externalRange, externalCustomFrom, externalCustomTo]);
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {

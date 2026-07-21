@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrency, formatCurrencyPrecise, formatShortDate } from '@/app/lib/utils';
 import SpendingCharts from '../spending/SpendingCharts';
 import SpendingProgress from '../spending/SpendingProgress';
-import type { DateFilter } from '../spending/SpendingView';
+import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 
 interface RawTransaction {
   id: string;
@@ -30,8 +30,6 @@ interface IncomeCategory {
 interface Props {
   transactions: RawTransaction[];
   categories: IncomeCategory[];
-  dateFilter: DateFilter;
-  onDateFilterChange?: (filter: DateFilter) => void;
   dailyIncome?: { date: string; amount: number }[];
 }
 
@@ -47,13 +45,12 @@ function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
   return txs.filter((tx) => tx.posted_at >= start && tx.posted_at <= end);
 }
 
-export default function IncomeView({ transactions, categories, dateFilter, onDateFilterChange, dailyIncome = [] }: Props) {
-  const now = new Date();
+export default function IncomeView({ transactions, categories, dailyIncome = [] }: Props) {
+  const { dateFilter, resolvedRange, category, setCategory, clearCategory } = useGlobalFilter();
+  const selectedCategoryId = category?.key ?? null;
   const [search, setSearch] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'category'>('date');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [tableFilterActive, setTableFilterActive] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -102,44 +99,7 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
     return Array.from(map.entries()).map(([id, v]) => ({ id, ...v })).sort((a, b) => b.total - a.total);
   }, [filtered]);
 
-  const monthlyChartData = useMemo(() => {
-    const byMonth: Record<string, number> = {};
-    for (const tx of transactions) {
-      const month = tx.posted_at.substring(0, 7);
-      byMonth[month] = (byMonth[month] || 0) + Math.abs(Number(tx.amount));
-    }
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return Object.entries(byMonth)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([monthKey, total]) => ({
-        month: new Date(monthKey + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-        monthKey,
-        total: Math.round(total),
-        isCurrentMonth: monthKey === currentMonthKey,
-      }));
-  }, [transactions, now]);
-
-  const selectedMonth = useMemo(() => {
-    if (dateFilter.mode !== 'month') return null;
-    return `${dateFilter.year}-${String(dateFilter.month + 1).padStart(2, '0')}`;
-  }, [dateFilter]);
-
-  function handleBarClick(monthKey: string) {
-    if (!onDateFilterChange) return;
-    if (selectedMonth === monthKey) {
-      setTableFilterActive(false);
-      onDateFilterChange({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
-    } else {
-      setTableFilterActive(true);
-      const [year, month] = monthKey.split('-').map(Number);
-      onDateFilterChange({ mode: 'month', year, month: month - 1 });
-    }
-  }
-
-  const tableBase = useMemo(
-    () => (tableFilterActive ? filtered : transactions),
-    [tableFilterActive, filtered, transactions],
-  );
+  const tableBase = filtered;
 
   useEffect(() => { setVisibleCount(50); }, [tableBase, selectedCategoryId, search]);
 
@@ -220,7 +180,10 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
             {categoryRows.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => setSelectedCategoryId((prev) => prev === cat.id ? null : cat.id)}
+                onClick={() => {
+                  if (category?.key === cat.id) clearCategory();
+                  else setCategory({ key: cat.id, label: cat.name, color: cat.color, icon: cat.icon });
+                }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
                   selectedCategoryId === cat.id ? 'text-white border-transparent' : 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
                 }`}
@@ -241,6 +204,8 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-start">
         <SpendingProgress
           data={dailyIncome}
+          rangeStart={resolvedRange.start}
+          rangeEnd={resolvedRange.end}
           label="Income over time"
           color="#16A34A"
           valueLabel="earned"
@@ -251,14 +216,21 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
             monthlyData={[]}
             totalSpending={totalIncome}
             selectedCategoryKey={selectedCategoryId}
-            onCategoryClick={(id) => setSelectedCategoryId((prev) => prev === id ? null : id)}
+            onCategoryClick={(id) => {
+              if (category?.key === id) {
+                clearCategory();
+              } else {
+                const row = categoryRows.find((c) => c.id === id);
+                if (row) setCategory({ key: id, label: row.name, color: row.color, icon: row.icon });
+              }
+            }}
           />
         </div>
       </div>
 
       {/* Transaction list */}
       <div>
-        <div className="sticky top-0 md:top-14 z-10 bg-sand-50 pb-2">
+        <div className="sticky top-0 md:top-24 z-10 bg-sand-50 pb-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs text-ink-400 shrink-0">Sort by</span>
             {(['date', 'amount', 'category'] as const).map((field) => (
@@ -332,7 +304,7 @@ export default function IncomeView({ transactions, categories, dateFilter, onDat
         {visibleTransactions.length > 0 && (
           <p className="text-xs text-ink-400 text-center mt-3">
             {Math.min(visibleCount, visibleTransactions.length)} of {visibleTransactions.length} transaction{visibleTransactions.length !== 1 ? 's' : ''}
-            {(search || selectedCategoryId || tableFilterActive) && ` · filtered from ${transactions.length}`}
+            {visibleTransactions.length !== transactions.length && ` · filtered from ${transactions.length}`}
           </p>
         )}
       </div>
