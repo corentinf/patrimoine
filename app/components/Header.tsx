@@ -329,7 +329,7 @@ function FilterBar() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <span className="text-xs font-medium min-w-[92px] text-center text-ink-700">
+        <span className="text-xs font-semibold min-w-[92px] text-center text-ink-800 bg-sand-100 rounded-md px-2 py-1">
           {rangeLabel}
         </span>
         <button
@@ -351,19 +351,27 @@ function FilterBar() {
         </button>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1">
         {PRESETS.map((p) => (
           <button
             key={p.key}
             onClick={() => applyPreset(p.key)}
-            className={`text-xs font-medium transition-colors ${activePreset === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              activePreset === p.key
+                ? 'bg-ink-800 text-white'
+                : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+            }`}
           >
             {p.label}
           </button>
         ))}
         <button
           onClick={() => applyPreset('custom')}
-          className={`text-xs font-medium transition-colors ${showCustom ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            showCustom
+              ? 'bg-ink-800 text-white'
+              : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+          }`}
         >
           Custom
         </button>
