@@ -26,6 +26,8 @@ interface TransactionDetailProps {
   onClose: () => void;
   onCategoryChange: (txId: string, cat: Category) => void;
   onPayeeChange: (txId: string, payee: string) => void;
+  /** Hide the Venmo request section — Venmo requests don't apply to money coming in. */
+  hideVenmo?: boolean;
 }
 
 export default function TransactionDetail({
@@ -34,6 +36,7 @@ export default function TransactionDetail({
   onClose,
   onCategoryChange,
   onPayeeChange,
+  hideVenmo = false,
 }: TransactionDetailProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -269,7 +272,7 @@ export default function TransactionDetail({
           )}
 
           {/* Venmo section */}
-          <VenmoSection transactionId={tx.id} transactionAmount={tx.amount} />
+          {!hideVenmo && <VenmoSection transactionId={tx.id} transactionAmount={tx.amount} />}
 
           {/* Category section */}
           <div className="px-5 py-4">

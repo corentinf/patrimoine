@@ -48,6 +48,8 @@ interface TransactionRowProps {
   onCategoryChange: (txId: string, cat: Category) => void;
   onTransferChange: (txId: string, value: boolean) => void;
   onRowClick: () => void;
+  /** Hide the Venmo request affordance — Venmo requests don't apply to money coming in. */
+  hideVenmo?: boolean;
 }
 
 export default function TransactionRow({
@@ -64,6 +66,7 @@ export default function TransactionRow({
   onCategoryChange,
   onTransferChange,
   onRowClick,
+  hideVenmo = false,
 }: TransactionRowProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -260,7 +263,7 @@ export default function TransactionRow({
         {/* Hover actions */}
         <div className="flex items-center gap-1.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           {/* Venmo */}
-          {venmo ? (
+          {!hideVenmo && (venmo ? (
             <div className="relative flex items-center gap-1 group/venmo">
               <button
                 onClick={handleVenmoStatusCycle}
@@ -295,7 +298,7 @@ export default function TransactionRow({
               <img src="/venmo.svg" alt="Venmo" className="w-5 h-5 hover:scale-110 transition-transform"
                 style={{ filter: 'brightness(0) saturate(100%) invert(80%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(90%)' }} />
             </button>
-          )}
+          ))}
           {/* Transfer toggle */}
           <button
             onClick={handleTransferToggle}
@@ -384,7 +387,7 @@ export default function TransactionRow({
       )}
 
       {/* Venmo mini-form dropdown */}
-      {showVenmoForm && (
+      {!hideVenmo && showVenmoForm && (
         <div
           className="absolute right-5 top-full bg-white border border-sand-200 rounded-xl shadow-lg z-30 p-3 w-64 space-y-2"
           onClick={(e) => e.stopPropagation()}

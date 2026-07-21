@@ -19,7 +19,7 @@ async function getIncomeTransactions(months = 12) {
   const { data, error } = await supabase
     .from('transactions')
     .select(`
-      id, amount, description, payee, memo, posted_at, account_id, is_transfer,
+      id, amount, description, payee, memo, posted_at, account_id, is_transfer, is_reimbursable,
       account:accounts(id, name, institution),
       category:categories(id, name, color, icon, is_income)
     `)

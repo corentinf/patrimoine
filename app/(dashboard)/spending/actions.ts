@@ -10,6 +10,13 @@ async function getSupabaseAndUser() {
   return { supabase, user };
 }
 
+// Categories and transactions are shared between Spending and Income, so any
+// edit needs to invalidate both pages' cached data.
+function revalidateTransactionPages() {
+  revalidatePath('/spending');
+  revalidatePath('/income');
+}
+
 export async function createCategory(data: { name: string; icon: string; color: string; parent_id?: string | null }) {
   const { supabase, user } = await getSupabaseAndUser();
   const { error } = await supabase.from('categories').insert({
@@ -20,7 +27,7 @@ export async function createCategory(data: { name: string; icon: string; color: 
     ...(data.parent_id ? { parent_id: data.parent_id } : {}),
   });
   if (error) throw new Error(error.message);
-  revalidatePath('/spending');
+  revalidateTransactionPages();
 }
 
 export async function updateCategory(
@@ -33,7 +40,7 @@ export async function updateCategory(
     .update({ name: data.name.trim(), icon: data.icon.trim(), color: data.color })
     .eq('id', id);
   if (error) throw new Error(error.message);
-  revalidatePath('/spending');
+  revalidateTransactionPages();
 }
 
 export async function updateTransactionPayee(id: string, payee: string) {
@@ -43,7 +50,7 @@ export async function updateTransactionPayee(id: string, payee: string) {
     .update({ payee: payee.trim() })
     .eq('id', id);
   if (error) throw new Error(error.message);
-  revalidatePath('/spending');
+  revalidateTransactionPages();
 }
 
 export async function toggleTransfer(id: string, value: boolean) {
@@ -53,7 +60,7 @@ export async function toggleTransfer(id: string, value: boolean) {
     .update({ is_transfer: value })
     .eq('id', id);
   if (error) throw new Error(error.message);
-  revalidatePath('/spending');
+  revalidateTransactionPages();
 }
 
 export async function markReimbursable(ids: string[], value: boolean) {
@@ -63,7 +70,7 @@ export async function markReimbursable(ids: string[], value: boolean) {
     .update({ is_reimbursable: value })
     .in('id', ids);
   if (error) throw new Error(error.message);
-  revalidatePath('/spending');
+  revalidateTransactionPages();
 }
 
 export async function assignTransactionCategory(
@@ -87,5 +94,5 @@ export async function assignTransactionCategory(
     : await query.eq('description', tx.description);
 
   if (error) throw new Error(error.message);
-  revalidatePath('/spending');
+  revalidateTransactionPages();
 }
