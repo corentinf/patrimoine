@@ -23,7 +23,10 @@ export default function MobileTopBar() {
 
   return (
     <>
-      <header className="md:hidden sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200">
+      <header
+        className="md:hidden sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         <div className="h-14 px-4 flex items-center gap-3">
           <h1 className="font-display text-base text-ink-800 tracking-tight flex-1 min-w-0 truncate">
             {pageLabel}
