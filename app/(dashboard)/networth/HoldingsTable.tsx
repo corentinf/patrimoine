@@ -60,15 +60,22 @@ interface HoldingsTableProps {
 }
 
 function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'center' | 'left' | 'right' }) {
+  const [open, setOpen] = useState(false);
   const translateX = align === 'left' ? 'left-0 -translate-x-0' : align === 'right' ? 'right-0 translate-x-0' : 'left-1/2 -translate-x-1/2';
   const arrowX = align === 'left' ? 'left-4' : align === 'right' ? 'right-4' : 'left-1/2 -translate-x-1/2';
   return (
-    <span className="relative group/tip hidden md:inline-flex items-center ml-1">
-      <svg className="w-3 h-3 text-ink-300 group-hover/tip:text-ink-500 transition-colors cursor-default flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" strokeWidth={2} />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
-      </svg>
-      <span className={`pointer-events-none absolute bottom-full ${translateX} mb-2 w-56 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed opacity-0 group-hover/tip:opacity-100 transition-opacity z-50 shadow-lg`}>
+    <span className="relative group/tip inline-flex items-center ml-1">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="flex items-center"
+      >
+        <svg className="w-3 h-3 text-ink-300 group-hover/tip:text-ink-500 transition-colors cursor-default flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" strokeWidth={2} />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
+        </svg>
+      </button>
+      <span className={`pointer-events-none absolute bottom-full ${translateX} mb-2 w-56 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed transition-opacity z-50 shadow-lg ${open ? 'opacity-100' : 'opacity-0'} md:group-hover/tip:opacity-100`}>
         {text}
         <span className={`absolute top-full ${arrowX} border-4 border-transparent border-t-ink-800`} />
       </span>
@@ -84,13 +91,20 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
 };
 
 function HoldingInfoTooltip({ holding, group }: { holding: { symbol: string | null; description: string | null; account: { name: string; institution: string } | null }; group: string }) {
+  const [open, setOpen] = useState(false);
   return (
     <span className="relative group/holdingTip inline-flex items-center">
-      <svg className="w-3 h-3 text-ink-200 group-hover/holdingTip:text-ink-400 transition-colors cursor-default flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" strokeWidth={2} />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
-      </svg>
-      <span className="pointer-events-none absolute bottom-full left-0 mb-2 w-64 bg-ink-800 text-white text-xs rounded-lg px-3 py-2.5 leading-relaxed opacity-0 group-hover/holdingTip:opacity-100 transition-opacity z-50 shadow-lg space-y-1.5">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="flex items-center"
+      >
+        <svg className="w-3 h-3 text-ink-200 group-hover/holdingTip:text-ink-400 transition-colors cursor-default flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" strokeWidth={2} />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
+        </svg>
+      </button>
+      <span className={`pointer-events-none absolute bottom-full left-0 mb-2 w-64 bg-ink-800 text-white text-xs rounded-lg px-3 py-2.5 leading-relaxed transition-opacity z-50 shadow-lg space-y-1.5 ${open ? 'opacity-100' : 'opacity-0'} md:group-hover/holdingTip:opacity-100`}>
         {holding.description && (
           <p className="font-medium text-white/90">{holding.description}</p>
         )}
@@ -207,7 +221,7 @@ function NoteCell({ holdingId }: { holdingId: string }) {
   return (
     <button
       onClick={() => setEditing(true)}
-      className="opacity-0 group-hover/row:opacity-100 transition-opacity"
+      className="opacity-100 md:opacity-0 md:group-hover/row:opacity-100 transition-opacity"
       title="Add memo"
     >
       <svg className="w-3 h-3 text-ink-300 hover:text-ink-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">

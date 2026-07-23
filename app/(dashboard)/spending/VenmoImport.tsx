@@ -27,6 +27,7 @@ export default function VenmoImport() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [showUnmatched, setShowUnmatched] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   async function handleFile(file: File) {
     setPhase('uploading');
@@ -101,15 +102,23 @@ export default function VenmoImport() {
 
   return (
     <div className="relative group/venmo inline-flex items-center">
-      <span className="inline-flex items-center gap-1.5 text-xs text-ink-500 cursor-default">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setSummaryOpen((v) => !v); }}
+        className="inline-flex items-center gap-1.5 text-xs text-ink-500"
+      >
         <span className="text-green-500">✓</span>
         {result?.matched === 0
           ? 'No transactions matched'
           : `${result?.matched} transaction${result?.matched !== 1 ? 's' : ''} labeled`}
-      </span>
+      </button>
 
       {/* Tooltip */}
-      <div className="pointer-events-none group-hover/venmo:pointer-events-auto absolute bottom-full left-0 mb-2 w-64 bg-white border border-sand-200 rounded-lg shadow-lg p-3 text-xs space-y-2 opacity-0 group-hover/venmo:opacity-100 transition-opacity z-50">
+      <div
+        className={`absolute bottom-full left-0 mb-2 w-64 bg-white border border-sand-200 rounded-lg shadow-lg p-3 text-xs space-y-2 transition-opacity z-50 md:group-hover/venmo:opacity-100 md:group-hover/venmo:pointer-events-auto ${
+          summaryOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      >
         <ul className="space-y-0.5 text-ink-500">
           {(result?.matched ?? 0) > 0 && (
             <li className="flex items-center gap-1.5">

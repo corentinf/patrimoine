@@ -85,19 +85,26 @@ function detectSubscriptions(transactions: Tx[]): DetectedSubscription[] {
 }
 
 function HighCostWarning() {
+  const [open, setOpen] = useState(false);
   return (
     <div className="relative group/warn shrink-0">
-      <svg
-        className="w-4 h-4 text-yellow-500"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-label="High cost — worth reviewing"
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="flex items-center"
       >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-      </svg>
-      <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/warn:block z-10 pointer-events-none">
+        <svg
+          className="w-4 h-4 text-yellow-500"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-label="High cost — worth reviewing"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+      </button>
+      <div className={`absolute bottom-full right-0 mb-1.5 z-10 pointer-events-none ${open ? 'block' : 'hidden'} md:group-hover/warn:block`}>
         <div className="bg-ink-800 text-white text-xs rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
           High cost — worth reviewing
           <div className="absolute top-full right-2 border-4 border-transparent border-t-ink-800" />

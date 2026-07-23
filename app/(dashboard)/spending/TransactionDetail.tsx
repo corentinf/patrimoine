@@ -169,7 +169,7 @@ export default function TransactionDetail({
                     {displayPayee}
                   </p>
                   <svg
-                    className="w-3.5 h-3.5 text-ink-300 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="w-3.5 h-3.5 text-ink-300 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
