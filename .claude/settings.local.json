@@ -9,7 +9,11 @@
       "Bash(git -C /Users/corentinfabry/Documents/patrimoine commit --allow-empty -m \"fix committer identity\")",
       "Bash(git -C /Users/corentinfabry/Documents/patrimoine push)",
       "Bash(npx vercel:*)",
-      "Bash(git -C /Users/corentinfabry/Documents/patrimoine add .)"
+      "Bash(git -C /Users/corentinfabry/Documents/patrimoine add .)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3001/spending)",
+      "Bash(echo \"--- exit: $? ---\")",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

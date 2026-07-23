@@ -125,7 +125,12 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   const [range, setRange] = useState<RangeKey>('30d');
   const [mode, setMode] = useState<ViewMode>('interval');
   const [gran, setGran] = useState<'day' | 'week' | 'month'>('day');
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // Click pins a bar's selection so it survives the mouse leaving the chart;
+  // hovering a (different) bar previews it live but reverts to whatever's
+  // pinned — or to nothing — once the mouse moves off.
+  const [pinnedKey, setPinnedKey] = useState<string | null>(null);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const selectedKey = hoveredKey ?? pinnedKey;
 
   const todayIso = iso(new Date());
   const firstDate = data[0]?.date ?? todayIso;
@@ -141,7 +146,8 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   }, [controlled, rangeStart, rangeEnd, range, firstDate, customFrom, customTo, todayIso]);
 
   useEffect(() => {
-    setSelectedKey(null);
+    setPinnedKey(null);
+    setHoveredKey(null);
     onPeriodSelect?.(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end, gran, mode]);
@@ -276,13 +282,24 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
               onClick={(d: any) => {
                 const key = d?.activePayload?.[0]?.payload?.key;
                 if (!key || !onPeriodSelect) return;
-                if (selectedKey === key) {
-                  setSelectedKey(null);
-                  onPeriodSelect(null);
+                if (pinnedKey === key) {
+                  // Unpin — a live hover preview (if any) still applies until the mouse leaves.
+                  setPinnedKey(null);
                 } else {
-                  setSelectedKey(key);
+                  setPinnedKey(key);
                   onPeriodSelect(bucketRange(key, gran));
                 }
+              }}
+              onMouseMove={(d: any) => {
+                const key = d?.activePayload?.[0]?.payload?.key;
+                if (!key || !onPeriodSelect || hoveredKey === key) return;
+                setHoveredKey(key);
+                onPeriodSelect(bucketRange(key, gran));
+              }}
+              onMouseLeave={() => {
+                setHoveredKey(null);
+                if (!onPeriodSelect) return;
+                onPeriodSelect(pinnedKey ? bucketRange(pinnedKey, gran) : null);
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />

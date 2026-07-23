@@ -1,11 +1,15 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { formatCurrency, amountColor } from '@/app/lib/utils';
+import { formatCurrency, amountColor, accountTypeConfig } from '@/app/lib/utils';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { idxAtOrBefore, isoDate } from '@/app/lib/investmentRange';
 import NetWorthChart from '../networth/NetWorthChart';
+import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../components/AccountsPanel';
+
+const ACCOUNT_TYPE_ORDER = ['checking', 'savings', 'investment', 'credit'];
 
 interface Snapshot {
   snapshot_date: string;
@@ -30,6 +34,7 @@ interface HomeViewProps {
   assetsCount: number;
   liabilitiesCount: number;
   milestones: Milestone[];
+  accounts: SidebarAccount[];
 }
 
 export default function HomeView({
@@ -41,9 +46,23 @@ export default function HomeView({
   assetsCount,
   liabilitiesCount,
   milestones,
+  accounts,
 }: HomeViewProps) {
   const { resolvedRange, rangeLabel } = useGlobalFilter();
   const todayIso = isoDate(new Date());
+  const router = useRouter();
+  const [modalAccount, setModalAccount] = useState<SidebarAccount | null | undefined>(undefined);
+
+  const groupedAccounts = useMemo(() => {
+    const byType: Record<string, SidebarAccount[]> = {};
+    for (const a of accounts) {
+      const t = a.account_type || 'checking';
+      (byType[t] ||= []).push(a);
+    }
+    return ACCOUNT_TYPE_ORDER
+      .map((type) => ({ type, accounts: byType[type] ?? [] }))
+      .filter((g) => g.accounts.length > 0);
+  }, [accounts]);
 
   const { chartData, startValue, endValue, hasChange } = useMemo(() => {
     const dates = history.map((h) => h.snapshot_date);
@@ -93,6 +112,14 @@ export default function HomeView({
 
   return (
     <div className="space-y-5">
+      {modalAccount !== undefined && (
+        <AccountModal
+          account={modalAccount}
+          onClose={() => setModalAccount(undefined)}
+          onSuccess={() => router.refresh()}
+        />
+      )}
+
       {/* Hero */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -139,6 +166,77 @@ export default function HomeView({
           <p className="stat-value text-xl mt-1" data-sensitive>{formatCurrency(currentNetWorth)}</p>
         </div>
       </div>
+
+      {/* Accounts — always current, not scoped to the selected period */}
+      {groupedAccounts.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Accounts</h3>
+            <button
+              onClick={() => setModalAccount(null)}
+              className="text-xs text-ink-400 hover:text-ink-700 transition-colors"
+            >
+              + Add account
+            </button>
+          </div>
+          <div className="space-y-4">
+            {groupedAccounts.map(({ type, accounts: group }) => {
+              const cfg = accountTypeConfig[type] ?? { label: type, icon: '💰' };
+              const subtotal = group.reduce(
+                (s, a) => s + (type === 'credit' ? Math.abs(Number(a.balance)) : Number(a.balance)),
+                0,
+              );
+              return (
+                <div key={type} className="card p-0 divide-y divide-sand-100 overflow-hidden">
+                  <div className="px-5 py-2.5 flex items-center justify-between bg-sand-50/60">
+                    <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>{cfg.icon}</span>
+                      {cfg.label}
+                    </span>
+                    <span
+                      className={`text-xs font-mono ${type === 'credit' ? 'text-accent-red' : 'text-ink-500'}`}
+                      data-sensitive
+                    >
+                      {formatCurrency(subtotal)}
+                    </span>
+                  </div>
+                  {group.map((a) => {
+                    const subtitleParts: string[] = [];
+                    if (a.name && a.name !== a.institution) subtitleParts.push(a.name);
+                    if (a.mask) subtitleParts.push(`•••• ${a.mask}`);
+                    const subtitle = subtitleParts.join(' · ');
+                    return (
+                      <button
+                        key={a.id}
+                        onClick={() => setModalAccount(a)}
+                        className="w-full text-left px-5 py-3 flex items-center justify-between gap-4 hover:bg-sand-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <InstitutionLogo
+                            institution={a.institution || a.name}
+                            institutionDomain={a.institution_domain}
+                            size={32}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm text-ink-700 truncate">{a.institution || a.name}</p>
+                            {subtitle && <p className="text-xs text-ink-300 truncate">{subtitle}</p>}
+                          </div>
+                        </div>
+                        <span
+                          className={`text-sm font-mono shrink-0 ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
+                          data-sensitive
+                        >
+                          {formatCurrency(Number(a.balance))}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Milestones — projected from current trajectory, not scoped to the selected period */}
       {milestones.length > 0 && (

@@ -2,14 +2,50 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrency, accountTypeConfig } from '@/app/lib/utils';
+import { formatCurrency, accountTypeConfig, resolveInstitutionDomain } from '@/app/lib/utils';
 
 export interface SidebarAccount {
   id: string;
   name: string;
+  mask?: string | null;
   institution: string;
+  institution_domain?: string | null;
   account_type: string;
   balance: number;
+}
+
+export function InstitutionLogo({
+  institution,
+  institutionDomain,
+  size = 32,
+}: {
+  institution: string;
+  institutionDomain?: string | null;
+  size?: number;
+}) {
+  const [failed, setFailed] = useState(false);
+  const domain = resolveInstitutionDomain(institution, institutionDomain);
+
+  if (!domain || failed) {
+    return (
+      <div
+        className="rounded-full bg-sand-100 text-ink-500 font-semibold flex items-center justify-center shrink-0"
+        style={{ width: size, height: size, fontSize: size * 0.4 }}
+      >
+        {(institution || '?').charAt(0).toUpperCase()}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=${size * 2}`}
+      alt=""
+      onError={() => setFailed(true)}
+      className="rounded-full bg-white border border-sand-200 object-contain shrink-0"
+      style={{ width: size, height: size, padding: Math.round(size * 0.14) }}
+    />
+  );
 }
 
 function compactCurrency(amount: number): string {
@@ -254,9 +290,12 @@ export function AccountsPanel({ accounts, onEdit, onAdd }: {
               <div
                 key={a.id}
                 className="group flex items-center justify-between gap-2 px-3 py-1 rounded-md text-xs hover:bg-sand-50"
-                title={`${a.institution} — ${a.name}`}
+                title={`${a.institution} — ${a.name}${a.mask ? ` (••${a.mask})` : ''}`}
               >
-                <span className="truncate text-ink-700">{a.institution || a.name}</span>
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <InstitutionLogo institution={a.institution || a.name} institutionDomain={a.institution_domain} size={16} />
+                  <span className="truncate text-ink-700">{a.institution || a.name}</span>
+                </span>
                 <div className="flex items-center gap-1 shrink-0">
                   <span
                     className={`font-mono ${a.account_type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}

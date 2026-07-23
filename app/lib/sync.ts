@@ -96,6 +96,7 @@ export async function syncAll(
           id: account.account_id,
           user_id: userId,
           name: account.name,
+          mask: account.mask ?? null,
           institution: item.institution_name ?? '',
           institution_domain: '',
           account_type: mapAccountType(account.type, account.subtype),
