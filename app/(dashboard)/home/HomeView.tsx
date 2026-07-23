@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { formatCurrency, amountColor, accountTypeConfig } from '@/app/lib/utils';
+import { formatCurrency, amountColor, accountTypeConfig, getAccountLinkUrl } from '@/app/lib/utils';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { idxAtOrBefore, isoDate } from '@/app/lib/investmentRange';
 import NetWorthChart from '../networth/NetWorthChart';
@@ -205,11 +205,26 @@ export default function HomeView({
                     if (a.name && a.name !== a.institution) subtitleParts.push(a.name);
                     if (a.mask) subtitleParts.push(`•••• ${a.mask}`);
                     const subtitle = subtitleParts.join(' · ');
+                    const linkUrl = getAccountLinkUrl(a.institution || a.name, a.institution_domain, a.custom_url);
+
+                    const openAccount = () => {
+                      if (linkUrl) window.open(linkUrl, '_blank', 'noopener,noreferrer');
+                      else setModalAccount(a);
+                    };
+
                     return (
-                      <button
+                      <div
                         key={a.id}
-                        onClick={() => setModalAccount(a)}
-                        className="w-full text-left px-5 py-3 flex items-center justify-between gap-4 hover:bg-sand-50 transition-colors"
+                        role="button"
+                        tabIndex={0}
+                        onClick={openAccount}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return;
+                          e.preventDefault();
+                          openAccount();
+                        }}
+                        title={linkUrl ? `Open ${a.institution || a.name}` : undefined}
+                        className="group w-full px-5 py-3 flex items-center justify-between gap-4 hover:bg-sand-50 transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <InstitutionLogo
@@ -222,13 +237,24 @@ export default function HomeView({
                             {subtitle && <p className="text-xs text-ink-300 truncate">{subtitle}</p>}
                           </div>
                         </div>
-                        <span
-                          className={`text-sm font-mono shrink-0 ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
-                          data-sensitive
-                        >
-                          {formatCurrency(Number(a.balance))}
-                        </span>
-                      </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`text-sm font-mono ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
+                            data-sensitive
+                          >
+                            {formatCurrency(Number(a.balance))}
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setModalAccount(a); }}
+                            title="Edit account"
+                            className="w-6 h-6 flex items-center justify-center text-ink-300 hover:text-ink-700 opacity-0 group-hover:opacity-100 transition-opacity rounded-md hover:bg-sand-100"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

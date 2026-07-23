@@ -108,6 +108,20 @@ export function resolveInstitutionDomain(
 }
 
 /**
+ * URL to open when clicking through to an account's institution —
+ * a user-set override, else the resolved institution domain.
+ */
+export function getAccountLinkUrl(
+  institution: string | null | undefined,
+  institutionDomain: string | null | undefined,
+  customUrl: string | null | undefined,
+): string | null {
+  if (customUrl) return customUrl;
+  const domain = resolveInstitutionDomain(institution, institutionDomain);
+  return domain ? `https://${domain}` : null;
+}
+
+/**
  * Get a unix timestamp for N days ago.
  */
 export function daysAgoTimestamp(days: number): number {

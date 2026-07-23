@@ -18,7 +18,7 @@ async function getAccounts() {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from('accounts')
-    .select('id, name, mask, institution, institution_domain, account_type, balance')
+    .select('id, name, mask, institution, institution_domain, custom_url, account_type, balance')
     .eq('is_hidden', false)
     .order('account_type')
     .order('institution');

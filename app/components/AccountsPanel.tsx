@@ -10,6 +10,7 @@ export interface SidebarAccount {
   mask?: string | null;
   institution: string;
   institution_domain?: string | null;
+  custom_url?: string | null;
   account_type: string;
   balance: number;
 }
