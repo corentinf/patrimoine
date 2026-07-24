@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   const context = holdings?.length ? buildPortfolioContext(holdings) : 'No holdings data available.';
 
   const result = streamText({
-    model: anthropic('claude-haiku-4.5'),
+    model: anthropic('claude-haiku-4-5'),
     system: `You are a portfolio advisor embedded in the user's investment tracking app. Answer questions about their specific holdings with precise numbers. Be concise (2–4 sentences unless detail is requested), direct, and actionable. Do not use markdown headers in short answers.
 
 ## Their Investment Portfolio

@@ -60,7 +60,7 @@ export async function GET() {
   const context = buildPortfolioContext(holdings);
 
   const { text } = await generateText({
-    model: anthropic('claude-haiku-4.5'),
+    model: anthropic('claude-haiku-4-5'),
     prompt: `You are analyzing an investment portfolio. Return ONLY a valid JSON array with exactly 4 insight objects and no other text.
 
 Each object has:
