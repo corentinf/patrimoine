@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
 
   const { error } = await supabase.from('accounts').upsert({
     id,
+    user_id: user.id,
     name,
     institution,
     account_type,
