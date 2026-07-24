@@ -283,20 +283,30 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                 const key = d?.activePayload?.[0]?.payload?.key;
                 if (!key || !onPeriodSelect) return;
                 if (pinnedKey === key) {
-                  // Unpin — a live hover preview (if any) still applies until the mouse leaves.
+                  // Unpin. On desktop a live hover preview would otherwise keep the
+                  // selection alive until the mouse leaves, but on touch there's no
+                  // hover/mouseleave at all — clear both explicitly so tapping a
+                  // selected bar again always deselects it.
                   setPinnedKey(null);
+                  setHoveredKey(null);
+                  onPeriodSelect(null);
                 } else {
                   setPinnedKey(key);
                   onPeriodSelect(bucketRange(key, gran));
                 }
               }}
               onMouseMove={(d: any) => {
+                // Mobile has no real hover — Recharts still relays touch-drag into this
+                // handler, which made dragging a finger across bars flicker through a
+                // live preview. Restrict the preview to actual pointer-hover devices.
+                if (window.innerWidth < 768) return;
                 const key = d?.activePayload?.[0]?.payload?.key;
                 if (!key || !onPeriodSelect || hoveredKey === key) return;
                 setHoveredKey(key);
                 onPeriodSelect(bucketRange(key, gran));
               }}
               onMouseLeave={() => {
+                if (window.innerWidth < 768) return;
                 setHoveredKey(null);
                 if (!onPeriodSelect) return;
                 onPeriodSelect(pinnedKey ? bucketRange(pinnedKey, gran) : null);

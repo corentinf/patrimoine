@@ -1,7 +1,6 @@
 import Header from '../components/Header';
 import MobileTopBar from '../components/MobileTopBar';
 import Sidebar from '../components/Sidebar';
-import SwipeNavigator from '../components/SwipeNavigator';
 import Chat from '../components/Chat';
 import { PrivacyProvider } from '../lib/privacy';
 import { GlobalFilterProvider } from '../lib/globalFilter';
@@ -58,13 +57,11 @@ export default async function DashboardLayout({
             />
             <MobileTopBar />
 
-            <SwipeNavigator className="flex-1">
-              <div className="max-w-screen-xl mx-auto px-4 md:px-6 lg:px-10 py-4 md:py-6 pb-24 md:pb-6">
-                <main>
-                  {children}
-                </main>
-              </div>
-            </SwipeNavigator>
+            <div className="flex-1 max-w-screen-xl mx-auto px-4 md:px-6 lg:px-10 py-4 md:py-6 pb-24 md:pb-6 w-full">
+              <main>
+                {children}
+              </main>
+            </div>
 
             <Chat />
             <Sidebar
