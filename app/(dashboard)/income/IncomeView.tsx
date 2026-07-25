@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { formatCurrency } from '@/app/lib/utils';
+import { formatCurrency, amountColor } from '@/app/lib/utils';
 import SpendingCharts from '../spending/SpendingCharts';
 import SpendingProgress from '../spending/SpendingProgress';
 import TransactionRow from '../spending/TransactionRow';
 import TransactionDetail from '../spending/TransactionDetail';
 import type { Category } from '../spending/CategoryManager';
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
+import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
 
 interface RawTransaction {
   id: string;
@@ -55,6 +56,7 @@ function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
 export default function IncomeView({ transactions, categories, dailyIncome = [] }: Props) {
   const { dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory } = useGlobalFilter();
   const selectedCategoryId = category?.key ?? null;
+  const { ref: txListRef, minHeight: txListMinHeight } = useStableMinHeight<HTMLDivElement>();
   const [search, setSearch] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'category'>('date');
@@ -201,61 +203,56 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
 
   return (
     <div className="space-y-5">
-      {/* Summary card */}
-      <div className="card flex flex-wrap gap-x-10 gap-y-4 items-center">
-        <div>
-          <p className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-1">Total income</p>
-          <div className="flex items-baseline gap-3">
-            <span className="font-display text-3xl font-semibold tabular-nums text-accent-green">
-              {formatCurrency(totalIncome)}
-            </span>
-            {momDelta !== null && (
-              <span className={`flex items-center gap-0.5 text-xs font-medium ${momDelta > 0 ? 'text-accent-green' : momDelta < 0 ? 'text-accent-red' : 'text-ink-300'}`}>
-                {momDelta > 0 ? (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-                  </svg>
-                ) : momDelta < 0 ? (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                ) : null}
-                {Math.abs(momDelta).toFixed(1)}% vs prior period
-              </span>
-            )}
-          </div>
-          {prevTotal > 0 && (
-            <p className="text-xs text-ink-400 mt-1">Prior period: <span className="font-mono">{formatCurrency(prevTotal)}</span></p>
-          )}
+      {/* Hero: title + total income */}
+      <div className="card px-5 py-4">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="font-display text-lg text-ink-800">Income</h2>
+          <span className="stat-label">Total income</span>
+          <span className="stat-value text-xl text-accent-green" data-sensitive>{formatCurrency(totalIncome)}</span>
         </div>
+        {/* Always mounted (even with no prior-period data) so this line's height
+            is reserved — otherwise hovering a bar/category can toggle it away
+            and the whole page jumps vertically. */}
+        <p className={`text-xs font-mono mt-1 ${prevTotal > 0 ? amountColor(totalIncome - prevTotal) : 'invisible'}`} data-sensitive>
+          {prevTotal > 0 ? (
+            <>
+              {totalIncome >= prevTotal ? '+' : ''}{formatCurrency(totalIncome - prevTotal)}
+              {momDelta !== null && ` (${momDelta >= 0 ? '+' : ''}${momDelta.toFixed(1)}%)`} vs prior period
+            </>
+          ) : '—'}
+        </p>
+      </div>
 
-        {categoryRows.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {categoryRows.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  if (category?.key === cat.id) clearCategory();
-                  else setCategory({ key: cat.id, label: cat.name, color: cat.color, icon: cat.icon });
-                }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
-                  selectedCategoryId === cat.id ? 'text-white border-transparent' : 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
-                }`}
-                style={selectedCategoryId === cat.id ? { backgroundColor: cat.color, borderColor: cat.color } : {}}
-              >
-                <span>{cat.icon}</span>
-                {cat.name}
-                <span className={`font-mono ${selectedCategoryId === cat.id ? 'text-white/80' : 'text-ink-400'}`}>
-                  {formatCurrency(cat.total)}
-                </span>
-              </button>
-            ))}
-          </div>
+      {/* Category quick filter — always mounted (even with zero categories
+          for the current bar/segment) so this row's height is reserved and
+          hovering different bars doesn't push the chart/content below up and down. */}
+      <div className="flex flex-wrap items-center gap-1.5 min-h-[30px]">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400 mr-1">Categories</span>
+        {categoryRows.length > 0 ? categoryRows.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => {
+              if (category?.key === cat.id) clearCategory();
+              else setCategory({ key: cat.id, label: cat.name, color: cat.color, icon: cat.icon });
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+              selectedCategoryId === cat.id ? 'text-white border-transparent' : 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
+            }`}
+            style={selectedCategoryId === cat.id ? { backgroundColor: cat.color, borderColor: cat.color } : {}}
+          >
+            <span>{cat.icon}</span>
+            {cat.name}
+            <span className={`font-mono ${selectedCategoryId === cat.id ? 'text-white/80' : 'text-ink-400'}`}>
+              {formatCurrency(cat.total)}
+            </span>
+          </button>
+        )) : (
+          <span className="text-xs text-ink-300">None</span>
         )}
       </div>
 
       {/* Income over time + By Category side by side */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-stretch">
         <SpendingProgress
           data={narrowedDailyIncome ?? dailyIncome}
           rangeStart={resolvedRange.start}
@@ -328,7 +325,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
           </div>
         </div>
 
-        <div className="card p-0">
+        <div ref={txListRef} className="card p-0" style={{ minHeight: txListMinHeight || undefined }}>
           {visibleTransactions.length === 0 ? (
             <div className="py-12 text-center text-ink-400 text-sm">No income transactions for this period.</div>
           ) : (

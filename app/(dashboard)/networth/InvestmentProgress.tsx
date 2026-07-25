@@ -7,7 +7,9 @@ import {
 import { format } from 'date-fns';
 import { formatCurrency, amountColor } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
-import { PRESETS, isoDate, resolveStart, type RangeKey } from '@/app/lib/investmentRange';
+import {
+  PRESETS, isoDate, resolveStart, buildCombinedSeries, seriesChange, type RangeKey,
+} from '@/app/lib/investmentRange';
 
 interface AccountSeries {
   id: string;
@@ -78,26 +80,11 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
   // Sum the selected accounts across the shared date axis, starting only where
   // all selected accounts have data (consistent basket — no jump when one is
   // linked later). Then reflect the live value as today's point.
-  const data: Point[] = useMemo(() => {
-    const out: Point[] = [];
-    for (let i = 0; i < dates.length; i++) {
-      let sum = 0;
-      let ok = selectedAccounts.length > 0;
-      for (const a of selectedAccounts) {
-        const v = a.values[i];
-        if (v == null) { ok = false; break; }
-        sum += v;
-      }
-      if (ok) out.push({ date: dates[i], value: sum });
-    }
-    if (out.length === 0 || out[out.length - 1].date < todayIso) {
-      if (selectedAccounts.length > 0) out.push({ date: todayIso, value: liveValue });
-    } else {
-      out[out.length - 1] = { ...out[out.length - 1], value: liveValue };
-    }
-    return out;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dates, accounts, selected, todayIso, liveValue]);
+  const data: Point[] = useMemo(
+    () => buildCombinedSeries(dates, selectedAccounts, todayIso, liveValue),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dates, accounts, selected, todayIso, liveValue],
+  );
 
   const firstDate = data[0]?.date ?? todayIso;
   const lastDate = data[data.length - 1]?.date ?? todayIso;
@@ -137,10 +124,10 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
     }));
   }, [baseline, inRange, costBasis]);
 
-  const startValue = baseline?.value ?? inRange[0]?.value ?? 0;
-  const endValue = inRange.length ? inRange[inRange.length - 1].value : liveValue;
-  const change = endValue - startValue;
-  const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
+  const { startValue, endValue, change, pct } = useMemo(
+    () => seriesChange(data, start, end, liveValue),
+    [data, start, end, liveValue],
+  );
   const up = change >= 0;
 
   function toggleAccount(id: string) {
@@ -213,7 +200,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                   on ? 'bg-ink-700 text-white' : 'bg-sand-100 text-ink-400 hover:bg-sand-200'
                 }`}
               >
-                {accountLabel(a)}
+                {accountLabel(a)}: <span data-sensitive>{formatCurrency(a.currentValue)}</span>
               </button>
             );
           })}

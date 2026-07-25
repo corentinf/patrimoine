@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { formatCurrency, formatCurrencyPrecise } from '@/app/lib/utils';
+import { formatCurrency, formatCurrencyPrecise, amountColor } from '@/app/lib/utils';
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
+import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
 import SpendingCharts from './SpendingCharts';
 import SpendingProgress from './SpendingProgress';
 import SpendingTransactions from './SpendingTransactions';
@@ -394,6 +395,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const [search, setSearch] = useState('');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const selectedCategoryKey = category?.key ?? null;
+  const { ref: txListRef, minHeight: txListMinHeight } = useStableMinHeight<HTMLDivElement>();
 
   // Derived lookup maps for sub-category hierarchy
   const subCatToParent = useMemo(() => {
@@ -740,10 +742,51 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     </div>,
   );
 
+  const spendingChange = totalSpending - prevTotalSpending;
+  const spendingPct = prevTotalSpending > 0 ? (spendingChange / prevTotalSpending) * 100 : null;
+
   return (
     <div className="space-y-5">
+      {/* Hero: title + total spending + savings rate */}
+      <div className="card px-5 py-4">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="font-display text-lg text-ink-800">Spending</h2>
+          <span className="stat-label">Total spending</span>
+          <span className="stat-value text-xl text-accent-red" data-sensitive>{formatCurrency(totalSpending)}</span>
+        </div>
+        {/* Always mounted (even with no prior-period data) so this line's height
+            is reserved — otherwise hovering a bar/category can toggle it away
+            and the whole page jumps vertically. */}
+        <p className={`text-xs font-mono mt-1 ${prevTotalSpending > 0 ? amountColor(-spendingChange) : 'invisible'}`}>
+          {prevTotalSpending > 0 ? (
+            <>
+              {spendingChange >= 0 ? '+' : ''}{formatCurrency(spendingChange)}
+              {spendingPct !== null && ` (${spendingPct >= 0 ? '+' : ''}${spendingPct.toFixed(1)}%)`} vs prior period
+            </>
+          ) : '—'}
+        </p>
+        {pacedTotal !== null && (
+          <p className="text-xs text-ink-400 mt-1">
+            on pace for ~<span className="font-mono text-ink-600">{formatCurrency(pacedTotal.paced)}</span>
+            {pacedTotal.largeTotal > 0 && (
+              <span className="text-ink-300">
+                {' '}(excl. <span className="font-mono">{formatCurrency(pacedTotal.largeTotal)}</span> in large purchases)
+              </span>
+            )}
+          </p>
+        )}
+        <div className="mt-3 pt-3 border-t border-sand-100">
+          <SavingsRateModule
+            currentSpending={totalSpending}
+            prevSpending={prevTotalSpending}
+            monthlyIncome={monthlyIncome}
+            periodDays={periodDays}
+          />
+        </div>
+      </div>
+
       {/* Spending over time + By Category side by side */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-stretch">
         <SpendingProgress
           data={narrowedDailySpending ?? dailySpending}
           rangeStart={resolvedRange.start}
@@ -777,16 +820,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           />
         </div>
       </div>
-
-      {/* Spending + savings rate combined card */}
-      <SavingsRateModule
-        currentSpending={totalSpending}
-        prevSpending={prevTotalSpending}
-        monthlyIncome={monthlyIncome}
-        periodDays={periodDays}
-        pacedTotal={pacedTotal}
-      />
-
 
       {/* Section tabs */}
       <div className="flex items-center gap-0 border-b border-sand-200 overflow-x-auto">
@@ -994,7 +1027,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
       {/* Tab: Transactions */}
       {activeTab === 'transactions' && (
-        <div>
+        <div ref={txListRef} style={{ minHeight: txListMinHeight || undefined }}>
           {selectedCategoryKey && (() => {
             const row = categoryRows.find((r) => r.key === selectedCategoryKey);
             return row ? (

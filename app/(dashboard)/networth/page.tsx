@@ -1,5 +1,4 @@
 import { createServiceClient } from '@/app/lib/supabase';
-import { formatCurrency } from '@/app/lib/utils';
 import { getDailyCloses } from '@/app/lib/prices';
 import HoldingsInsights from './HoldingsInsights';
 import InvestmentClient from './InvestmentClient';
@@ -178,16 +177,6 @@ export default async function NetWorthPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl text-ink-800">Investment holdings</h2>
-        </div>
-        <div className="sm:text-right">
-          <p className="stat-label">Total value</p>
-          <p className="stat-value" data-sensitive>{formatCurrency(totalInvestmentValue)}</p>
-        </div>
-      </div>
-
       <InvestmentClient
         dates={investment.dates}
         accounts={investment.accounts}

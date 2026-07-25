@@ -194,7 +194,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   const hasData = chartData.length >= 2;
 
   return (
-    <div className="card space-y-4">
+    <div className="card space-y-4 h-full flex flex-col">
       {/* Header: stats left, controls right */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -258,8 +258,9 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
         </div>
       )}
 
+      <div className="flex-1 min-h-[220px]">
       {hasData ? (
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height="100%">
           {mode === 'cumulative' ? (
             <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
               <defs>
@@ -333,10 +334,11 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
           )}
         </ResponsiveContainer>
       ) : (
-        <div className="h-[180px] flex items-center justify-center text-xs text-ink-400">
+        <div className="h-full flex items-center justify-center text-xs text-ink-400">
           No spending in this range.
         </div>
       )}
+      </div>
 
       {/* Time range selector — mobile only, below chart */}
       {!controlled && (

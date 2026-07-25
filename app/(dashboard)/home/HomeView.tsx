@@ -121,21 +121,19 @@ export default function HomeView({
       )}
 
       {/* Hero */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="font-display text-2xl text-ink-800">Net worth</h2>
+      <div className="card px-5 py-4">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="font-display text-lg text-ink-800">Net worth</h2>
+          <span className="stat-label">{rangeLabel}</span>
+          <span className="stat-value text-xl" data-sensitive>{formatCurrency(endValue)}</span>
         </div>
-        <div className="sm:text-right">
-          <p className="stat-label">{rangeLabel}</p>
-          <p className="stat-value" data-sensitive>{formatCurrency(endValue)}</p>
-          {hasChange ? (
-            <p className={`text-xs font-mono mt-1 ${amountColor(change)}`} data-sensitive>
-              {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%) over period
-            </p>
-          ) : trackingStartDate ? (
-            <p className="text-xs text-ink-300 mt-1">Tracking since {trackingStartDate}</p>
-          ) : null}
-        </div>
+        {hasChange ? (
+          <p className={`text-xs font-mono mt-1 ${amountColor(change)}`} data-sensitive>
+            {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%) over period
+          </p>
+        ) : trackingStartDate ? (
+          <p className="text-xs text-ink-300 mt-1">Tracking since {trackingStartDate}</p>
+        ) : null}
       </div>
 
       {/* Chart */}

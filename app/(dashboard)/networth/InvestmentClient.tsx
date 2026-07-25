@@ -1,6 +1,9 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
+import { formatCurrency, amountColor } from '@/app/lib/utils';
+import { isoDate, buildCombinedSeries, seriesChange } from '@/app/lib/investmentRange';
 import InvestmentProgress from './InvestmentProgress';
 import HoldingsTable, { type Holding } from './HoldingsTable';
 import type { InvestmentAccountSeries } from './page';
@@ -29,8 +32,25 @@ export default function InvestmentClient({
   const customFrom = activePreset ? undefined : resolvedRange.start;
   const customTo = activePreset ? undefined : resolvedRange.end;
 
+  const { change, pct } = useMemo(() => {
+    const todayIso = isoDate(new Date());
+    const series = buildCombinedSeries(dates, accounts, todayIso, totalInvestmentValue);
+    return seriesChange(series, resolvedRange.start, resolvedRange.end, totalInvestmentValue);
+  }, [dates, accounts, totalInvestmentValue, resolvedRange.start, resolvedRange.end]);
+
   return (
     <>
+      <div className="card px-5 py-4">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="font-display text-lg text-ink-800">Investment holdings</h2>
+          <span className="stat-label">Total value</span>
+          <span className="stat-value text-xl" data-sensitive>{formatCurrency(totalInvestmentValue)}</span>
+        </div>
+        <p className={`text-xs font-mono mt-1 ${amountColor(change)}`} data-sensitive>
+          {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%) over period
+        </p>
+      </div>
+
       <InvestmentProgress
         dates={dates}
         accounts={accounts}

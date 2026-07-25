@@ -558,36 +558,6 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
         </div>
       )}
 
-      {/* Performance range selector */}
-      <div className="card p-0">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-sand-100">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400">Performance</span>
-          <div className="flex items-center gap-4">
-            {PRESETS.map((p) => (
-              <button key={p.key} onClick={() => setRange(p.key)}
-                className={`text-xs font-medium transition-colors ${range === p.key ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
-                {p.label}
-              </button>
-            ))}
-            <button onClick={() => setRange('custom')}
-              className={`text-xs font-medium transition-colors ${range === 'custom' ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`}>
-              Custom
-            </button>
-          </div>
-        </div>
-        {range === 'custom' && priceDates.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-500 px-4 py-2">
-            <input type="date" value={customFrom} min={firstDate} max={customTo}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400" />
-            <span>→</span>
-            <input type="date" value={customTo} min={customFrom} max={lastDate}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="border border-sand-300 rounded px-2 py-1 text-ink-700 bg-white focus:outline-none focus:ring-1 focus:ring-sand-400" />
-          </div>
-        )}
-      </div>
-
       {/* Holdings table */}
       <div className="card p-0">
         {/* Desktop header */}
