@@ -134,6 +134,11 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   const [pinnedKey, setPinnedKey] = useState<string | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const selectedKey = hoveredKey ?? pinnedKey;
+  // Auto-detected outlier capping (see yAxisCap below) can be overridden by
+  // the user via the "Full scale" toggle — e.g. when two similar-sized
+  // outliers make each other look "normal" to the heuristic, or they just
+  // want to see the true proportions.
+  const [forceFullScale, setForceFullScale] = useState(false);
 
   const todayIso = iso(new Date());
   const firstDate = data[0]?.date ?? todayIso;
@@ -151,6 +156,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   useEffect(() => {
     setPinnedKey(null);
     setHoveredKey(null);
+    setForceFullScale(false);
     onPeriodSelect?.(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end, gran, mode]);
@@ -192,21 +198,23 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   }, [inRange, mode, gran]);
 
   // One outsized bucket (e.g. a rent payment) can flatten every other bar to
-  // near-zero. When a bucket is a clear outlier vs. the rest, cap the y-axis
-  // at a bit above the second-highest bucket and clamp that bar's rendered
-  // height to the cap — its true amount still shows via a label above the
-  // bar and the tooltip (CustomTooltip reads the real value, not the clamp).
-  const yAxisCap = useMemo(() => {
+  // near-zero. Compare against the median (not just the single next-highest
+  // bucket) so two similar-sized outliers in the same period — which would
+  // otherwise look "normal" next to each other — both still get caught. Any
+  // bucket over the cap clamps to it, with its true amount shown via a label
+  // above the bar and in the tooltip (CustomTooltip reads the real value).
+  const autoYAxisCap = useMemo(() => {
     if (mode !== 'interval') return null;
     const values = chartData.map((d: any) => d.value).filter((v: number) => v > 0).sort((a: number, b: number) => a - b);
     if (values.length < 4) return null;
     const max = values[values.length - 1];
-    const secondMax = values[values.length - 2];
     const median = values[Math.floor(values.length / 2)];
-    const ceiling = Math.max(secondMax * 1.5, median * 4);
+    const ceiling = median * 4;
     if (max <= ceiling * 1.15) return null;
     return Math.ceil(ceiling / 100) * 100;
   }, [chartData, mode]);
+
+  const yAxisCap = forceFullScale ? null : autoYAxisCap;
 
   const barChartData = useMemo(() => {
     if (!yAxisCap) return chartData;
@@ -266,6 +274,17 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
               </button>
             </div>
             {mode === 'interval' && <GranDropdown value={gran} onChange={setGran} />}
+            {autoYAxisCap != null && (
+              <button
+                onClick={() => setForceFullScale((v) => !v)}
+                title={forceFullScale
+                  ? 'Showing the true scale — a big day is squashing the rest. Click to normalize it.'
+                  : 'A big day is being scaled down so the rest stay comparable. Click to see the true scale.'}
+                className="px-2.5 py-1 rounded-lg bg-sand-100 text-xs font-medium text-ink-500 hover:text-ink-700 hover:bg-sand-200 transition-colors"
+              >
+                {forceFullScale ? 'Normalize' : 'True scale'}
+              </button>
+            )}
           </div>
         </div>
       </div>
