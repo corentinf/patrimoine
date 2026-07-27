@@ -7,6 +7,7 @@ import { createBrowserClient } from '@/app/lib/supabase';
 import { usePrivacy } from '@/app/lib/privacy';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { usePageFilterSlotContent } from '@/app/lib/pageFilterSlot';
+import { useShortcutsHelp } from './KeyboardShortcuts';
 import { PRESETS } from '@/app/lib/investmentRange';
 import PlaidLinkButton from './PlaidLink';
 import SimpleFINLinkButton from './SimpleFINLink';
@@ -210,6 +211,7 @@ function ProfileMenu({ accounts }: { accounts: SidebarAccount[] }) {
   const [modalAccount, setModalAccount] = useState<SidebarAccount | null | undefined>(undefined);
   const ref = useRef<HTMLDivElement>(null);
   const { blurred, toggle: togglePrivacy } = usePrivacy();
+  const { openHelp } = useShortcutsHelp();
   const router = useRouter();
 
   useEffect(() => {
@@ -292,6 +294,15 @@ function ProfileMenu({ accounts }: { accounts: SidebarAccount[] }) {
                 <span className={`w-7 h-4 rounded-full transition-colors relative ${blurred ? 'bg-ink-700' : 'bg-sand-300'}`}>
                   <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${blurred ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
                 </span>
+              </button>
+              <button
+                onClick={() => { openHelp(); setOpen(false); }}
+                className="w-full flex items-center gap-2 text-xs text-ink-500 hover:text-ink-700 transition-colors px-3 py-1.5 rounded-lg hover:bg-sand-50"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9h.01M15 9h.01M9 13h6M12 3C7.03 3 3 6.58 3 11c0 2.39 1.19 4.53 3.08 5.99-.1.93-.5 2.24-1.58 3.51 0 0 2.19-.09 4.19-1.42.7.19 1.44.29 2.31.29 4.97 0 9-3.58 9-8s-4.03-8-9-8z" />
+                </svg>
+                Keyboard shortcuts
               </button>
               <ResetButton onClose={() => setOpen(false)} />
               <button
