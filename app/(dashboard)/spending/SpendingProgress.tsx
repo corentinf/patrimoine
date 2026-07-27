@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { formatCurrency } from '@/app/lib/utils';
@@ -37,10 +37,13 @@ function BlurredYTick({ x, y, payload, blurred }: any) {
 
 function CustomTooltip({ active, payload, label, mode, valueLabel }: any) {
   if (!active || !payload?.length) return null;
+  // The bar's own dataKey is a display value clamped for outlier-capping —
+  // the tooltip always shows the true amount from the underlying data point.
+  const trueValue = payload[0].payload?.value ?? payload[0].value;
   return (
     <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-0.5">
       <p className="font-medium text-sand-300">{label}</p>
-      <p className="font-mono">{formatCurrency(payload[0].value)}{mode === 'cumulative' ? ' total' : ` ${valueLabel ?? 'spent'}`}</p>
+      <p className="font-mono">{formatCurrency(trueValue)}{mode === 'cumulative' ? ' total' : ` ${valueLabel ?? 'spent'}`}</p>
     </div>
   );
 }
@@ -188,6 +191,32 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
       .map(([k, v]) => ({ label: bucketLabel(k, gran), key: k, value: Math.round(v) }));
   }, [inRange, mode, gran]);
 
+  // One outsized bucket (e.g. a rent payment) can flatten every other bar to
+  // near-zero. When a bucket is a clear outlier vs. the rest, cap the y-axis
+  // at a bit above the second-highest bucket and clamp that bar's rendered
+  // height to the cap — its true amount still shows via a label above the
+  // bar and the tooltip (CustomTooltip reads the real value, not the clamp).
+  const yAxisCap = useMemo(() => {
+    if (mode !== 'interval') return null;
+    const values = chartData.map((d: any) => d.value).filter((v: number) => v > 0).sort((a: number, b: number) => a - b);
+    if (values.length < 4) return null;
+    const max = values[values.length - 1];
+    const secondMax = values[values.length - 2];
+    const median = values[Math.floor(values.length / 2)];
+    const ceiling = Math.max(secondMax * 1.5, median * 4);
+    if (max <= ceiling * 1.15) return null;
+    return Math.ceil(ceiling / 100) * 100;
+  }, [chartData, mode]);
+
+  const barChartData = useMemo(() => {
+    if (!yAxisCap) return chartData;
+    return chartData.map((d: any) => ({
+      ...d,
+      displayValue: Math.min(d.value, yAxisCap),
+      capped: d.value > yAxisCap,
+    }));
+  }, [chartData, yAxisCap]);
+
   const rangeBtn = (active: boolean) =>
     `text-xs font-medium transition-colors ${active ? 'text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-700'}`;
 
@@ -277,8 +306,8 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
             </AreaChart>
           ) : (
             <BarChart
-              data={chartData}
-              margin={{ top: 5, right: 5, bottom: 0, left: -10 }}
+              data={barChartData}
+              margin={{ top: yAxisCap ? 18 : 5, right: 5, bottom: 0, left: -10 }}
               style={{ cursor: onPeriodSelect ? 'pointer' : 'default' }}
               onClick={(d: any) => {
                 const key = d?.activePayload?.[0]?.payload?.key;
@@ -315,11 +344,16 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8F897E' }} axisLine={{ stroke: '#E2D9CA' }} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
-              <YAxis axisLine={false} tickLine={false} tick={(props) => <BlurredYTick {...props} blurred={blurred} />} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                domain={yAxisCap ? [0, yAxisCap] : ['auto', 'auto']}
+                tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
+              />
               <Tooltip content={<CustomTooltip mode={mode} valueLabel={valueLabel} />} cursor={{ fill: '#F0EBE1', opacity: 0.5 }} />
-              <Bar dataKey="value" name="Spending" radius={[3, 3, 0, 0]}>
-                {chartData.map((entry, i) => {
-                  const isSelected = !!selectedKey && (entry as any).key === selectedKey;
+              <Bar dataKey={yAxisCap ? 'displayValue' : 'value'} name="Spending" radius={[3, 3, 0, 0]}>
+                {barChartData.map((entry: any, i: number) => {
+                  const isSelected = !!selectedKey && entry.key === selectedKey;
                   const hasSelection = !!selectedKey;
                   return (
                     <Cell
@@ -329,6 +363,28 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                     />
                   );
                 })}
+                {yAxisCap && (
+                  <LabelList
+                    dataKey="displayValue"
+                    content={(props: any) => {
+                      const { x, y, width, index } = props;
+                      const entry = barChartData[index];
+                      if (!entry?.capped) return null;
+                      return (
+                        <text
+                          x={x + width / 2}
+                          y={y - 6}
+                          textAnchor="middle"
+                          fontSize={10}
+                          fontWeight={600}
+                          fill="#8F897E"
+                        >
+                          {formatCurrency(entry.value)}
+                        </text>
+                      );
+                    }}
+                  />
+                )}
               </Bar>
             </BarChart>
           )}
