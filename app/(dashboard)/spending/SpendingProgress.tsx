@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { formatCurrency } from '@/app/lib/utils';
@@ -22,8 +22,6 @@ interface SpendingProgressProps {
   rangeEnd?: string;
 }
 
-type ViewMode = 'cumulative' | 'interval';
-
 const iso = isoDate;
 
 function BlurredYTick({ x, y, payload, blurred }: any) {
@@ -35,7 +33,7 @@ function BlurredYTick({ x, y, payload, blurred }: any) {
   );
 }
 
-function CustomTooltip({ active, payload, label, mode, valueLabel }: any) {
+function CustomTooltip({ active, payload, label, valueLabel }: any) {
   if (!active || !payload?.length) return null;
   // The bar's own dataKey is a display value clamped for outlier-capping —
   // the tooltip always shows the true amount from the underlying data point.
@@ -43,7 +41,7 @@ function CustomTooltip({ active, payload, label, mode, valueLabel }: any) {
   return (
     <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-0.5">
       <p className="font-medium text-sand-300">{label}</p>
-      <p className="font-mono">{formatCurrency(trueValue)}{mode === 'cumulative' ? ' total' : ` ${valueLabel ?? 'spent'}`}</p>
+      <p className="font-mono">{formatCurrency(trueValue)} {valueLabel ?? 'spent'}</p>
     </div>
   );
 }
@@ -126,7 +124,6 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   const { blurred } = usePrivacy();
   const controlled = rangeStart !== undefined && rangeEnd !== undefined;
   const [range, setRange] = useState<RangeKey>('30d');
-  const [mode, setMode] = useState<ViewMode>('interval');
   const [gran, setGran] = useState<'day' | 'week' | 'month'>('day');
   // Click pins a bar's selection so it survives the mouse leaving the chart;
   // hovering a (different) bar previews it live but reverts to whatever's
@@ -159,7 +156,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
     setForceFullScale(false);
     onPeriodSelect?.(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, end, gran, mode]);
+  }, [start, end, gran]);
 
   const inRange = useMemo(
     () => data.filter((d) => d.date >= start && d.date <= end),
@@ -171,13 +168,6 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   const avgPerDay = total / spanDays;
 
   const chartData = useMemo(() => {
-    if (mode === 'cumulative') {
-      let run = 0;
-      return inRange.map((d) => {
-        run += d.amount;
-        return { label: format(new Date(d.date + 'T12:00:00'), 'MMM d'), value: Math.round(run) };
-      });
-    }
     const byBucket = new Map<string, number>();
     for (const d of inRange) {
       const k = bucketKey(d.date, gran);
@@ -195,7 +185,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
     return Array.from(byBucket.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([k, v]) => ({ label: bucketLabel(k, gran), key: k, value: Math.round(v) }));
-  }, [inRange, mode, gran]);
+  }, [inRange, gran]);
 
   // One outsized bucket (e.g. a rent payment) can flatten every other bar to
   // near-zero. Compare against the median (not just the single next-highest
@@ -204,7 +194,6 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   // bucket over the cap clamps to it, with its true amount shown via a label
   // above the bar and in the tooltip (CustomTooltip reads the real value).
   const autoYAxisCap = useMemo(() => {
-    if (mode !== 'interval') return null;
     const values = chartData.map((d: any) => d.value).filter((v: number) => v > 0).sort((a: number, b: number) => a - b);
     if (values.length < 4) return null;
     const max = values[values.length - 1];
@@ -212,7 +201,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
     const ceiling = median * 4;
     if (max <= ceiling * 1.15) return null;
     return Math.ceil(ceiling / 100) * 100;
-  }, [chartData, mode]);
+  }, [chartData]);
 
   const yAxisCap = forceFullScale ? null : autoYAxisCap;
 
@@ -247,7 +236,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
             </span>
           </div>
           <p className="text-xs text-ink-400 mt-0.5">
-            {mode === 'cumulative' ? `Cumulative ${valueLabel} over the selected period` : `${valueLabel.charAt(0).toUpperCase() + valueLabel.slice(1)} per period`}
+            {`${valueLabel.charAt(0).toUpperCase() + valueLabel.slice(1)} per period`}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -261,19 +250,9 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
               <button onClick={() => setRange('custom')} className={rangeBtn(range === 'custom')}>Custom</button>
             </div>
           )}
-          {/* Mode + gran toggles */}
+          {/* Granularity + scale toggles */}
           <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-lg bg-sand-100 p-0.5 text-xs font-medium">
-              <button onClick={() => setMode('cumulative')}
-                className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'cumulative' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}>
-                Total
-              </button>
-              <button onClick={() => setMode('interval')}
-                className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'interval' ? 'bg-white text-ink-700 shadow-sm' : 'text-ink-400 hover:text-ink-600'}`}>
-                Period
-              </button>
-            </div>
-            {mode === 'interval' && <GranDropdown value={gran} onChange={setGran} />}
+            <GranDropdown value={gran} onChange={setGran} />
             {autoYAxisCap != null && (
               <button
                 onClick={() => setForceFullScale((v) => !v)}
@@ -309,21 +288,6 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
       <div className="flex-1 min-h-[220px]">
       {hasData ? (
         <ResponsiveContainer width="100%" height="100%">
-          {mode === 'cumulative' ? (
-            <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
-              <defs>
-                <linearGradient id="spendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={color} stopOpacity={0.18} />
-                  <stop offset="100%" stopColor={color} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8F897E' }} axisLine={{ stroke: '#E2D9CA' }} tickLine={false} interval="preserveStartEnd" minTickGap={24} />
-              <YAxis axisLine={false} tickLine={false} domain={['auto', 'auto']} tick={(props) => <BlurredYTick {...props} blurred={blurred} />} />
-              <Tooltip content={<CustomTooltip mode={mode} />} />
-              <Area type="monotone" dataKey="value" name="Spending" stroke={color} strokeWidth={2} fill="url(#spendFill)" dot={false} activeDot={{ r: 4, fill: color }} />
-            </AreaChart>
-          ) : (
             <BarChart
               data={barChartData}
               margin={{ top: yAxisCap ? 18 : 5, right: 5, bottom: 0, left: -10 }}
@@ -369,7 +333,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                 domain={yAxisCap ? [0, yAxisCap] : ['auto', 'auto']}
                 tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
               />
-              <Tooltip content={<CustomTooltip mode={mode} valueLabel={valueLabel} />} cursor={{ fill: '#F0EBE1', opacity: 0.5 }} />
+              <Tooltip content={<CustomTooltip valueLabel={valueLabel} />} cursor={{ fill: '#F0EBE1', opacity: 0.5 }} />
               <Bar dataKey={yAxisCap ? 'displayValue' : 'value'} name="Spending" radius={[3, 3, 0, 0]}>
                 {barChartData.map((entry: any, i: number) => {
                   const isSelected = !!selectedKey && entry.key === selectedKey;
@@ -406,7 +370,6 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                 )}
               </Bar>
             </BarChart>
-          )}
         </ResponsiveContainer>
       ) : (
         <div className="h-full flex items-center justify-center text-xs text-ink-400">
