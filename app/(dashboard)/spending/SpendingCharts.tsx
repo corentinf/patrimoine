@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, ResponsiveContainer,
@@ -72,12 +73,36 @@ export default function SpendingCharts({
     return data;
   })();
 
+  // One dominant category (e.g. rent) can shrink every other slice to a
+  // sliver. As in SpendingProgress's bar chart, compare against the median
+  // (not just the runner-up) so multiple similarly-large slices are all
+  // caught, and let the user flip back to the true proportions.
+  const [forceFullScale, setForceFullScale] = useState(false);
+  const autoPieCap = useMemo(() => {
+    const values = pieData.map((d) => d.value).filter((v) => v > 0).sort((a, b) => a - b);
+    if (values.length < 4) return null;
+    const max = values[values.length - 1];
+    const median = values[Math.floor(values.length / 2)];
+    const ceiling = median * 4;
+    if (max <= ceiling * 1.15) return null;
+    return ceiling;
+  }, [pieData]);
+  const pieCap = forceFullScale ? null : autoPieCap;
+  const displayPieData = pieData.map((d) => ({
+    ...d,
+    displayValue: pieCap ? Math.min(d.value, pieCap) : d.value,
+    capped: pieCap != null && d.value > pieCap,
+  }));
+
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
+    // The arc's own dataKey is a display value clamped for outlier-capping —
+    // the tooltip always shows the true amount from the underlying data point.
+    const trueValue = payload[0].payload?.value ?? payload[0].value;
     return (
       <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg">
         <p className="font-medium">{payload[0].payload.month || payload[0].name}</p>
-        <p className="font-mono mt-0.5">{formatCurrency(payload[0].value)}</p>
+        <p className="font-mono mt-0.5">{formatCurrency(trueValue)}</p>
       </div>
     );
   };
@@ -132,29 +157,42 @@ export default function SpendingCharts({
           current period) so the container never disappears/reappears and
           shifts the page; height matches the chart card next to it via h-full. */}
       <div className="card h-full flex flex-col">
-        <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
-          By category
-        </h4>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
+            By category
+          </h4>
+          {autoPieCap != null && (
+            <button
+              onClick={() => setForceFullScale((v) => !v)}
+              title={forceFullScale
+                ? 'Showing true proportions — a big category is squashing the rest. Click to normalize it.'
+                : 'A big category is being scaled down so the rest stay comparable. Click to see the true proportions.'}
+              className="px-2.5 py-1 rounded-lg bg-sand-100 text-xs font-medium text-ink-500 hover:text-ink-700 hover:bg-sand-200 transition-colors"
+            >
+              {forceFullScale ? 'Normalize' : 'True scale'}
+            </button>
+          )}
+        </div>
         {pieData.length > 0 ? (
           <>
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie
-                  data={pieData}
+                  data={displayPieData}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
                   outerRadius={100}
                   paddingAngle={2}
-                  dataKey="value"
+                  dataKey={pieCap ? 'displayValue' : 'value'}
                   animationDuration={400}
                   onClick={(_, index) => {
-                    const item = pieData[index];
+                    const item = displayPieData[index];
                     if (item?.id && onCategoryClick) onCategoryClick(item.id);
                   }}
                   style={{ cursor: onCategoryClick ? 'pointer' : 'default' }}
                 >
-                  {pieData.map((entry, i) => {
+                  {displayPieData.map((entry, i) => {
                     const isSelected = !!entry.id && entry.id === selectedCategoryKey;
                     const hasSelection = !!selectedCategoryKey;
                     return (
@@ -163,6 +201,7 @@ export default function SpendingCharts({
                         fill={entry.color}
                         stroke={isSelected ? entry.color : 'white'}
                         strokeWidth={isSelected ? 3 : 2}
+                        strokeDasharray={entry.capped ? '3 2' : undefined}
                         fillOpacity={hasSelection && !isSelected ? 0.35 : 1}
                       />
                     );
@@ -175,7 +214,7 @@ export default function SpendingCharts({
                 categories + "Other") so narrowing the data (e.g. hovering a
                 single bar) doesn't shrink the card and shift the page. */}
             <div className="flex-1 flex flex-wrap gap-x-4 gap-y-1 mt-2 justify-center min-h-24 content-start">
-              {pieData.map((entry) => {
+              {displayPieData.map((entry) => {
                 const isSelected = !!entry.id && entry.id === selectedCategoryKey;
                 const hasSelection = !!selectedCategoryKey;
                 return (
@@ -183,6 +222,7 @@ export default function SpendingCharts({
                     key={entry.name}
                     onClick={() => entry.id && onCategoryClick?.(entry.id)}
                     disabled={!entry.id}
+                    title={entry.capped ? `Slice scaled down — actual: ${formatCurrency(entry.value)}` : undefined}
                     className={`flex items-center gap-1.5 text-xs transition-opacity ${
                       hasSelection && !isSelected ? 'opacity-35' : 'opacity-100'
                     } ${entry.id ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'} ${
@@ -195,6 +235,10 @@ export default function SpendingCharts({
                       style={{ backgroundColor: entry.color }}
                     />
                     {entry.name}
+                    <span className={`font-mono ${isSelected ? 'text-white/80' : 'text-ink-400'}`}>
+                      {formatCurrency(entry.value)}
+                    </span>
+                    {entry.capped && <span className="text-ink-300" title="Slice scaled down for readability">✂</span>}
                   </button>
                 );
               })}
