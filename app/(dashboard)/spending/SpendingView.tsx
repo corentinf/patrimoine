@@ -390,7 +390,10 @@ function CategoryPill({
 
 export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, dailySpending }: SpendingViewProps) {
   const now = new Date();
-  const { dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory } = useGlobalFilter();
+  const {
+    dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory,
+    stepPeriod, canStepBackward, canStepForward,
+  } = useGlobalFilter();
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
@@ -791,6 +794,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           data={narrowedDailySpending ?? dailySpending}
           rangeStart={resolvedRange.start}
           rangeEnd={resolvedRange.end}
+          onStepPeriod={stepPeriod}
+          canStepBackward={canStepBackward}
+          canStepForward={canStepForward}
           onPeriodSelect={(range) => {
             if (!range) {
               clearSegment();

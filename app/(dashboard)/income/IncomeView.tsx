@@ -54,7 +54,10 @@ function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
 }
 
 export default function IncomeView({ transactions, categories, dailyIncome = [] }: Props) {
-  const { dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory } = useGlobalFilter();
+  const {
+    dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory,
+    stepPeriod, canStepBackward, canStepForward,
+  } = useGlobalFilter();
   const selectedCategoryId = category?.key ?? null;
   const { ref: txListRef, minHeight: txListMinHeight } = useStableMinHeight<HTMLDivElement>();
   const [search, setSearch] = useState('');
@@ -260,6 +263,9 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
           label="Income over time"
           color="#16A34A"
           valueLabel="earned"
+          onStepPeriod={stepPeriod}
+          canStepBackward={canStepBackward}
+          canStepForward={canStepForward}
           onPeriodSelect={(range) => {
             if (!range) {
               clearSegment();

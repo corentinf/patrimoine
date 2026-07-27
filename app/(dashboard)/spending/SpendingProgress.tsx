@@ -20,6 +20,11 @@ interface SpendingProgressProps {
    *  (built-in preset buttons are hidden) instead of the internal selector. */
   rangeStart?: string;
   rangeEnd?: string;
+  /** Shifts the parent's (global) date filter by its own span — wires the
+   *  chart's prev/next arrows to the same period selector as the header. */
+  onStepPeriod?: (delta: number) => void;
+  canStepBackward?: boolean;
+  canStepForward?: boolean;
 }
 
 const iso = isoDate;
@@ -120,7 +125,7 @@ function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: stri
   return { start: key, end: iso(d) };
 }
 
-export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent', rangeStart, rangeEnd }: SpendingProgressProps) {
+export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent', rangeStart, rangeEnd, onStepPeriod, canStepBackward = true, canStepForward = true }: SpendingProgressProps) {
   const { blurred } = usePrivacy();
   const controlled = rangeStart !== undefined && rangeEnd !== undefined;
   const [range, setRange] = useState<RangeKey>('30d');
@@ -186,6 +191,11 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([k, v]) => ({ label: bucketLabel(k, gran), key: k, value: Math.round(v) }));
   }, [inRange, gran]);
+
+  // Which bucket (whatever the current granularity) today falls into, so its
+  // bar can be visually flagged — only matches something when today is
+  // actually within the visible range.
+  const todayKey = bucketKey(todayIso, gran);
 
   // One outsized bucket (e.g. a rent payment) can flatten every other bar to
   // near-zero. Compare against the median (not just the single next-highest
@@ -285,7 +295,8 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
         </div>
       )}
 
-      <div className="flex-1 min-h-[220px]">
+      <div className="flex-1 min-h-[220px] flex flex-col">
+      <div className="flex-1 min-h-0">
       {hasData ? (
         <ResponsiveContainer width="100%" height="100%">
             <BarChart
@@ -338,11 +349,14 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                 {barChartData.map((entry: any, i: number) => {
                   const isSelected = !!selectedKey && entry.key === selectedKey;
                   const hasSelection = !!selectedKey;
+                  const isToday = entry.key === todayKey;
                   return (
                     <Cell
                       key={i}
                       fill={color}
                       fillOpacity={hasSelection ? (isSelected ? 1 : 0.3) : 1}
+                      stroke={isToday ? '#292524' : 'none'}
+                      strokeWidth={isToday ? 1.5 : 0}
                     />
                   );
                 })}
@@ -374,6 +388,31 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
       ) : (
         <div className="h-full flex items-center justify-center text-xs text-ink-400">
           No spending in this range.
+        </div>
+      )}
+      </div>
+      {onStepPeriod && (
+        <div className="flex items-center justify-between pt-1">
+          <button
+            onClick={() => onStepPeriod(-1)}
+            disabled={!canStepBackward}
+            aria-label="Previous period"
+            className="p-1 rounded-md text-ink-300 hover:text-ink-600 hover:bg-sand-100 transition-colors disabled:opacity-0 disabled:pointer-events-none"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onStepPeriod(1)}
+            disabled={!canStepForward}
+            aria-label="Next period"
+            className="p-1 rounded-md text-ink-300 hover:text-ink-600 hover:bg-sand-100 transition-colors disabled:opacity-0 disabled:pointer-events-none"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       )}
       </div>
