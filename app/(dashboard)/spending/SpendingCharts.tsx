@@ -147,7 +147,7 @@ export default function SpendingCharts({
                   outerRadius={100}
                   paddingAngle={2}
                   dataKey="value"
-                  animationDuration={400}
+                  isAnimationActive={false}
                   onClick={(_, index) => {
                     const item = pieData[index];
                     if (item?.id && onCategoryClick) onCategoryClick(item.id);
