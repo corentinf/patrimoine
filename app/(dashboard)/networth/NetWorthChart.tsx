@@ -87,7 +87,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
         Net worth over time
       </h4>
       <ResponsiveContainer width="100%" height={260}>
-        <LineChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+        <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
           <XAxis
             dataKey="month"
@@ -96,13 +96,30 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
             tickLine={false}
             interval="preserveStartEnd"
           />
+          {/* Net worth and assets share a tight auto-fit left axis so day-to-day
+              movement is actually visible — the previous shared 0-to-max axis
+              made every line look flat since liabilities are ~200x smaller than
+              net worth/assets, forcing the whole chart to scale to that max. */}
           <YAxis
+            yAxisId="left"
             axisLine={false}
             tickLine={false}
+            domain={['auto', 'auto']}
             tick={(props) => <BlurredYTick {...props} formatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} blurred={blurred} />}
+          />
+          {/* Liabilities get their own right-hand axis at their own scale —
+              otherwise they'd still be squashed flat near zero on the left axis. */}
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            axisLine={false}
+            tickLine={false}
+            domain={['auto', 'auto']}
+            tick={(props) => <BlurredYTick {...props} formatter={(v: number) => `$${(v / 1000).toFixed(1)}k`} blurred={blurred} />}
           />
           <Tooltip content={<CustomTooltip />} />
           <Line
+            yAxisId="left"
             type="monotone"
             dataKey="netWorth"
             name="Net worth"
@@ -112,6 +129,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
             activeDot={{ r: 4, fill: '#4A443C' }}
           />
           <Line
+            yAxisId="left"
             type="monotone"
             dataKey="assets"
             name="Assets"
@@ -122,6 +140,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
             activeDot={{ r: 3, fill: '#3D7A5F' }}
           />
           <Line
+            yAxisId="right"
             type="monotone"
             dataKey="liabilities"
             name="Liabilities"
