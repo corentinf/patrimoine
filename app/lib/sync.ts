@@ -122,15 +122,23 @@ export async function syncAll(
         if (data.errors?.length) result.errors.push(`SimpleFIN: ${data.errors.join(', ')}`);
         for (const account of data.accounts) {
           const accountId = `sfin_${account.id}`;
+          const sfinAccountType = inferAccountType(account);
+          // SimpleFIN reports balance from an asset perspective — a credit
+          // card debt comes back negative. Plaid instead normalizes credit
+          // account balances to a positive "amount owed", and the rest of
+          // the app (this account's own display, net worth math, etc.)
+          // assumes that convention — so flip sign here to match.
+          const rawBalance = parseFloat(account.balance);
+          const balance = sfinAccountType === 'credit' ? -rawBalance : rawBalance;
           const { error: accErr } = await supabase.from('accounts').upsert({
             id: accountId,
             user_id: userId,
             name: account.name,
             institution: getInstitutionName(account),
             institution_domain: account.org.domain,
-            account_type: inferAccountType(account),
+            account_type: sfinAccountType,
             currency: account.currency,
-            balance: parseFloat(account.balance),
+            balance,
             available_balance: account['available-balance']
               ? parseFloat(account['available-balance'])
               : null,
