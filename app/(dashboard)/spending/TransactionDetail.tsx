@@ -297,7 +297,7 @@ export default function TransactionDetail({
                 onClick={() => { setShowCategoryPicker((v) => !v); setCatSearch(''); }}
                 className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
                   showCategoryPicker
-                    ? 'bg-ink-800 text-white'
+                    ? 'bg-ink-800/10 text-ink-800 font-semibold'
                     : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
                 }`}
               >

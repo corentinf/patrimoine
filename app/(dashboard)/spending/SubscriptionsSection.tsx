@@ -201,13 +201,13 @@ export default function SubscriptionsSection({ transactions, initialOverrides, m
           <div className="flex items-center rounded-lg border border-sand-200 overflow-hidden text-xs">
             <button
               onClick={() => setView('monthly')}
-              className={`px-2.5 py-1 transition-colors ${view === 'monthly' ? 'bg-ink-800 text-white' : 'text-ink-400 hover:text-ink-600'}`}
+              className={`px-2.5 py-1 transition-colors ${view === 'monthly' ? 'bg-ink-800/10 text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-600'}`}
             >
               Monthly
             </button>
             <button
               onClick={() => setView('annual')}
-              className={`px-2.5 py-1 transition-colors ${view === 'annual' ? 'bg-ink-800 text-white' : 'text-ink-400 hover:text-ink-600'}`}
+              className={`px-2.5 py-1 transition-colors ${view === 'annual' ? 'bg-ink-800/10 text-ink-800 font-semibold' : 'text-ink-400 hover:text-ink-600'}`}
             >
               Annual
             </button>

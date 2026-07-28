@@ -369,7 +369,7 @@ export function FilterBar() {
             onClick={() => applyPreset(p.key)}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
               activePreset === p.key
-                ? 'bg-ink-800 text-white'
+                ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
                 : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
             }`}
           >
@@ -380,7 +380,7 @@ export function FilterBar() {
           onClick={() => applyPreset('custom')}
           className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
             showCustom
-              ? 'bg-ink-800 text-white'
+              ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
               : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
           }`}
         >

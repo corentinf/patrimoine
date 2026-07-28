@@ -230,7 +230,7 @@ function AccountDropdown({
         onClick={() => setOpen((v) => !v)}
         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
           selectedAccount
-            ? 'bg-ink-800 text-white'
+            ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
             : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
         }`}
       >
@@ -299,6 +299,7 @@ function CategoryPill({
   onAddToSelection: () => void;
 }) {
   const [pressed, setPressed] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
 
@@ -329,6 +330,14 @@ function CategoryPill({
     else onSelectOnly();
   }
 
+  // Only unselected pills get the + affordance — clicking an active pill's
+  // body already removes it, so a dedicated × button would be redundant.
+  const showAction = !active && hasSelection;
+  // On hover, the trailing text fades into the + icon instead of the icon
+  // sitting in an overlapping badge — keeps the pill's box completely static.
+  const fade = 'linear-gradient(to right, black, black calc(100% - 30px), transparent calc(100% - 8px))';
+  const maskStyle = hovered && showAction ? { maskImage: fade, WebkitMaskImage: fade } : undefined;
+
   return (
     <div
       className={`relative group/catpill inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
@@ -344,6 +353,8 @@ function CategoryPill({
         ...(active ? { backgroundColor: cat.color, borderColor: cat.color } : {}),
         ...(!active && hasActivity ? { backgroundColor: cat.color + '14' } : {}),
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       <button
         onClick={handleClick}
@@ -363,25 +374,18 @@ function CategoryPill({
         className="inline-flex items-center gap-1"
       >
         <span className={active || hasActivity ? '' : 'opacity-40'}>{cat.icon}</span>
-        {cat.name}
+        <span className="whitespace-nowrap transition-[mask-image] duration-150" style={maskStyle}>{cat.name}</span>
       </button>
-      {active && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onDeselect(); }}
-          aria-label={`Remove ${cat.name} filter`}
-          className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-ink-800 text-white text-xs flex items-center justify-center leading-none shadow-sm hover:bg-ink-700 transition-colors"
-        >
-          ✕
-        </button>
-      )}
-      {!active && hasSelection && (
+      {showAction && (
         <button
           onClick={(e) => { e.stopPropagation(); onAddToSelection(); }}
           aria-label={`Add ${cat.name} to filter`}
           title="Add to selection"
-          className="hidden md:flex absolute -top-2 -right-2 w-5 h-5 rounded-full bg-ink-800 text-white text-sm items-center justify-center leading-none shadow-sm hover:bg-ink-700 transition-colors md:opacity-0 md:group-hover/catpill:opacity-100"
+          className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 text-ink-800 hover:text-ink-900 opacity-0 group-hover/catpill:opacity-100 transition-opacity"
         >
-          +
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+          </svg>
         </button>
       )}
     </div>
@@ -493,6 +497,24 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     [dateAndAccountFiltered, filterCategories, search, allCategories],
   );
 
+  // A second pipeline that ignores `segment` — used only to feed the "Spending
+  // over time" chart's own data. Hovering a bar narrows `viewFilter` above to
+  // that single day (so the pie chart/category rows preview it), but the trend
+  // chart must keep showing the whole period; otherwise every other bar would
+  // vanish the moment you hover one (feedback loop via narrowedDailySpending).
+  const chartDateFiltered = useMemo(
+    () => applyDateFilter(transactions, dateFilter),
+    [transactions, dateFilter],
+  );
+  const chartDateAndAccountFiltered = useMemo(() => {
+    if (!selectedAccount) return chartDateFiltered;
+    return chartDateFiltered.filter((tx) => tx.account_id === selectedAccount);
+  }, [chartDateFiltered, selectedAccount]);
+  const chartFilteredTransactions = useMemo(
+    () => applySearchAndCategoryFilter(chartDateAndAccountFiltered, filterCategories, search, allCategories),
+    [chartDateAndAccountFiltered, filterCategories, search, allCategories],
+  );
+
   // Category names with actual spending in the selected time frame (for dimming
   // pills that have nothing to show, independent of which pill is selected).
   const activeCategoryNames = useMemo(() => {
@@ -529,7 +551,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     const childIds = category ? (childIdsByParent.get(category.key) ?? []) : [];
     const allowed = category ? new Set([category.key, ...childIds]) : null;
     const byDay = new Map<string, number>();
-    for (const tx of filteredTransactions) {
+    for (const tx of chartFilteredTransactions) {
       if (isExcludedFromSpending(tx)) continue;
       if (allowed) {
         const matches = isUncategorized ? !tx.category : allowed.has(tx.category?.id ?? '');
@@ -541,7 +563,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return Array.from(byDay.entries())
       .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [category, filterCategories, search, filteredTransactions, childIdsByParent]);
+  }, [category, filterCategories, search, chartFilteredTransactions, childIdsByParent]);
 
   const visibleTransactions = useMemo(() => {
     if (!selectedCategoryKey) return filteredTransactions;
@@ -714,7 +736,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         <button
           onClick={() => setFilterCategories([])}
           className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-            filterCategories.length === 0 ? 'bg-ink-800 text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+            filterCategories.length === 0 ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
           }`}
         >
           All

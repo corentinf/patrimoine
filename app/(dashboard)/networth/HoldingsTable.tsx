@@ -450,7 +450,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
           onClick={() => setSelectedGroup(null)}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
             selectedGroup === null
-              ? 'bg-ink-800 text-white'
+              ? 'bg-ink-800/10 text-ink-800 font-semibold'
               : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
           }`}
         >
@@ -462,7 +462,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
               onClick={() => setSelectedGroup(selectedGroup === g ? null : g)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 selectedGroup === g
-                  ? 'bg-ink-800 text-white'
+                  ? 'bg-ink-800/10 text-ink-800 font-semibold'
                   : 'bg-sand-100 text-ink-500 hover:bg-sand-200'
               }`}
             >

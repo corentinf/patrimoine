@@ -191,7 +191,7 @@ function DateControl({
         onClick={() => setCustomOpen((v) => !v)}
         className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${
           isCustomActive
-            ? 'bg-ink-800 text-white border-ink-800'
+            ? 'bg-ink-800/10 text-ink-800 border-ink-800/20'
             : 'bg-white border-sand-200 text-ink-500 hover:border-sand-300'
         }`}
       >
@@ -272,7 +272,7 @@ function VenmoDropdown({
         onClick={() => setOpen((v) => !v)}
         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
           active
-            ? 'bg-ink-800 text-white'
+            ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
             : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
         }`}
       >
@@ -282,7 +282,7 @@ function VenmoDropdown({
           className="w-3.5 h-3.5"
           style={{
             filter: active
-              ? 'brightness(0) invert(1)'
+              ? 'brightness(0)'
               : 'brightness(0) saturate(100%) invert(70%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(95%)',
           }}
         />
@@ -644,7 +644,7 @@ export default function SpendingTransactions({
               onClick={() => toggleSort(field)}
               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                 sortBy === field
-                  ? 'bg-ink-800 text-white'
+                  ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
                   : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
               }`}
             >

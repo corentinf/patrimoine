@@ -79,6 +79,93 @@ export function buildCombinedSeries(
   return out;
 }
 
+export interface PerAccountPoint {
+  date: string;
+  [accountId: string]: number | string;
+}
+
+// Same consistent-basket rule as buildCombinedSeries (every account must have
+// a value on a date for that date to be included), but keeps each account's
+// value separate instead of summing — powers the "Stacked" view, where the
+// per-account areas need to line up on every date to stack correctly.
+export function buildPerAccountSeries(
+  dates: string[],
+  accounts: { id: string; values: (number | null)[]; currentValue: number }[],
+  todayIso: string,
+): PerAccountPoint[] {
+  const out: PerAccountPoint[] = [];
+  for (let i = 0; i < dates.length; i++) {
+    let ok = accounts.length > 0;
+    const point: PerAccountPoint = { date: dates[i] };
+    for (const a of accounts) {
+      const v = a.values[i];
+      if (v == null) { ok = false; break; }
+      point[a.id] = v;
+    }
+    if (ok) out.push(point);
+  }
+  if (out.length === 0 || out[out.length - 1].date < todayIso) {
+    if (accounts.length > 0) {
+      const point: PerAccountPoint = { date: todayIso };
+      for (const a of accounts) point[a.id] = a.currentValue;
+      out.push(point);
+    }
+  } else {
+    const last: PerAccountPoint = { ...out[out.length - 1] };
+    for (const a of accounts) last[a.id] = a.currentValue;
+    out[out.length - 1] = last;
+  }
+  return out;
+}
+
+// Normalizes each account to % change from its own value at (or just before)
+// `start`, so accounts of very different sizes (a $212k 401k next to a $491
+// Roth IRA) can be compared on one axis. Unlike buildPerAccountSeries, each
+// account keeps its own independent date range — there's nothing being
+// summed, so an account that started later just starts its line later.
+export function buildComparePercentSeries(
+  dates: string[],
+  accounts: { id: string; values: (number | null)[]; currentValue: number }[],
+  start: string,
+  todayIso: string,
+): PerAccountPoint[] {
+  const baselines = new Map<string, number>();
+  for (const a of accounts) {
+    let baseline: number | null = null;
+    for (let i = 0; i < dates.length; i++) {
+      if (dates[i] > start) break;
+      if (a.values[i] != null) baseline = a.values[i] as number;
+    }
+    if (baseline == null) {
+      const firstIdx = a.values.findIndex((v) => v != null);
+      if (firstIdx >= 0) baseline = a.values[firstIdx] as number;
+    }
+    if (baseline) baselines.set(a.id, baseline);
+  }
+
+  const out: PerAccountPoint[] = [];
+  for (let i = 0; i < dates.length; i++) {
+    if (dates[i] < start) continue;
+    const point: PerAccountPoint = { date: dates[i] };
+    for (const a of accounts) {
+      const baseline = baselines.get(a.id);
+      const v = a.values[i];
+      if (baseline && v != null) point[a.id] = ((v - baseline) / baseline) * 100;
+    }
+    out.push(point);
+  }
+
+  const last: PerAccountPoint = { date: todayIso };
+  for (const a of accounts) {
+    const baseline = baselines.get(a.id);
+    if (baseline) last[a.id] = ((a.currentValue - baseline) / baseline) * 100;
+  }
+  if (out.length === 0 || out[out.length - 1].date < todayIso) out.push(last);
+  else out[out.length - 1] = { ...out[out.length - 1], ...last };
+
+  return out;
+}
+
 // Change in a combined series between `start` and `end` (inclusive ISO date
 // bounds) — the baseline is the last point at or before `start` (so the change
 // is flat, not zero, when the range starts before any data exists).

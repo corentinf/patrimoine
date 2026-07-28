@@ -158,7 +158,6 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   useEffect(() => {
     setPinnedKey(null);
     setHoveredKey(null);
-    setForceFullScale(false);
     onPeriodSelect?.(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end, gran]);

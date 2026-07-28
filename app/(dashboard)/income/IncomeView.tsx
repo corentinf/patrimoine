@@ -305,7 +305,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
                 key={field}
                 onClick={() => toggleSort(field)}
                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  sortBy === field ? 'bg-ink-800 text-white' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                  sortBy === field ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
                 }`}
               >
                 {field.charAt(0).toUpperCase() + field.slice(1)}

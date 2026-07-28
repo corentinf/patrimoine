@@ -1,15 +1,31 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
+  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { format } from 'date-fns';
 import { formatCurrency, amountColor } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
 import {
-  PRESETS, isoDate, resolveStart, buildCombinedSeries, seriesChange, type RangeKey,
+  PRESETS, isoDate, resolveStart, buildCombinedSeries, buildPerAccountSeries,
+  buildComparePercentSeries, seriesChange, type RangeKey,
 } from '@/app/lib/investmentRange';
+
+type ViewMode = 'total' | 'stacked' | 'compare';
+
+const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
+  { key: 'total', label: 'Total' },
+  { key: 'stacked', label: 'Stacked' },
+  { key: 'compare', label: 'Compare %' },
+];
+
+// Cycled per selected account so each gets a stable, distinguishable color in
+// the Stacked/Compare views — pulled from the app's accent palette plus a
+// couple of sand/ink tones so 5+ accounts still stay legible.
+const ACCOUNT_COLORS = ['#3D7A5F', '#4A6FA5', '#C4983B', '#B85450', '#8A7A64', '#6B5D4A', '#A89882'];
+
+const LONG_PRESS_MS = 500;
 
 interface AccountSeries {
   id: string;
@@ -57,6 +73,153 @@ function BlurredYTick({ x, y, payload, blurred }: any) {
       style={blurred ? { filter: 'blur(5px)', userSelect: 'none' } : {}}>
       {`$${(payload.value / 1000).toFixed(0)}k`}
     </text>
+  );
+}
+
+function PercentYTick({ x, y, payload }: any) {
+  return (
+    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end">
+      {`${payload.value >= 0 ? '+' : ''}${payload.value}%`}
+    </text>
+  );
+}
+
+function BuildingHistory() {
+  return (
+    <div className="h-[180px] flex flex-col items-center justify-center gap-2 text-center">
+      <svg className="w-8 h-8 text-ink-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 17l6-6 4 4 8-8" />
+      </svg>
+      <p className="text-sm font-medium text-ink-600">Building your history</p>
+      <p className="text-xs text-ink-400 max-w-xs">
+        Your portfolio trend will appear after a few more daily syncs.
+      </p>
+    </div>
+  );
+}
+
+// Shared tooltip for the Stacked and Compare views — one line per account
+// (using the color/name Recharts already attaches to each series), plus a
+// running total for Stacked so it's clear the areas add up to the combined line.
+function MultiSeriesTooltip({ active, payload, label, formatValue, showTotal }: any) {
+  if (!active || !payload?.length) return null;
+  const total = payload.reduce((s: number, p: any) => s + (p.value ?? 0), 0);
+  return (
+    <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-1 min-w-[160px]">
+      <p className="font-medium text-sand-300">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} className="font-mono flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1.5 text-ink-200">
+            <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+            {p.name}
+          </span>
+          {formatValue(p.value)}
+        </p>
+      ))}
+      {showTotal && payload.length > 1 && (
+        <p className="font-mono flex items-center justify-between gap-3 pt-1 border-t border-ink-600 text-sand-300">
+          <span>Total</span>{formatValue(total)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Mirrors the Spending page's CategoryPill interaction: a plain click always
+// replaces the whole selection with just this account (or, if it's already
+// the sole active one, removes it) — hovering a non-active pill (desktop) or
+// long-pressing it (touch) reveals a "+" to add it alongside the current
+// selection instead of replacing it.
+function AccountPill({
+  account, active, hasSelection, showColor, highlighted, color, onSelectOnly, onDeselect, onAddToSelection, onHover,
+}: {
+  account: AccountSeries;
+  active: boolean;
+  hasSelection: boolean;
+  showColor: boolean;
+  highlighted: boolean;
+  color: string;
+  onSelectOnly: () => void;
+  onDeselect: () => void;
+  onAddToSelection: () => void;
+  onHover: (hovering: boolean) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  function clearPress() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  function handleTouchStart() {
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      onAddToSelection();
+    }, LONG_PRESS_MS);
+  }
+
+  function handleClick() {
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    if (active) onDeselect();
+    else onSelectOnly();
+  }
+
+  const label = account.name.length <= 24 ? account.name : account.institution;
+  // Only unselected pills get the + affordance — clicking an active pill's
+  // body already removes it, so a dedicated × button would be redundant.
+  const showAction = !active && hasSelection;
+  // On hover, the trailing text fades into the + icon instead of the icon
+  // sitting in an overlapping badge — keeps the pill's box completely static.
+  const fade = 'linear-gradient(to right, black, black calc(100% - 30px), transparent calc(100% - 8px))';
+  const maskStyle = hovered && showAction ? { maskImage: fade, WebkitMaskImage: fade } : undefined;
+
+  return (
+    <div
+      className={`relative group/acctpill inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+        active ? 'bg-ink-800/10 text-ink-800' : 'bg-sand-100 text-ink-400 hover:bg-sand-200'
+      } ${highlighted ? 'ring-1 ring-ink-800/25' : ''}`}
+      onMouseEnter={() => { setHovered(true); onHover(true); }}
+      onMouseLeave={() => { setHovered(false); onHover(false); }}
+    >
+      <button
+        onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={clearPress}
+        onTouchMove={clearPress}
+        onTouchCancel={clearPress}
+        title={`${account.key}${account.costBasis != null ? '' : ' (no cost basis)'}${
+          active ? ' — click to remove' : hasSelection ? ' — click to switch selection to this account, hover the + to add instead' : ' — click to select'
+        }`}
+        className="flex items-center gap-1.5"
+      >
+        {showColor && (
+          <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+        )}
+        <span className="whitespace-nowrap transition-[mask-image] duration-150" style={maskStyle}>
+          {label}: <span data-sensitive>{formatCurrency(account.currentValue)}</span>
+        </span>
+      </button>
+      {showAction && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddToSelection(); }}
+          aria-label={`Add ${label} to selection`}
+          title="Add to selection"
+          className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 text-ink-800 hover:text-ink-900 opacity-0 group-hover/acctpill:opacity-100 transition-opacity"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -130,13 +293,62 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
   );
   const up = change >= 0;
 
-  function toggleAccount(id: string) {
+  // Stacked/Compare only make sense with 2+ accounts on screen — fall back to
+  // Total silently rather than showing a toggle with no effect.
+  const [viewMode, setViewMode] = useState<ViewMode>('total');
+  const effectiveView: ViewMode = selectedAccounts.length > 1 ? viewMode : 'total';
+  // Hovering an account pill highlights its series in Stacked/Compare — dims the
+  // rest instead of hiding them so the reader keeps the whole picture in view.
+  const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
+  // Indexed against the full account list (not selectedAccounts) so a given
+  // account keeps the same color regardless of what else is currently toggled
+  // on/off — otherwise Vanguard's dot would repaint every time the selection changed.
+  const accountColor = (id: string) => {
+    const idx = accounts.findIndex((a) => a.id === id);
+    return ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
+  };
+
+  const stackedData = useMemo(() => {
+    if (effectiveView !== 'stacked') return [];
+    const perAccount = buildPerAccountSeries(dates, selectedAccounts, todayIso);
+    let base: (typeof perAccount)[number] | null = null;
+    for (const p of perAccount) {
+      if (p.date <= start) base = p;
+      else break;
+    }
+    const inRangePts = perAccount.filter((p) => p.date >= start && p.date <= end);
+    const pts = base && (inRangePts.length === 0 || inRangePts[0].date !== base.date)
+      ? [base, ...inRangePts]
+      : inRangePts;
+    return pts.map((p) => ({
+      label: format(new Date(p.date + 'T12:00:00'), 'MMM d'),
+      ...Object.fromEntries(selectedAccounts.map((a) => [a.id, Math.round(Number(p[a.id] ?? 0))])),
+    }));
+  }, [effectiveView, dates, selectedAccounts, todayIso, start, end]);
+
+  const compareData = useMemo(() => {
+    if (effectiveView !== 'compare') return [];
+    const perAccount = buildComparePercentSeries(dates, selectedAccounts, start, todayIso);
+    return perAccount
+      .filter((p) => p.date <= end)
+      .map((p) => ({
+        label: format(new Date(p.date + 'T12:00:00'), 'MMM d'),
+        ...Object.fromEntries(selectedAccounts.map((a) => [a.id, p[a.id] as number | undefined])),
+      }));
+  }, [effectiveView, dates, selectedAccounts, start, end, todayIso]);
+
+  function selectOnlyAccount(id: string) {
+    setSelected(new Set([id]));
+  }
+  function deselectAccount(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      next.delete(id);
       return next;
     });
+  }
+  function addAccountToSelection(id: string) {
+    setSelected((prev) => new Set(prev).add(id));
   }
 
   const accountLabel = (a: AccountSeries) => (a.name.length <= 24 ? a.name : a.institution);
@@ -185,25 +397,44 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
         )}
       </div>
 
-      {/* Account filter */}
+      {/* Account filter — same interaction as the Spending page's category pills:
+          click selects only that account, hover/long-press the + to add instead. */}
       {accounts.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400 mr-1">Accounts</span>
-          {accounts.map((a) => {
-            const on = selected.has(a.id);
-            return (
-              <button
-                key={a.id}
-                onClick={() => toggleAccount(a.id)}
-                title={`${a.key}${a.costBasis != null ? '' : ' (no cost basis)'}`}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  on ? 'bg-ink-700 text-white' : 'bg-sand-100 text-ink-400 hover:bg-sand-200'
-                }`}
-              >
-                {accountLabel(a)}: <span data-sensitive>{formatCurrency(a.currentValue)}</span>
-              </button>
-            );
-          })}
+          {accounts.map((a) => (
+            <AccountPill
+              key={a.id}
+              account={a}
+              active={selected.has(a.id)}
+              hasSelection={selected.size > 0}
+              showColor={effectiveView !== 'total'}
+              highlighted={effectiveView !== 'total' && selected.has(a.id) && hoveredAccountId === a.id}
+              color={accountColor(a.id)}
+              onSelectOnly={() => selectOnlyAccount(a.id)}
+              onDeselect={() => deselectAccount(a.id)}
+              onAddToSelection={() => addAccountToSelection(a.id)}
+              onHover={(hovering) => setHoveredAccountId(hovering ? a.id : null)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* View mode: only meaningful with 2+ accounts selected */}
+      {selectedAccounts.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400 mr-1">View</span>
+          {VIEW_OPTIONS.map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setViewMode(v.key)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                effectiveView === v.key ? 'bg-ink-800/10 text-ink-800 font-semibold' : 'bg-sand-100 text-ink-400 hover:bg-sand-200'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
       )}
 
@@ -238,6 +469,89 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
         <div className="h-[180px] flex items-center justify-center text-xs text-ink-400">
           Select at least one account to see its progress.
         </div>
+      ) : effectiveView === 'stacked' ? (
+        stackedData.length >= 2 ? (
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={stackedData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: '#8F897E' }}
+                axisLine={{ stroke: '#E2D9CA' }}
+                tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={24}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                domain={['auto', 'auto']}
+                tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
+              />
+              <Tooltip content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal />} />
+              {selectedAccounts.map((a) => {
+                const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
+                return (
+                  <Area
+                    key={a.id}
+                    type="monotone"
+                    dataKey={a.id}
+                    name={accountLabel(a)}
+                    stackId="stack"
+                    stroke={accountColor(a.id)}
+                    fill={accountColor(a.id)}
+                    fillOpacity={dimmed ? 0.15 : 0.55}
+                    strokeOpacity={dimmed ? 0.35 : 1}
+                    strokeWidth={hoveredAccountId === a.id ? 2.5 : 1.5}
+                    dot={false}
+                    activeDot={{ r: 3 }}
+                  />
+                );
+              })}
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : <BuildingHistory />
+      ) : effectiveView === 'compare' ? (
+        compareData.length >= 2 ? (
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={compareData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: '#8F897E' }}
+                axisLine={{ stroke: '#E2D9CA' }}
+                tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={24}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                domain={['auto', 'auto']}
+                tick={<PercentYTick />}
+              />
+              <Tooltip content={<MultiSeriesTooltip formatValue={(v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`} />} />
+              <ReferenceLine y={0} stroke="#C9BDA8" strokeWidth={1} />
+              {selectedAccounts.map((a) => {
+                const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
+                return (
+                  <Line
+                    key={a.id}
+                    type="monotone"
+                    dataKey={a.id}
+                    name={accountLabel(a)}
+                    stroke={accountColor(a.id)}
+                    strokeOpacity={dimmed ? 0.25 : 1}
+                    strokeWidth={hoveredAccountId === a.id ? 3 : 2}
+                    dot={false}
+                    connectNulls={false}
+                    activeDot={{ r: 3 }}
+                  />
+                );
+              })}
+            </LineChart>
+          </ResponsiveContainer>
+        ) : <BuildingHistory />
       ) : chartData.length >= 2 ? (
         <ResponsiveContainer width="100%" height={220}>
           <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
@@ -285,15 +599,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
           </AreaChart>
         </ResponsiveContainer>
       ) : (
-        <div className="h-[180px] flex flex-col items-center justify-center gap-2 text-center">
-          <svg className="w-8 h-8 text-ink-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 17l6-6 4 4 8-8" />
-          </svg>
-          <p className="text-sm font-medium text-ink-600">Building your history</p>
-          <p className="text-xs text-ink-400 max-w-xs">
-            Your portfolio trend will appear after a few more daily syncs.
-          </p>
-        </div>
+        <BuildingHistory />
       )}
 
       {/* Time range selector — mobile only, below chart */}
