@@ -140,7 +140,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   // the user via the "Full scale" toggle — e.g. when two similar-sized
   // outliers make each other look "normal" to the heuristic, or they just
   // want to see the true proportions.
-  const [forceFullScale, setForceFullScale] = useState(false);
+  const [forceFullScale, setForceFullScale] = useState(true);
 
   const todayIso = iso(new Date());
   const firstDate = data[0]?.date ?? todayIso;
