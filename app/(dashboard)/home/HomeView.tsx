@@ -11,6 +11,30 @@ import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../compon
 
 const ACCOUNT_TYPE_ORDER = ['checking', 'savings', 'investment', 'credit'];
 
+function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'center' | 'left' | 'right' }) {
+  const [open, setOpen] = useState(false);
+  const translateX = align === 'left' ? 'left-0 -translate-x-0' : align === 'right' ? 'right-0 translate-x-0' : 'left-1/2 -translate-x-1/2';
+  const arrowX = align === 'left' ? 'left-4' : align === 'right' ? 'right-4' : 'left-1/2 -translate-x-1/2';
+  return (
+    <span className="relative group/tip inline-flex items-center">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="flex items-center"
+      >
+        <svg className="w-3 h-3 text-ink-300 group-hover/tip:text-ink-500 transition-colors cursor-default flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" strokeWidth={2} />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
+        </svg>
+      </button>
+      <span className={`pointer-events-none absolute bottom-full ${translateX} mb-2 w-56 bg-ink-800 text-white text-xs rounded-lg px-3 py-2 leading-relaxed transition-opacity z-50 shadow-lg ${open ? 'opacity-100' : 'opacity-0'} md:group-hover/tip:opacity-100`}>
+        {text}
+        <span className={`absolute top-full ${arrowX} border-4 border-transparent border-t-ink-800`} />
+      </span>
+    </span>
+  );
+}
+
 interface Snapshot {
   snapshot_date: string;
   net_worth: number;
@@ -235,9 +259,12 @@ export default function HomeView({
                             {subtitle && <p className="text-xs text-ink-300 truncate">{subtitle}</p>}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        {/* relative + md:absolute on the button so the edit affordance overlays
+                            the value on hover instead of pushing it left of the row's true
+                            right edge — the value's own right alignment stays fixed either way. */}
+                        <div className="relative flex items-center gap-1.5 md:gap-0 shrink-0">
                           <span
-                            className={`text-sm font-mono ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
+                            className={`text-sm font-mono text-right whitespace-nowrap transition-[mask-image] duration-150 md:[mask-image:none] md:[-webkit-mask-image:none] md:group-hover:[mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] md:group-hover:[-webkit-mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
                             data-sensitive
                           >
                             {formatCurrency(Number(a.balance))}
@@ -245,7 +272,7 @@ export default function HomeView({
                           <button
                             onClick={(e) => { e.stopPropagation(); setModalAccount(a); }}
                             title="Edit account"
-                            className="w-6 h-6 flex items-center justify-center text-ink-300 hover:text-ink-700 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity rounded-md hover:bg-sand-100"
+                            className="w-6 h-6 flex items-center justify-center text-ink-300 hover:text-ink-700 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity rounded-md hover:bg-sand-100 md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -292,7 +319,13 @@ export default function HomeView({
                       Reached
                     </span>
                   ) : eta ? (
-                    <span className="text-xs text-ink-400">~{eta}</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-ink-400">
+                      ~{eta}
+                      <InfoTooltip
+                        align="right"
+                        text="Projected from your average net worth growth over the last few months — not scoped to whatever period you've selected up top."
+                      />
+                    </span>
                   ) : (
                     <span className="text-xs text-ink-300">—</span>
                   )}
