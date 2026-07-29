@@ -622,6 +622,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               <Tooltip
                 content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal hoveredAccountId={hoveredAccountId} nearAxis={nearAxis} />}
                 allowEscapeViewBox={{ x: true, y: true }}
+                isAnimationActive={false}
               />
               {selectedAccounts.map((a) => {
                 const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
@@ -695,6 +696,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
             <Tooltip
               content={<CustomTooltip up={up} hoveredAccountId={hoveredAccountId} nearAxis={nearAxis} />}
               allowEscapeViewBox={{ x: true, y: true }}
+              isAnimationActive={false}
             />
             {costBasis != null && (
               <ReferenceLine
