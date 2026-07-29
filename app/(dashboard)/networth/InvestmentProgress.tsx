@@ -638,9 +638,9 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                     fill={accountColor(a.id)}
                     fillOpacity={dimmed ? 0.15 : 0.55}
                     strokeOpacity={dimmed ? 0.35 : 1}
-                    strokeWidth={hovered ? 2.5 : 1.5}
+                    strokeWidth={hovered ? 3.5 : 2.5}
                     dot={false}
-                    activeDot={{ r: 3 }}
+                    activeDot={{ r: 4 }}
                     onMouseEnter={() => setHoveredAccountId(a.id)}
                     onMouseLeave={() => setHoveredAccountId(null)}
                     label={hovered ? (props: any) => <CurveEndLabel {...props} index={props.index} lastIndex={stackedData.length - 1} text={accountLabel(a)} color={accountColor(a.id)} anchor="end" /> : undefined}
@@ -715,10 +715,10 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               dataKey="value"
               name="Investments"
               stroke={up ? '#3D7A5F' : '#B85450'}
-              strokeWidth={hoveredAccountId === TOTAL_HOVER_ID ? 4 : 3}
+              strokeWidth={hoveredAccountId === TOTAL_HOVER_ID ? 5 : 4}
               fill="url(#investFill)"
               dot={false}
-              activeDot={{ r: 4, fill: up ? '#3D7A5F' : '#B85450' }}
+              activeDot={{ r: 5, fill: up ? '#3D7A5F' : '#B85450' }}
               onMouseEnter={() => setHoveredAccountId(TOTAL_HOVER_ID)}
               onMouseLeave={() => setHoveredAccountId(null)}
               label={hoveredAccountId === TOTAL_HOVER_ID ? (props: any) => (
@@ -740,10 +740,10 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                   stroke={accountColor(a.id)}
                   strokeDasharray="4 3"
                   strokeOpacity={dimmed ? 0.25 : 0.85}
-                  strokeWidth={hovered ? 2.25 : 1.25}
+                  strokeWidth={hovered ? 3 : 2}
                   dot={false}
                   connectNulls={false}
-                  activeDot={{ r: 3 }}
+                  activeDot={{ r: 4 }}
                   label={hovered ? (props: any) => (
                     <CurveEndLabel {...props} lastIndex={chartData.length - 1} text={accountLabel(a)} color={accountColor(a.id)} anchor="end" />
                   ) : undefined}
