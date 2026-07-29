@@ -16,6 +16,9 @@ export interface FullTransaction {
   posted_at: string;
   is_transfer: boolean;
   is_reimbursable: boolean;
+  /** Secondary provenance badge (e.g. "Amazon") — separate from category,
+   *  never counted in spending totals/budgets. */
+  source_tag?: string | null;
   account: { name: string; institution: string } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }

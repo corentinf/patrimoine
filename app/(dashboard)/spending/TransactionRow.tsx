@@ -249,6 +249,14 @@ export default function TransactionRow({
                 ↩ reimb.
               </span>
             )}
+            {tx.source_tag && (
+              <span
+                className="text-[10px] font-medium px-1.5 py-px rounded bg-sand-100 text-ink-500 border border-sand-200"
+                title={`Also tagged: ${tx.source_tag} (doesn't affect spending totals)`}
+              >
+                {tx.source_tag}
+              </span>
+            )}
             {tx.account && (
               <span className="text-xs text-ink-300 truncate">
                 {tx.account.institution || tx.account.name}

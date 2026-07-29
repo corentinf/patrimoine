@@ -31,6 +31,7 @@ async function getSpendingTransactions(months = 12) {
       account_id,
       is_transfer,
       is_reimbursable,
+      source_tag,
       account:accounts(id, name, institution),
       category:categories(id, name, color, icon, is_income)
     `)

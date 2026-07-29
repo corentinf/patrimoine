@@ -26,6 +26,9 @@ interface RawTransaction {
   posted_at: string;
   account_id: string;
   is_transfer: boolean;
+  /** Secondary provenance badge (e.g. "Amazon") — separate from category,
+   *  never counted in spending totals/budgets. */
+  source_tag?: string | null;
   account: { id: string; name: string; institution: string } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }
@@ -107,8 +110,9 @@ function applySearchAndCategoryFilter(
     result = result.filter((tx) => {
       const name = (tx.payee ?? tx.description ?? 'Unknown').toLowerCase();
       const cat = (tx.category?.name || 'Uncategorized').toLowerCase();
+      const tag = (tx.source_tag ?? '').toLowerCase();
       const amount = formatCurrencyPrecise(Math.abs(tx.amount)).toLowerCase();
-      return name.includes(q) || cat.includes(q) || amount.includes(q);
+      return name.includes(q) || cat.includes(q) || tag.includes(q) || amount.includes(q);
     });
   }
   return result;
