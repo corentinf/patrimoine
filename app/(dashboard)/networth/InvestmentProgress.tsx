@@ -62,12 +62,17 @@ const iso = isoDate;
 // breakdown; hovering a specific curve narrows this down to just that
 // curve's value at this point, since the curve itself is already the
 // highlight — the tooltip shouldn't repeat everyone else too.
-function CustomTooltip({ active, payload, label, up, hoveredAccountId }: any) {
+function CustomTooltip({ active, payload, label, up, hoveredAccountId, nearAxis }: any) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   const cost = p.costBasis as number | undefined;
   const pctEntries = payload.filter((entry: any) => typeof entry.dataKey === 'string' && entry.dataKey.startsWith('pct_'));
 
+  // Priority: a specific curve's own hover always wins (it's already the
+  // highlight). Otherwise, near the axis shows the full "what happened this
+  // day" breakdown — even if the mouse also happens to be inside the total
+  // area's fill, which stretches most of the way down to the axis anyway.
+  // Away from the axis with nothing specific hovered, show nothing.
   if (hoveredAccountId && hoveredAccountId !== TOTAL_HOVER_ID) {
     const entry = pctEntries.find((e: any) => e.dataKey === `pct_${hoveredAccountId}`);
     if (!entry) return null;
@@ -83,7 +88,8 @@ function CustomTooltip({ active, payload, label, up, hoveredAccountId }: any) {
     );
   }
 
-  if (hoveredAccountId === TOTAL_HOVER_ID) {
+  if (!nearAxis) {
+    if (hoveredAccountId !== TOTAL_HOVER_ID) return null;
     return (
       <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-0.5">
         <p className="font-medium text-sand-300">{label}</p>
@@ -180,8 +186,9 @@ function BuildingHistory() {
 // Same axis-vs-curve distinction as CustomTooltip: hovering the background
 // shows every band + the running total, hovering one band narrows it to
 // just that account's value at this point.
-function MultiSeriesTooltip({ active, payload, label, formatValue, showTotal, hoveredAccountId }: any) {
+function MultiSeriesTooltip({ active, payload, label, formatValue, showTotal, hoveredAccountId, nearAxis }: any) {
   if (!active || !payload?.length) return null;
+  if (!hoveredAccountId && !nearAxis) return null;
 
   if (hoveredAccountId) {
     const entry = payload.find((p: any) => p.dataKey === hoveredAccountId);
@@ -412,6 +419,24 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
   // Hovering an account pill highlights its series in Stacked/Total's % overlay
   // — dims the rest instead of hiding them so the reader keeps the whole picture.
   const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
+  // The full multi-account breakdown only makes sense as a "what happened on
+  // this day" summary, so it's gated to hovering near the x-axis itself —
+  // hovering empty space elsewhere in the chart shows nothing (a specific
+  // curve's own hover/hit-line still works everywhere along it, independent
+  // of this). Recharts only tracks the mouse within the plot rect itself —
+  // not down into the tick-label text below the axis line — so the "near
+  // axis" zone is the bottom band of the trackable plot area (just above
+  // where the axis line sits, per every chart's shared height={220}/margin
+  // below), not literally the label row.
+  const [nearAxis, setNearAxis] = useState(false);
+  const PLOT_BOTTOM = 190;
+  const AXIS_ZONE_PX = 25;
+  const handleChartMouseMove = (state: any) => {
+    if (state?.activeCoordinate) {
+      setNearAxis(state.activeCoordinate.y >= PLOT_BOTTOM - AXIS_ZONE_PX && state.activeCoordinate.y <= PLOT_BOTTOM);
+    }
+  };
+  const handleChartMouseLeave = () => setNearAxis(false);
   // Indexed against the full account list (not selectedAccounts) so a given
   // account keeps the same color regardless of what else is currently toggled
   // on/off — otherwise Vanguard's dot would repaint every time the selection changed.
@@ -573,7 +598,12 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
       ) : effectiveView === 'stacked' ? (
         stackedData.length >= 2 ? (
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={stackedData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+            <AreaChart
+              data={stackedData}
+              margin={{ top: 5, right: 5, bottom: 0, left: -10 }}
+              onMouseMove={handleChartMouseMove}
+              onMouseLeave={handleChartMouseLeave}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
               <XAxis
                 dataKey="label"
@@ -590,7 +620,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                 tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
               />
               <Tooltip
-                content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal hoveredAccountId={hoveredAccountId} />}
+                content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal hoveredAccountId={hoveredAccountId} nearAxis={nearAxis} />}
                 allowEscapeViewBox={{ x: true, y: true }}
               />
               {selectedAccounts.map((a) => {
@@ -624,7 +654,12 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
           {/* ComposedChart so the $ total (Area, left axis) and each account's
               % change (Line, right axis) can share one x-axis — the two
               views this replaced (Total, Compare %) overlaid on one graph. */}
-          <ComposedChart data={chartData} margin={{ top: 5, right: showComparePct ? 10 : 5, bottom: 0, left: -10 }}>
+          <ComposedChart
+            data={chartData}
+            margin={{ top: 5, right: showComparePct ? 10 : 5, bottom: 0, left: -10 }}
+            onMouseMove={handleChartMouseMove}
+            onMouseLeave={handleChartMouseLeave}
+          >
             <defs>
               <linearGradient id="investFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={up ? '#3D7A5F' : '#B85450'} stopOpacity={0.18} />
@@ -658,7 +693,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               />
             )}
             <Tooltip
-              content={<CustomTooltip up={up} hoveredAccountId={hoveredAccountId} />}
+              content={<CustomTooltip up={up} hoveredAccountId={hoveredAccountId} nearAxis={nearAxis} />}
               allowEscapeViewBox={{ x: true, y: true }}
             />
             {costBasis != null && (
