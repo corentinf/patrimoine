@@ -320,8 +320,9 @@ export default function SpendingTransactions({
       result = result.filter((tx) => {
         const name = getEffectivePayee(tx).toLowerCase();
         const cat = (getEffectiveCategory(tx)?.name || 'Uncategorized').toLowerCase();
+        const tag = (tx.source_tag ?? '').toLowerCase();
         const amount = formatCurrencyPrecise(Math.abs(tx.amount)).toLowerCase();
-        return name.includes(q) || cat.includes(q) || amount.includes(q);
+        return name.includes(q) || cat.includes(q) || tag.includes(q) || amount.includes(q);
       });
     }
 
