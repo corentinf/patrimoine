@@ -172,6 +172,25 @@ function Sparkline({ points, gain, width = 64, height = 20 }: { points: number[]
   );
 }
 
+function GoogleSearchLink({ symbol, description }: { symbol: string | null; description: string | null }) {
+  const query = symbol ? `${symbol} stock` : `${description} stock`;
+  const href = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      title={`Search Google for ${symbol || description}`}
+      className="flex items-center text-ink-300 hover:text-ink-500 transition-colors flex-shrink-0"
+    >
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+      </svg>
+    </a>
+  );
+}
+
 const NOTES_STORAGE_KEY = 'holding_notes_v1';
 
 function NoteCell({ holdingId }: { holdingId: string }) {
@@ -636,6 +655,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
                   <HoldingInfoTooltip holding={h} group={h._group} />
+                  <GoogleSearchLink symbol={h.symbol} description={h.description} />
                   <NoteCell holdingId={h.id} />
                 </div>
                 <p className="text-xs text-ink-300 truncate">{h.description}</p>
@@ -664,7 +684,10 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
             {/* Mobile card */}
             <div className="sm:hidden px-4 py-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
+                  <GoogleSearchLink symbol={h.symbol} description={h.description} />
+                </div>
                 <p className="text-xs text-ink-400">{Number(h.shares).toFixed(2)} shares · {h._portfolio_pct.toFixed(1)}% of portfolio</p>
               </div>
               <Sparkline points={h._spark} gain={h._gain} width={48} />
