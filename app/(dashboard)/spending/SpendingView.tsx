@@ -86,11 +86,23 @@ function getPrevPeriodFilter(filter: DateFilter): DateFilter {
   return { mode: 'custom', start: prevStart, end: prevEnd };
 }
 
-// Applies the header's category-pill + search filters to a transaction list.
+// A transaction's badges: its persisted source_tag (e.g. "Amazon", "Venmo",
+// set by an importer) plus a synthesized "Transfer" tag for anything already
+// treated as a transfer — computed, never stored, so it stays in sync with
+// the category/is_transfer fields instead of needing its own bookkeeping.
+function effectiveTags(tx: { source_tag?: string | null; is_transfer: boolean; category?: { name: string } | null }): string[] {
+  const tags: string[] = [];
+  if (tx.source_tag) tags.push(tx.source_tag);
+  if (tx.is_transfer || tx.category?.name === 'Transfer') tags.push('Transfer');
+  return tags;
+}
+
+// Applies the header's category-pill + tag-pill + search filters to a transaction list.
 // `filterCategories` holds category names; selecting a parent also matches its children.
 function applySearchAndCategoryFilter(
   txs: RawTransaction[],
   filterCategories: string[],
+  filterTags: string[],
   search: string,
   allCategories: Category[],
 ): RawTransaction[] {
@@ -105,14 +117,17 @@ function applySearchAndCategoryFilter(
     }
     result = result.filter((tx) => matchNames.has(tx.category?.name || 'Uncategorized'));
   }
+  if (filterTags.length > 0) {
+    result = result.filter((tx) => effectiveTags(tx).some((t) => filterTags.includes(t)));
+  }
   if (search.trim()) {
     const q = search.trim().toLowerCase();
     result = result.filter((tx) => {
       const name = (tx.payee ?? tx.description ?? 'Unknown').toLowerCase();
       const cat = (tx.category?.name || 'Uncategorized').toLowerCase();
-      const tag = (tx.source_tag ?? '').toLowerCase();
+      const tags = effectiveTags(tx).join(' ').toLowerCase();
       const amount = formatCurrencyPrecise(Math.abs(tx.amount)).toLowerCase();
-      return name.includes(q) || cat.includes(q) || tag.includes(q) || amount.includes(q);
+      return name.includes(q) || cat.includes(q) || tags.includes(q) || amount.includes(q);
     });
   }
   return result;
@@ -399,6 +414,28 @@ function CategoryPill({
   );
 }
 
+// Tags are simpler than categories — no icon/hierarchy, and a transaction can
+// carry more than one at once — so this is a plain multi-select toggle rather
+// than CategoryPill's select-only/add-to-selection distinction.
+function TagPill({ tag, active, hasActivity, onToggle }: { tag: string; active: boolean; hasActivity: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      title={active ? 'Remove from filter' : !hasActivity ? 'No spending tagged this way in the selected period' : 'Filter by this tag'}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+        active
+          ? 'bg-ink-700 text-white border-transparent'
+          : hasActivity
+            ? 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
+            : 'bg-white border-sand-100 text-ink-300 hover:border-sand-200'
+      }`}
+    >
+      <span className={active || hasActivity ? '' : 'opacity-40'}>🏷️</span>
+      {tag}
+    </button>
+  );
+}
+
 export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, dailySpending }: SpendingViewProps) {
   // Not otherwise used here — but subscribing is what makes this component
   // re-render (and every formatCurrency() call below re-check demo mode)
@@ -412,6 +449,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
+  const [filterTags, setFilterTags] = useState<string[]>([]);
   const selectedCategoryKey = category?.key ?? null;
   const { ref: txListRef, minHeight: txListMinHeight } = useStableMinHeight<HTMLDivElement>();
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -456,6 +494,16 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     }
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [transactions, allCategories]);
+
+  // Distinct tags across all transactions (source_tag from an importer, plus
+  // the synthesized "Transfer" tag) — for the header's tag-pill row.
+  const availableTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const tx of transactions) {
+      for (const t of effectiveTags(tx)) set.add(t);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [transactions]);
 
   // Sub-categories grouped by their parent's name, for the drill-down row
   // under the header pills (e.g. "Gas & Fuel" under "Transport").
@@ -523,8 +571,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   }, [dateFiltered, selectedAccount]);
 
   const filteredTransactions = useMemo(
-    () => applySearchAndCategoryFilter(dateAndAccountFiltered, filterCategories, search, allCategories),
-    [dateAndAccountFiltered, filterCategories, search, allCategories],
+    () => applySearchAndCategoryFilter(dateAndAccountFiltered, filterCategories, filterTags, search, allCategories),
+    [dateAndAccountFiltered, filterCategories, filterTags, search, allCategories],
   );
 
   // A second pipeline that ignores `segment` — used only to feed the "Spending
@@ -541,8 +589,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return chartDateFiltered.filter((tx) => tx.account_id === selectedAccount);
   }, [chartDateFiltered, selectedAccount]);
   const chartFilteredTransactions = useMemo(
-    () => applySearchAndCategoryFilter(chartDateAndAccountFiltered, filterCategories, search, allCategories),
-    [chartDateAndAccountFiltered, filterCategories, search, allCategories],
+    () => applySearchAndCategoryFilter(chartDateAndAccountFiltered, filterCategories, filterTags, search, allCategories),
+    [chartDateAndAccountFiltered, filterCategories, filterTags, search, allCategories],
   );
 
   // Category names with actual spending in the selected time frame (for dimming
@@ -571,11 +619,21 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return map;
   }, [chipCategories, allCategories, activeCategoryNames]);
 
+  // Whether each tag has any activity in the selected time frame (for dimming
+  // pills that have nothing to show), mirroring chipHasActivity above.
+  const tagHasActivity = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const tag of availableTags) {
+      map.set(tag, dateAndAccountFiltered.some((tx) => !isExcludedFromSpending(tx) && effectiveTags(tx).includes(tag)));
+    }
+    return map;
+  }, [availableTags, dateAndAccountFiltered]);
+
   // Effective daily series for "Spending over time": narrowed whenever a category
   // pill, search, or the single category drill-down (donut/table click) is active;
   // otherwise falls back to the server-computed full daily total.
   const narrowedDailySpending = useMemo(() => {
-    const hasNarrowing = !!category || filterCategories.length > 0 || !!search.trim();
+    const hasNarrowing = !!category || filterCategories.length > 0 || filterTags.length > 0 || !!search.trim();
     if (!hasNarrowing) return null;
     const isUncategorized = category?.key === '__uncategorized__';
     const childIds = category ? (childIdsByParent.get(category.key) ?? []) : [];
@@ -593,7 +651,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return Array.from(byDay.entries())
       .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [category, filterCategories, search, chartFilteredTransactions, childIdsByParent]);
+  }, [category, filterCategories, filterTags, search, chartFilteredTransactions, childIdsByParent]);
 
   const visibleTransactions = useMemo(() => {
     if (!selectedCategoryKey) return filteredTransactions;
@@ -625,8 +683,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const prevFiltered = useMemo(() => {
     let prev = applyDateFilter(transactions, getPrevPeriodFilter(viewFilter));
     if (selectedAccount) prev = prev.filter((tx) => tx.account_id === selectedAccount);
-    return applySearchAndCategoryFilter(prev, filterCategories, search, allCategories);
-  }, [transactions, viewFilter, selectedAccount, filterCategories, search, allCategories]);
+    return applySearchAndCategoryFilter(prev, filterCategories, filterTags, search, allCategories);
+  }, [transactions, viewFilter, selectedAccount, filterCategories, filterTags, search, allCategories]);
 
   const categoryRows = useMemo(() =>
     buildCategoryRows(
@@ -764,9 +822,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       )}
       <div className="flex items-center gap-1.5 flex-wrap">
         <button
-          onClick={() => { setFilterCategories([]); setExpandedCategory(null); }}
+          onClick={() => { setFilterCategories([]); setFilterTags([]); setExpandedCategory(null); }}
           className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-            filterCategories.length === 0 ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+            filterCategories.length === 0 && filterTags.length === 0 ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
           }`}
         >
           All
@@ -832,6 +890,28 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           >
             Deselect all
           </button>
+        )}
+        {availableTags.length > 0 && (
+          <span className="w-full flex items-center gap-1.5 flex-wrap pl-3 border-l-2 border-sand-200 ml-1">
+            <span className="text-xs text-ink-300 whitespace-nowrap">Tags ›</span>
+            {availableTags.map((tag) => (
+              <TagPill
+                key={tag}
+                tag={tag}
+                active={filterTags.includes(tag)}
+                hasActivity={tagHasActivity.get(tag) ?? false}
+                onToggle={() => setFilterTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])}
+              />
+            ))}
+            {filterTags.length > 0 && (
+              <button
+                onClick={() => setFilterTags([])}
+                className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
+              >
+                Clear tags
+              </button>
+            )}
+          </span>
         )}
       </div>
     </div>,
@@ -1159,6 +1239,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               onSearchChange={setSearch}
               filterCategories={filterCategories}
               onFilterCategoriesChange={setFilterCategories}
+              filterTags={filterTags}
+              onFilterTagsChange={setFilterTags}
             />
           ) : (
             <div className="card text-center py-16">

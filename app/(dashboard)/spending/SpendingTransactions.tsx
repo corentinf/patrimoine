@@ -133,6 +133,18 @@ interface SpendingTransactionsProps {
   onSearchChange: (v: string) => void;
   filterCategories: string[];
   onFilterCategoriesChange: (v: string[]) => void;
+  /** Tag-pill filter (source_tag + synthesized "Transfer") — also owned by the parent. */
+  filterTags?: string[];
+  onFilterTagsChange?: (v: string[]) => void;
+}
+
+// Mirrors SpendingView.tsx's effectiveTags — kept in sync manually since the
+// two components each own an independent filtering pipeline.
+function effectiveTags(tx: { source_tag?: string | null; is_transfer: boolean; category?: { name: string } | null }): string[] {
+  const tags: string[] = [];
+  if (tx.source_tag) tags.push(tx.source_tag);
+  if (tx.is_transfer || tx.category?.name === 'Transfer') tags.push('Transfer');
+  return tags;
 }
 
 type SortField = 'date' | 'amount' | 'category';
@@ -150,6 +162,8 @@ export default function SpendingTransactions({
   onSearchChange,
   filterCategories,
   onFilterCategoriesChange,
+  filterTags = [],
+  onFilterTagsChange,
 }: SpendingTransactionsProps) {
   // Local date filter — affects only the transactions list, not the page-level charts.
   // Initialized from the external (header) filter when one is provided.
@@ -315,14 +329,18 @@ export default function SpendingTransactions({
       result = result.filter((tx) => matchNames.has(getEffectiveCategory(tx)?.name || 'Uncategorized'));
     }
 
+    if (filterTags.length > 0) {
+      result = result.filter((tx) => effectiveTags(tx).some((t) => filterTags.includes(t)));
+    }
+
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter((tx) => {
         const name = getEffectivePayee(tx).toLowerCase();
         const cat = (getEffectiveCategory(tx)?.name || 'Uncategorized').toLowerCase();
-        const tag = (tx.source_tag ?? '').toLowerCase();
+        const tags = effectiveTags(tx).join(' ').toLowerCase();
         const amount = formatCurrencyPrecise(Math.abs(tx.amount)).toLowerCase();
-        return name.includes(q) || cat.includes(q) || tag.includes(q) || amount.includes(q);
+        return name.includes(q) || cat.includes(q) || tags.includes(q) || amount.includes(q);
       });
     }
 
@@ -354,7 +372,7 @@ export default function SpendingTransactions({
       return sortDir === 'desc' ? -cmp : cmp;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, dateFilter, dateFilterActive, filterCategories, search, sortBy, sortDir, categoryOverrides, payeeOverrides, transferOverrides, showTransfers, venmoFilter, venmoByTxId]);
+  }, [transactions, dateFilter, dateFilterActive, filterCategories, filterTags, search, sortBy, sortDir, categoryOverrides, payeeOverrides, transferOverrides, showTransfers, venmoFilter, venmoByTxId]);
 
   useEffect(() => { setVisibleCount(50); }, [filtered]);
 
@@ -386,6 +404,7 @@ export default function SpendingTransactions({
 
   const hasFilters =
     filterCategories.length > 0 ||
+    filterTags.length > 0 ||
     !!search.trim() ||
     !!selectedAccount ||
     dateFilterActive ||
@@ -449,6 +468,7 @@ export default function SpendingTransactions({
             <button
               onClick={() => {
                 onFilterCategoriesChange([]);
+                onFilterTagsChange?.([]);
                 onSearchChange('');
                 onAccountChange?.(null);
                 setShowTransfers(true);

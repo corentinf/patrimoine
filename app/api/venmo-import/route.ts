@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     const newPayee = person ? `${note} · ${person}` : note;
     const { error } = await supabase
       .from('transactions')
-      .update({ payee: newPayee })
+      .update({ payee: newPayee, source_tag: 'Venmo' })
       .eq('id', tx.id)
       .eq('user_id', user.id);
 
