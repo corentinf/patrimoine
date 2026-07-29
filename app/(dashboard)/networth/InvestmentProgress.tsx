@@ -589,7 +589,10 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                 domain={['auto', 'auto']}
                 tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
               />
-              <Tooltip content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal hoveredAccountId={hoveredAccountId} />} />
+              <Tooltip
+                content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal hoveredAccountId={hoveredAccountId} />}
+                allowEscapeViewBox={{ x: true, y: true }}
+              />
               {selectedAccounts.map((a) => {
                 const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
                 const hovered = hoveredAccountId === a.id;
@@ -654,7 +657,10 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                 tick={<PercentYTick />}
               />
             )}
-            <Tooltip content={<CustomTooltip up={up} hoveredAccountId={hoveredAccountId} />} />
+            <Tooltip
+              content={<CustomTooltip up={up} hoveredAccountId={hoveredAccountId} />}
+              allowEscapeViewBox={{ x: true, y: true }}
+            />
             {costBasis != null && (
               <ReferenceLine
                 yAxisId="left"
