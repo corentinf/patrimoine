@@ -11,6 +11,29 @@ import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../compon
 
 const ACCOUNT_TYPE_ORDER = ['checking', 'savings', 'investment', 'credit'];
 
+// Sync source is fully determined by the id prefix sync.ts assigns (see
+// app/lib/sync.ts) — sfin_ for SimpleFIN, manual_ for hand-entered balances
+// (401k/HSA/etc — accounts.balance is set once and never refreshed by
+// "Sync now"), everything else is a raw Plaid account_id.
+function accountSource(id: string): string {
+  if (id.startsWith('sfin_')) return 'SimpleFIN';
+  if (id.startsWith('manual_')) return 'Manual';
+  return 'Plaid';
+}
+
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
 function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'center' | 'left' | 'right' }) {
   const [open, setOpen] = useState(false);
   const translateX = align === 'left' ? 'left-0 -translate-x-0' : align === 'right' ? 'right-0 translate-x-0' : 'left-1/2 -translate-x-1/2';
@@ -257,6 +280,11 @@ export default function HomeView({
                           <div className="min-w-0">
                             <p className="text-sm text-ink-700 truncate">{a.institution || a.name}</p>
                             {subtitle && <p className="text-xs text-ink-300 truncate">{subtitle}</p>}
+                            {a.balance_date && (
+                              <p className="text-[11px] text-ink-300 truncate">
+                                {accountSource(a.id)} · Updated {timeAgo(a.balance_date)}
+                              </p>
+                            )}
                           </div>
                         </div>
                         {/* relative + md:absolute on the button so the edit affordance overlays
