@@ -58,11 +58,45 @@ const iso = isoDate;
 // Total view's tooltip: the $ total (+ cost basis diff) as before, plus —
 // when 2+ accounts are selected — each account's % change underneath, since
 // the chart now overlays those as thin lines on a secondary axis.
-function CustomTooltip({ active, payload, label, up }: any) {
+// Hovering the axis/background (hoveredAccountId unset) shows the full
+// breakdown; hovering a specific curve narrows this down to just that
+// curve's value at this point, since the curve itself is already the
+// highlight — the tooltip shouldn't repeat everyone else too.
+function CustomTooltip({ active, payload, label, up, hoveredAccountId }: any) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   const cost = p.costBasis as number | undefined;
   const pctEntries = payload.filter((entry: any) => typeof entry.dataKey === 'string' && entry.dataKey.startsWith('pct_'));
+
+  if (hoveredAccountId && hoveredAccountId !== TOTAL_HOVER_ID) {
+    const entry = pctEntries.find((e: any) => e.dataKey === `pct_${hoveredAccountId}`);
+    if (!entry) return null;
+    return (
+      <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-1 min-w-[120px]">
+        <p className="font-medium text-sand-300">{label}</p>
+        <p className="font-mono flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
+          <span className="text-ink-200">{entry.name}</span>
+          <span className="ml-auto">{entry.value >= 0 ? '+' : ''}{Number(entry.value).toFixed(1)}%</span>
+        </p>
+      </div>
+    );
+  }
+
+  if (hoveredAccountId === TOTAL_HOVER_ID) {
+    return (
+      <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-0.5">
+        <p className="font-medium text-sand-300">{label}</p>
+        <p className="font-mono">{formatCurrency(p.value)}</p>
+        {cost != null && (
+          <p className="font-mono" style={{ color: p.value - cost >= 0 ? '#7FD1A8' : '#E89B98' }}>
+            {p.value - cost >= 0 ? '+' : ''}{formatCurrency(p.value - cost)} vs cost basis
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-1 min-w-[160px]">
       <p className="font-medium text-sand-300">{label}</p>
@@ -143,8 +177,27 @@ function BuildingHistory() {
 // Shared tooltip for the Stacked and Compare views — one line per account
 // (using the color/name Recharts already attaches to each series), plus a
 // running total for Stacked so it's clear the areas add up to the combined line.
-function MultiSeriesTooltip({ active, payload, label, formatValue, showTotal }: any) {
+// Same axis-vs-curve distinction as CustomTooltip: hovering the background
+// shows every band + the running total, hovering one band narrows it to
+// just that account's value at this point.
+function MultiSeriesTooltip({ active, payload, label, formatValue, showTotal, hoveredAccountId }: any) {
   if (!active || !payload?.length) return null;
+
+  if (hoveredAccountId) {
+    const entry = payload.find((p: any) => p.dataKey === hoveredAccountId);
+    if (!entry) return null;
+    return (
+      <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-1 min-w-[120px]">
+        <p className="font-medium text-sand-300">{label}</p>
+        <p className="font-mono flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
+          <span className="text-ink-200">{entry.name}</span>
+          <span className="ml-auto">{formatValue(entry.value)}</span>
+        </p>
+      </div>
+    );
+  }
+
   const total = payload.reduce((s: number, p: any) => s + (p.value ?? 0), 0);
   return (
     <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-1 min-w-[160px]">
@@ -536,7 +589,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                 domain={['auto', 'auto']}
                 tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
               />
-              <Tooltip content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal />} />
+              <Tooltip content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal hoveredAccountId={hoveredAccountId} />} />
               {selectedAccounts.map((a) => {
                 const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
                 const hovered = hoveredAccountId === a.id;
@@ -601,7 +654,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                 tick={<PercentYTick />}
               />
             )}
-            <Tooltip content={<CustomTooltip up={up} />} />
+            <Tooltip content={<CustomTooltip up={up} hoveredAccountId={hoveredAccountId} />} />
             {costBasis != null && (
               <ReferenceLine
                 yAxisId="left"
