@@ -768,33 +768,50 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         </button>
         {chipCategories.map((cat) => {
           const children = childrenByParentName.get(cat.name);
+          const isExpanded = expandedCategory === cat.name;
           return (
-            <span key={cat.name} className="inline-flex items-center">
-              <CategoryPill
-                cat={cat}
-                active={filterCategories.includes(cat.name)}
-                hasActivity={chipHasActivity.get(cat.name) ?? false}
-                hasSelection={filterCategories.length > 0}
-                onSelectOnly={() => setFilterCategories([cat.name])}
-                onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== cat.name))}
-                onAddToSelection={() => {
-                  if (!filterCategories.includes(cat.name)) setFilterCategories([...filterCategories, cat.name]);
-                }}
-              />
-              {children && children.length > 0 && (
-                <button
-                  onClick={() => setExpandedCategory((v) => (v === cat.name ? null : cat.name))}
-                  aria-label={`${expandedCategory === cat.name ? 'Hide' : 'Show'} ${cat.name} sub-categories`}
-                  title="Sub-categories"
-                  className={`ml-0.5 flex items-center justify-center w-4 h-4 rounded-full transition-colors ${
-                    expandedCategory === cat.name ? 'text-ink-700 bg-sand-200' : 'text-ink-300 hover:text-ink-500 hover:bg-sand-100'
-                  }`}
-                >
-                  <svg className={`w-3 h-3 transition-transform ${expandedCategory === cat.name ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              )}
+            <span key={cat.name} className="inline-flex items-center flex-wrap gap-1.5">
+              <span className="inline-flex items-center">
+                <CategoryPill
+                  cat={cat}
+                  active={filterCategories.includes(cat.name)}
+                  hasActivity={chipHasActivity.get(cat.name) ?? false}
+                  hasSelection={filterCategories.length > 0}
+                  onSelectOnly={() => setFilterCategories([cat.name])}
+                  onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== cat.name))}
+                  onAddToSelection={() => {
+                    if (!filterCategories.includes(cat.name)) setFilterCategories([...filterCategories, cat.name]);
+                  }}
+                />
+                {children && children.length > 0 && (
+                  <button
+                    onClick={() => setExpandedCategory((v) => (v === cat.name ? null : cat.name))}
+                    aria-label={`${isExpanded ? 'Hide' : 'Show'} ${cat.name} sub-categories`}
+                    title="Sub-categories"
+                    className={`ml-0.5 flex items-center justify-center w-4 h-4 rounded-full transition-colors ${
+                      isExpanded ? 'text-ink-700 bg-sand-200' : 'text-ink-300 hover:text-ink-500 hover:bg-sand-100'
+                    }`}
+                  >
+                    <svg className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                )}
+              </span>
+              {isExpanded && children && children.map((sub) => (
+                <CategoryPill
+                  key={sub.name}
+                  cat={sub}
+                  active={filterCategories.includes(sub.name)}
+                  hasActivity={activeCategoryNames.has(sub.name)}
+                  hasSelection={filterCategories.length > 0}
+                  onSelectOnly={() => setFilterCategories([sub.name])}
+                  onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== sub.name))}
+                  onAddToSelection={() => {
+                    if (!filterCategories.includes(sub.name)) setFilterCategories([...filterCategories, sub.name]);
+                  }}
+                />
+              ))}
             </span>
           );
         })}
@@ -805,25 +822,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           >
             Deselect all
           </button>
-        )}
-        {expandedCategory && childrenByParentName.get(expandedCategory) && (
-          <div className="w-full flex items-center gap-1.5 flex-wrap pl-3 border-l-2 border-sand-200 ml-1">
-            <span className="text-xs text-ink-300 whitespace-nowrap">{expandedCategory} ›</span>
-            {childrenByParentName.get(expandedCategory)!.map((sub) => (
-              <CategoryPill
-                key={sub.name}
-                cat={sub}
-                active={filterCategories.includes(sub.name)}
-                hasActivity={activeCategoryNames.has(sub.name)}
-                hasSelection={filterCategories.length > 0}
-                onSelectOnly={() => setFilterCategories([sub.name])}
-                onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== sub.name))}
-                onAddToSelection={() => {
-                  if (!filterCategories.includes(sub.name)) setFilterCategories([...filterCategories, sub.name]);
-                }}
-              />
-            ))}
-          </div>
         )}
       </div>
     </div>,
