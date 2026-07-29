@@ -715,8 +715,10 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               dataKey="value"
               name="Investments"
               stroke={up ? '#3D7A5F' : '#B85450'}
+              strokeOpacity={hoveredAccountId !== null && hoveredAccountId !== TOTAL_HOVER_ID ? 0.3 : 1}
               strokeWidth={hoveredAccountId === TOTAL_HOVER_ID ? 5 : 4}
               fill="url(#investFill)"
+              fillOpacity={hoveredAccountId !== null && hoveredAccountId !== TOTAL_HOVER_ID ? 0.3 : 1}
               dot={false}
               activeDot={{ r: 5, fill: up ? '#3D7A5F' : '#B85450' }}
               onMouseEnter={() => setHoveredAccountId(TOTAL_HOVER_ID)}
