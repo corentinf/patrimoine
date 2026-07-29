@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
+  AreaChart, Area, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { format } from 'date-fns';
 import { formatCurrency, amountColor } from '@/app/lib/utils';
@@ -12,12 +12,11 @@ import {
   buildComparePercentSeries, seriesChange, type RangeKey,
 } from '@/app/lib/investmentRange';
 
-type ViewMode = 'total' | 'stacked' | 'compare';
+type ViewMode = 'total' | 'stacked';
 
 const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
   { key: 'total', label: 'Total' },
   { key: 'stacked', label: 'Stacked' },
-  { key: 'compare', label: 'Compare %' },
 ];
 
 // Cycled per selected account so each gets a stable, distinguishable color in
@@ -50,18 +49,35 @@ interface Point { date: string; value: number }
 
 const iso = isoDate;
 
+// Total view's tooltip: the $ total (+ cost basis diff) as before, plus —
+// when 2+ accounts are selected — each account's % change underneath, since
+// the chart now overlays those as thin lines on a secondary axis.
 function CustomTooltip({ active, payload, label, up }: any) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   const cost = p.costBasis as number | undefined;
+  const pctEntries = payload.filter((entry: any) => typeof entry.dataKey === 'string' && entry.dataKey.startsWith('pct_'));
   return (
-    <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-0.5">
+    <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-1 min-w-[160px]">
       <p className="font-medium text-sand-300">{label}</p>
       <p className="font-mono">{formatCurrency(p.value)}</p>
       {cost != null && (
         <p className="font-mono" style={{ color: p.value - cost >= 0 ? '#7FD1A8' : '#E89B98' }}>
           {p.value - cost >= 0 ? '+' : ''}{formatCurrency(p.value - cost)} vs cost basis
         </p>
+      )}
+      {pctEntries.length > 0 && (
+        <div className="pt-1 mt-1 border-t border-ink-600 space-y-0.5">
+          {pctEntries.map((entry: any) => (
+            <p key={entry.dataKey} className="font-mono flex items-center justify-between gap-3">
+              <span className="flex items-center gap-1.5 text-ink-200">
+                <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
+                {entry.name}
+              </span>
+              <span>{entry.value >= 0 ? '+' : ''}{Number(entry.value).toFixed(1)}%</span>
+            </p>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -276,16 +292,33 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
     [data, start, end],
   );
 
+  // Total view overlays each account's % change (like the old Compare % view)
+  // whenever 2+ accounts are selected — a map keyed by date so chartData below
+  // can merge it in alongside the $ total on the same x-axis.
+  const showComparePct = selectedAccounts.length > 1;
+  const compareOverlay = useMemo(() => {
+    if (!showComparePct) return null;
+    const perAccount = buildComparePercentSeries(dates, selectedAccounts, start, todayIso);
+    return new Map(perAccount.map((p) => [p.date, p]));
+  }, [showComparePct, dates, selectedAccounts, start, todayIso]);
+
   const chartData = useMemo(() => {
     const pts = baseline && (inRange.length === 0 || inRange[0].date !== baseline.date)
       ? [baseline, ...inRange]
       : inRange;
-    return pts.map((p) => ({
-      label: format(new Date(p.date + 'T12:00:00'), 'MMM d'),
-      value: Math.round(p.value),
-      ...(costBasis != null ? { costBasis: Math.round(costBasis) } : {}),
-    }));
-  }, [baseline, inRange, costBasis]);
+    return pts.map((p) => {
+      const overlay = compareOverlay?.get(p.date);
+      const pctFields = overlay
+        ? Object.fromEntries(selectedAccounts.map((a) => [`pct_${a.id}`, overlay[a.id] as number | undefined]))
+        : {};
+      return {
+        label: format(new Date(p.date + 'T12:00:00'), 'MMM d'),
+        value: Math.round(p.value),
+        ...(costBasis != null ? { costBasis: Math.round(costBasis) } : {}),
+        ...pctFields,
+      };
+    });
+  }, [baseline, inRange, costBasis, compareOverlay, selectedAccounts]);
 
   const { startValue, endValue, change, pct } = useMemo(
     () => seriesChange(data, start, end, liveValue),
@@ -293,12 +326,12 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
   );
   const up = change >= 0;
 
-  // Stacked/Compare only make sense with 2+ accounts on screen — fall back to
-  // Total silently rather than showing a toggle with no effect.
+  // Stacked only makes sense with 2+ accounts on screen — fall back to Total
+  // silently rather than showing a toggle with no effect.
   const [viewMode, setViewMode] = useState<ViewMode>('total');
   const effectiveView: ViewMode = selectedAccounts.length > 1 ? viewMode : 'total';
-  // Hovering an account pill highlights its series in Stacked/Compare — dims the
-  // rest instead of hiding them so the reader keeps the whole picture in view.
+  // Hovering an account pill highlights its series in Stacked/Total's % overlay
+  // — dims the rest instead of hiding them so the reader keeps the whole picture.
   const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
   // Indexed against the full account list (not selectedAccounts) so a given
   // account keeps the same color regardless of what else is currently toggled
@@ -325,17 +358,6 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
       ...Object.fromEntries(selectedAccounts.map((a) => [a.id, Math.round(Number(p[a.id] ?? 0))])),
     }));
   }, [effectiveView, dates, selectedAccounts, todayIso, start, end]);
-
-  const compareData = useMemo(() => {
-    if (effectiveView !== 'compare') return [];
-    const perAccount = buildComparePercentSeries(dates, selectedAccounts, start, todayIso);
-    return perAccount
-      .filter((p) => p.date <= end)
-      .map((p) => ({
-        label: format(new Date(p.date + 'T12:00:00'), 'MMM d'),
-        ...Object.fromEntries(selectedAccounts.map((a) => [a.id, p[a.id] as number | undefined])),
-      }));
-  }, [effectiveView, dates, selectedAccounts, start, end, todayIso]);
 
   function selectOnlyAccount(id: string) {
     setSelected(new Set([id]));
@@ -408,8 +430,8 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               account={a}
               active={selected.has(a.id)}
               hasSelection={selected.size > 0}
-              showColor={effectiveView !== 'total'}
-              highlighted={effectiveView !== 'total' && selected.has(a.id) && hoveredAccountId === a.id}
+              showColor={showComparePct}
+              highlighted={showComparePct && selected.has(a.id) && hoveredAccountId === a.id}
               color={accountColor(a.id)}
               onSelectOnly={() => selectOnlyAccount(a.id)}
               onDeselect={() => deselectAccount(a.id)}
@@ -511,50 +533,12 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
             </AreaChart>
           </ResponsiveContainer>
         ) : <BuildingHistory />
-      ) : effectiveView === 'compare' ? (
-        compareData.length >= 2 ? (
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={compareData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11, fill: '#8F897E' }}
-                axisLine={{ stroke: '#E2D9CA' }}
-                tickLine={false}
-                interval="preserveStartEnd"
-                minTickGap={24}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                domain={['auto', 'auto']}
-                tick={<PercentYTick />}
-              />
-              <Tooltip content={<MultiSeriesTooltip formatValue={(v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`} />} />
-              <ReferenceLine y={0} stroke="#C9BDA8" strokeWidth={1} />
-              {selectedAccounts.map((a) => {
-                const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
-                return (
-                  <Line
-                    key={a.id}
-                    type="monotone"
-                    dataKey={a.id}
-                    name={accountLabel(a)}
-                    stroke={accountColor(a.id)}
-                    strokeOpacity={dimmed ? 0.25 : 1}
-                    strokeWidth={hoveredAccountId === a.id ? 3 : 2}
-                    dot={false}
-                    connectNulls={false}
-                    activeDot={{ r: 3 }}
-                  />
-                );
-              })}
-            </LineChart>
-          </ResponsiveContainer>
-        ) : <BuildingHistory />
       ) : chartData.length >= 2 ? (
         <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+          {/* ComposedChart so the $ total (Area, left axis) and each account's
+              % change (Line, right axis) can share one x-axis — the two
+              views this replaced (Total, Compare %) overlaid on one graph. */}
+          <ComposedChart data={chartData} margin={{ top: 5, right: showComparePct ? 10 : 5, bottom: 0, left: -10 }}>
             <defs>
               <linearGradient id="investFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={up ? '#3D7A5F' : '#B85450'} stopOpacity={0.18} />
@@ -571,14 +555,26 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               minTickGap={24}
             />
             <YAxis
+              yAxisId="left"
               axisLine={false}
               tickLine={false}
               domain={['auto', 'auto']}
               tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
             />
+            {showComparePct && (
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                axisLine={false}
+                tickLine={false}
+                domain={['auto', 'auto']}
+                tick={<PercentYTick />}
+              />
+            )}
             <Tooltip content={<CustomTooltip up={up} />} />
             {costBasis != null && (
               <ReferenceLine
+                yAxisId="left"
                 y={costBasis}
                 stroke="#8F897E"
                 strokeDasharray="4 4"
@@ -586,7 +582,9 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                 label={{ value: 'cost basis', position: 'insideTopRight', fontSize: 10, fill: '#8F897E' }}
               />
             )}
+            {showComparePct && <ReferenceLine yAxisId="right" y={0} stroke="#C9BDA8" strokeWidth={1} />}
             <Area
+              yAxisId="left"
               type="monotone"
               dataKey="value"
               name="Investments"
@@ -596,7 +594,25 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               dot={false}
               activeDot={{ r: 4, fill: up ? '#3D7A5F' : '#B85450' }}
             />
-          </AreaChart>
+            {showComparePct && selectedAccounts.map((a) => {
+              const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
+              return (
+                <Line
+                  key={a.id}
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey={`pct_${a.id}`}
+                  name={accountLabel(a)}
+                  stroke={accountColor(a.id)}
+                  strokeOpacity={dimmed ? 0.25 : 1}
+                  strokeWidth={hoveredAccountId === a.id ? 2.5 : 1.5}
+                  dot={false}
+                  connectNulls={false}
+                  activeDot={{ r: 3 }}
+                />
+              );
+            })}
+          </ComposedChart>
         </ResponsiveContainer>
       ) : (
         <BuildingHistory />
