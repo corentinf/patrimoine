@@ -449,6 +449,23 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [transactions, allCategories]);
 
+  // Sub-categories grouped by their parent's name, for the drill-down row
+  // under the header pills (e.g. "Gas & Fuel" under "Transport").
+  const childrenByParentName = useMemo(() => {
+    const map = new Map<string, { name: string; icon: string; color: string }[]>();
+    for (const cat of allCategories) {
+      if (!cat.parent_id || cat.is_income) continue;
+      const parent = allCategories.find((c) => c.id === cat.parent_id);
+      if (!parent) continue;
+      const list = map.get(parent.name) ?? [];
+      list.push({ name: cat.name, icon: cat.icon || '', color: cat.color || '#6B7280' });
+      map.set(parent.name, list);
+    }
+    for (const list of Array.from(map.values())) list.sort((a, b) => a.name.localeCompare(b.name));
+    return map;
+  }, [allCategories]);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('transactions');
   const [budgets, setBudgets] = useState<Record<string, number>>(initialBudgets);
@@ -739,34 +756,71 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       )}
       <div className="flex items-center gap-1.5 flex-wrap">
         <button
-          onClick={() => setFilterCategories([])}
+          onClick={() => { setFilterCategories([]); setExpandedCategory(null); }}
           className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
             filterCategories.length === 0 ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
           }`}
         >
           All
         </button>
-        {chipCategories.map((cat) => (
-          <CategoryPill
-            key={cat.name}
-            cat={cat}
-            active={filterCategories.includes(cat.name)}
-            hasActivity={chipHasActivity.get(cat.name) ?? false}
-            hasSelection={filterCategories.length > 0}
-            onSelectOnly={() => setFilterCategories([cat.name])}
-            onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== cat.name))}
-            onAddToSelection={() => {
-              if (!filterCategories.includes(cat.name)) setFilterCategories([...filterCategories, cat.name]);
-            }}
-          />
-        ))}
+        {chipCategories.map((cat) => {
+          const children = childrenByParentName.get(cat.name);
+          return (
+            <span key={cat.name} className="inline-flex items-center">
+              <CategoryPill
+                cat={cat}
+                active={filterCategories.includes(cat.name)}
+                hasActivity={chipHasActivity.get(cat.name) ?? false}
+                hasSelection={filterCategories.length > 0}
+                onSelectOnly={() => setFilterCategories([cat.name])}
+                onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== cat.name))}
+                onAddToSelection={() => {
+                  if (!filterCategories.includes(cat.name)) setFilterCategories([...filterCategories, cat.name]);
+                }}
+              />
+              {children && children.length > 0 && (
+                <button
+                  onClick={() => setExpandedCategory((v) => (v === cat.name ? null : cat.name))}
+                  aria-label={`${expandedCategory === cat.name ? 'Hide' : 'Show'} ${cat.name} sub-categories`}
+                  title="Sub-categories"
+                  className={`ml-0.5 flex items-center justify-center w-4 h-4 rounded-full transition-colors ${
+                    expandedCategory === cat.name ? 'text-ink-700 bg-sand-200' : 'text-ink-300 hover:text-ink-500 hover:bg-sand-100'
+                  }`}
+                >
+                  <svg className={`w-3 h-3 transition-transform ${expandedCategory === cat.name ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              )}
+            </span>
+          );
+        })}
         {filterCategories.length > 0 && (
           <button
-            onClick={() => setFilterCategories([])}
+            onClick={() => { setFilterCategories([]); setExpandedCategory(null); }}
             className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
           >
             Deselect all
           </button>
+        )}
+        {expandedCategory && childrenByParentName.get(expandedCategory) && (
+          <div className="w-full flex items-center gap-1.5 flex-wrap pl-3 border-l-2 border-sand-200 ml-1">
+            <span className="text-xs text-ink-300 whitespace-nowrap">{expandedCategory} ›</span>
+            {childrenByParentName.get(expandedCategory)!.map((sub) => (
+              <CategoryPill
+                key={sub.name}
+                cat={sub}
+                active={filterCategories.includes(sub.name)}
+                hasActivity={activeCategoryNames.has(sub.name)}
+                hasSelection={filterCategories.length > 0}
+                onSelectOnly={() => setFilterCategories([sub.name])}
+                onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== sub.name))}
+                onAddToSelection={() => {
+                  if (!filterCategories.includes(sub.name)) setFilterCategories([...filterCategories, sub.name]);
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>,
