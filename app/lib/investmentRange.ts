@@ -49,11 +49,16 @@ export function idxAtOrBefore(dates: string[], target: string): number {
 
 export interface SeriesPoint { date: string; value: number }
 
-// Sum `accounts` values across the shared `dates` axis, requiring every account
-// to have a value on a date before including it (a consistent basket — no jump
-// when one account is linked later than the others). The final point is then
-// overridden with `liveValue` (today's true current total) so the series always
-// ends at today regardless of how stale the last snapshot date is.
+// Sum `accounts` values across the shared `dates` axis. A null entry means
+// that account hadn't been linked yet on that date, so it contributes 0
+// rather than excluding the date entirely — otherwise one recently-added
+// account (even a small one) would cap the whole chart to only the handful
+// of days since it joined, hiding months of real history for every other
+// account. The day an account's history begins, the total legitimately steps
+// up by its balance — that's accurate, not a rendering artifact. The final
+// point is then overridden with `liveValue` (today's true current total) so
+// the series always ends at today regardless of how stale the last snapshot
+// date is.
 export function buildCombinedSeries(
   dates: string[],
   accounts: { values: (number | null)[] }[],
@@ -63,13 +68,12 @@ export function buildCombinedSeries(
   const out: SeriesPoint[] = [];
   for (let i = 0; i < dates.length; i++) {
     let sum = 0;
-    let ok = accounts.length > 0;
+    let anyData = false;
     for (const a of accounts) {
       const v = a.values[i];
-      if (v == null) { ok = false; break; }
-      sum += v;
+      if (v != null) { sum += v; anyData = true; }
     }
-    if (ok) out.push({ date: dates[i], value: sum });
+    if (anyData) out.push({ date: dates[i], value: sum });
   }
   if (out.length === 0 || out[out.length - 1].date < todayIso) {
     if (accounts.length > 0) out.push({ date: todayIso, value: liveValue });
@@ -84,10 +88,10 @@ export interface PerAccountPoint {
   [accountId: string]: number | string;
 }
 
-// Same consistent-basket rule as buildCombinedSeries (every account must have
-// a value on a date for that date to be included), but keeps each account's
-// value separate instead of summing — powers the "Stacked" view, where the
-// per-account areas need to line up on every date to stack correctly.
+// Same missing-means-zero rule as buildCombinedSeries (an account not yet
+// linked on a date contributes 0 rather than excluding the date), but keeps
+// each account's value separate instead of summing — powers the "Stacked"
+// view, where a recently-added account's band just starts partway through.
 export function buildPerAccountSeries(
   dates: string[],
   accounts: { id: string; values: (number | null)[]; currentValue: number }[],
@@ -95,14 +99,14 @@ export function buildPerAccountSeries(
 ): PerAccountPoint[] {
   const out: PerAccountPoint[] = [];
   for (let i = 0; i < dates.length; i++) {
-    let ok = accounts.length > 0;
+    let anyData = false;
     const point: PerAccountPoint = { date: dates[i] };
     for (const a of accounts) {
       const v = a.values[i];
-      if (v == null) { ok = false; break; }
-      point[a.id] = v;
+      point[a.id] = v ?? 0;
+      if (v != null) anyData = true;
     }
-    if (ok) out.push(point);
+    if (anyData) out.push(point);
   }
   if (out.length === 0 || out[out.length - 1].date < todayIso) {
     if (accounts.length > 0) {
