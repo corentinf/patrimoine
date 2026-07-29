@@ -1,27 +1,56 @@
 import { format, parseISO, subDays, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
+import { isFakeModeActive } from './demoMode';
+
+// Deterministic PRNG (mulberry32) — same seed always yields the same value,
+// so demo mode maps a given real amount to the same fake one everywhere it's
+// shown, without needing to persist anything.
+function seededRandom01(seed: number): number {
+  let t = seed + 0x6D2B79F5;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+// Demo mode: substitutes a plausible-looking fake amount so the app can be
+// shown to someone else without revealing real figures. Scales the fake
+// value to roughly the same order of magnitude as the real one (~0.55x-1.45x)
+// so a net worth still looks like a net worth and a coffee purchase still
+// looks like a coffee purchase — it does NOT reconcile sums (a fake category
+// total won't add up to a fake grand total), since each amount is faked
+// independently; it's a screenshot/demo aid, not a synthetic dataset.
+export function fakeifyAmount(amount: number): number {
+  if (!amount) return amount;
+  const sign = amount < 0 ? -1 : 1;
+  const abs = Math.abs(amount);
+  const seed = Math.round(abs * 100) % 2147483647;
+  const factor = 0.55 + seededRandom01(seed) * 0.9;
+  return sign * Math.round(abs * factor);
+}
 
 /**
  * Format a number as USD currency.
  */
 export function formatCurrency(amount: number): string {
+  const value = isFakeModeActive() ? fakeifyAmount(amount) : amount;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(value);
 }
 
 /**
  * Format with cents for detail views.
  */
 export function formatCurrencyPrecise(amount: number): string {
+  const value = isFakeModeActive() ? fakeifyAmount(amount) : amount;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(value);
 }
 
 /**

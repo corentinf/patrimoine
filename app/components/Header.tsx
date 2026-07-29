@@ -5,6 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createBrowserClient } from '@/app/lib/supabase';
 import { usePrivacy } from '@/app/lib/privacy';
+import { isFakeModeActive } from '@/app/lib/demoMode';
+import { fakeifyAmount } from '@/app/lib/utils';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { usePageFilterSlotContent } from '@/app/lib/pageFilterSlot';
 import { useShortcutsHelp } from './KeyboardShortcuts';
@@ -448,7 +450,8 @@ export function PageFiltersRow() {
   );
 }
 
-function shortNum(n: number): string {
+function shortNum(rawN: number): string {
+  const n = isFakeModeActive() ? fakeifyAmount(rawN) : rawN;
   const abs = Math.abs(n);
   if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
@@ -465,6 +468,10 @@ interface HeaderProps {
 
 export default function Header({ accounts = [], netWorth = 0, spending = 0, income = 0, investmentTotal = 0 }: HeaderProps) {
   const pathname = usePathname();
+  // Not otherwise used here — but subscribing is what makes this component
+  // re-render (and shortNum() below re-check demo mode) when the toggle in
+  // Profile changes it, since shortNum reads a plain flag outside React state.
+  usePrivacy();
 
   const tabStats: Record<string, string> = {
     '/home': shortNum(netWorth),

@@ -71,7 +71,7 @@ function SyncButton() {
 
 export default function ProfileClient({ accounts, netWorth }: Props) {
   const router = useRouter();
-  const { blurred, toggle: togglePrivacy } = usePrivacy();
+  const { blurred, fake, toggle: togglePrivacy, toggleFake } = usePrivacy();
   const [modalAccount, setModalAccount] = useState<SidebarAccount | null | undefined>(undefined);
 
   async function handleSignOut() {
@@ -125,6 +125,33 @@ export default function ProfileClient({ accounts, netWorth }: Props) {
             </span>
             <span className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${blurred ? 'bg-ink-700' : 'bg-sand-300'}`}>
               <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${blurred ? 'translate-x-5' : 'translate-x-0'}`} />
+            </span>
+          </button>
+
+          {/* Demo mode — same idea as Privacy mode, but instead of blurring real
+              figures it substitutes plausible-looking fake ones (deterministic
+              per amount, so the same number always fakes the same way this
+              session) so the app can be shown to someone else safely. Doesn't
+              reconcile sums across the app — each figure is faked independently. */}
+          <button
+            onClick={toggleFake}
+            title="Shows made-up amounts instead of your real balances/transactions — safe to demo to someone else. Sums won't perfectly add up since each figure is faked independently."
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-sand-50 transition-colors"
+          >
+            <span className="flex items-center gap-3 text-sm text-ink-700">
+              <span className="w-8 h-8 rounded-full bg-sand-100 flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                </svg>
+              </span>
+              <span>
+                Demo mode
+                <span className="block text-xs text-ink-400 font-normal">Shows fake amounts instead of real ones</span>
+              </span>
+            </span>
+            <span className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${fake ? 'bg-ink-700' : 'bg-sand-300'}`}>
+              <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${fake ? 'translate-x-5' : 'translate-x-0'}`} />
             </span>
           </button>
 

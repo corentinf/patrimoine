@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrency, accountTypeConfig, resolveInstitutionDomain } from '@/app/lib/utils';
+import { formatCurrency, fakeifyAmount, accountTypeConfig, resolveInstitutionDomain } from '@/app/lib/utils';
+import { isFakeModeActive } from '@/app/lib/demoMode';
 
 export interface SidebarAccount {
   id: string;
@@ -13,6 +14,7 @@ export interface SidebarAccount {
   custom_url?: string | null;
   account_type: string;
   balance: number;
+  balance_date?: string | null;
 }
 
 export function InstitutionLogo({
@@ -49,7 +51,8 @@ export function InstitutionLogo({
   );
 }
 
-function compactCurrency(amount: number): string {
+function compactCurrency(rawAmount: number): string {
+  const amount = isFakeModeActive() ? fakeifyAmount(rawAmount) : rawAmount;
   const abs = Math.abs(amount);
   if (abs >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
   if (abs >= 10_000) return `$${(amount / 1000).toFixed(0)}K`;

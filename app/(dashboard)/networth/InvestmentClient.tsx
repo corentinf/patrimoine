@@ -63,8 +63,8 @@ export default function InvestmentClient({
           {totalInvestmentValue - totalHoldingsValue > 1 && (
             <p className="text-xs text-ink-400">
               Line items below cover{' '}
-              <span data-sensitive>{totalHoldingsValue.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}</span>. The remaining{' '}
-              <span data-sensitive>{(totalInvestmentValue - totalHoldingsValue).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}</span>{' '}
+              <span data-sensitive>{formatCurrency(totalHoldingsValue)}</span>. The remaining{' '}
+              <span data-sensitive>{formatCurrency(totalInvestmentValue - totalHoldingsValue)}</span>{' '}
               is in accounts that don&apos;t report individual holdings (e.g. 401k, HSA).
             </p>
           )}
