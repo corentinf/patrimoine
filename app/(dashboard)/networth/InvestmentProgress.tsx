@@ -20,9 +20,11 @@ const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
 ];
 
 // Cycled per selected account so each gets a stable, distinguishable color in
-// the Stacked/Compare views — pulled from the app's accent palette plus a
-// couple of sand/ink tones so 5+ accounts still stay legible.
-const ACCOUNT_COLORS = ['#3D7A5F', '#4A6FA5', '#C4983B', '#B85450', '#8A7A64', '#6B5D4A', '#A89882'];
+// the Stacked view and Total's % overlay. Deliberately excludes the app's
+// green/red accents (#3D7A5F/#B85450) — those are reserved for the $ total
+// line's up/down color, and an account happening to land on the same hue
+// made it disappear into the total on the chart.
+const ACCOUNT_COLORS = ['#4A6FA5', '#C4983B', '#8E6BAE', '#5B8A8A', '#8A7A64', '#6B5D4A', '#A89882'];
 
 const LONG_PRESS_MS = 500;
 
@@ -589,11 +591,13 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               dataKey="value"
               name="Investments"
               stroke={up ? '#3D7A5F' : '#B85450'}
-              strokeWidth={2}
+              strokeWidth={3}
               fill="url(#investFill)"
               dot={false}
               activeDot={{ r: 4, fill: up ? '#3D7A5F' : '#B85450' }}
             />
+            {/* Dashed and thinner than the total's solid line so the two never
+                compete visually, on top of using an entirely separate palette. */}
             {showComparePct && selectedAccounts.map((a) => {
               const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
               return (
@@ -604,8 +608,9 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                   dataKey={`pct_${a.id}`}
                   name={accountLabel(a)}
                   stroke={accountColor(a.id)}
-                  strokeOpacity={dimmed ? 0.25 : 1}
-                  strokeWidth={hoveredAccountId === a.id ? 2.5 : 1.5}
+                  strokeDasharray="4 3"
+                  strokeOpacity={dimmed ? 0.25 : 0.85}
+                  strokeWidth={hoveredAccountId === a.id ? 2.25 : 1.25}
                   dot={false}
                   connectNulls={false}
                   activeDot={{ r: 3 }}
