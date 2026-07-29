@@ -94,3 +94,10 @@
 .privacy-mode [data-sensitive]:hover {
   filter: blur(6px);
 }
+
+/* Sub-category pills appearing next to their parent — a CSS animation (not a
+   transition) so it plays on mount without needing a before/after state. */
+@keyframes pill-in {
+  from { opacity: 0; transform: scale(0.85) translateX(-4px); }
+  to   { opacity: 1; transform: scale(1) translateX(0); }
+}

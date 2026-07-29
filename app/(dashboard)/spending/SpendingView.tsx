@@ -798,19 +798,24 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                   </button>
                 )}
               </span>
-              {isExpanded && children && children.map((sub) => (
-                <CategoryPill
+              {isExpanded && children && children.map((sub, i) => (
+                <span
                   key={sub.name}
-                  cat={sub}
-                  active={filterCategories.includes(sub.name)}
-                  hasActivity={activeCategoryNames.has(sub.name)}
-                  hasSelection={filterCategories.length > 0}
-                  onSelectOnly={() => setFilterCategories([sub.name])}
-                  onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== sub.name))}
-                  onAddToSelection={() => {
-                    if (!filterCategories.includes(sub.name)) setFilterCategories([...filterCategories, sub.name]);
-                  }}
-                />
+                  className="inline-flex animate-[pill-in_150ms_ease-out_backwards]"
+                  style={{ animationDelay: `${i * 30}ms` }}
+                >
+                  <CategoryPill
+                    cat={sub}
+                    active={filterCategories.includes(sub.name)}
+                    hasActivity={activeCategoryNames.has(sub.name)}
+                    hasSelection={filterCategories.length > 0}
+                    onSelectOnly={() => setFilterCategories([sub.name])}
+                    onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== sub.name))}
+                    onAddToSelection={() => {
+                      if (!filterCategories.includes(sub.name)) setFilterCategories([...filterCategories, sub.name]);
+                    }}
+                  />
+                </span>
               ))}
             </span>
           );
