@@ -4,238 +4,6 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrencyPrecise } from '@/app/lib/utils';
 import type { DateFilter } from './SpendingView';
 
-function isoDate(y: number, m: number, d: number) {
-  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-function CalendarMonth({
-  year, month, rangeStart, rangeEnd, hoverDate, selecting,
-  onDayClick, onDayHover,
-}: {
-  year: number; month: number;
-  rangeStart: string | null; rangeEnd: string | null;
-  hoverDate: string | null; selecting: boolean;
-  onDayClick: (d: string) => void;
-  onDayHover: (d: string | null) => void;
-}) {
-  const label = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const firstDow = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  // Effective range including hover preview
-  const [effStart, effEnd] = (() => {
-    if (selecting && hoverDate && rangeStart) {
-      return hoverDate >= rangeStart
-        ? [rangeStart, hoverDate]
-        : [hoverDate, rangeStart];
-    }
-    return [rangeStart, rangeEnd];
-  })();
-
-  const cells: (number | null)[] = Array(firstDow).fill(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  return (
-    <div className="min-w-[196px]">
-      <p className="text-xs font-semibold text-ink-700 text-center mb-3">{label}</p>
-      <div className="grid grid-cols-7 mb-1">
-        {['S','M','T','W','T','F','S'].map((d, i) => (
-          <span key={i} className="text-center text-[10px] text-ink-300 font-medium">{d}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7">
-        {cells.map((day, i) => {
-          if (!day) return <span key={`e${i}`} />;
-          const ds = isoDate(year, month, day);
-          const isStart = ds === effStart;
-          const isEnd = ds === effEnd;
-          const inRange = !!(effStart && effEnd && ds > effStart && ds < effEnd);
-          return (
-            <div
-              key={day}
-              className={`flex items-center justify-center h-8 ${
-                inRange ? 'bg-sand-100' : ''
-              } ${isStart && effEnd ? 'rounded-l-full' : ''} ${isEnd && effStart ? 'rounded-r-full' : ''}`}
-            >
-              <button
-                onClick={() => onDayClick(ds)}
-                onMouseEnter={() => onDayHover(ds)}
-                onMouseLeave={() => onDayHover(null)}
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs transition-colors ${
-                  isStart || isEnd
-                    ? 'bg-ink-800 text-white font-medium'
-                    : inRange
-                      ? 'hover:bg-sand-200 text-ink-700'
-                      : 'hover:bg-sand-100 text-ink-600'
-                }`}
-              >
-                {day}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function DateControl({
-  dateFilter,
-  dateFilterActive,
-  onChange,
-  onClear,
-}: {
-  dateFilter: DateFilter;
-  dateFilterActive: boolean;
-  onChange: (f: DateFilter) => void;
-  onClear: () => void;
-}) {
-  const today = new Date();
-  const [customOpen, setCustomOpen] = useState(false);
-  const [calYear, setCalYear] = useState(today.getFullYear());
-  const [calMonth, setCalMonth] = useState(Math.max(today.getMonth() - 1, 0));
-  const [rangeStart, setRangeStart] = useState<string | null>(
-    dateFilter.mode === 'custom' && dateFilterActive ? dateFilter.start : null
-  );
-  const [rangeEnd, setRangeEnd] = useState<string | null>(
-    dateFilter.mode === 'custom' && dateFilterActive ? dateFilter.end : null
-  );
-  const [hoverDate, setHoverDate] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setCustomOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const isMonthActive = dateFilter.mode === 'month' && dateFilterActive;
-  const isCustomActive = dateFilter.mode === 'custom' && dateFilterActive;
-
-  const monthYear = isMonthActive
-    ? new Date(dateFilter.year, dateFilter.month, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-    : today.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-
-  const customLabel = isCustomActive
-    ? `${dateFilter.start.slice(5).replace('-', '/')} – ${dateFilter.end.slice(5).replace('-', '/')}`
-    : 'Custom';
-
-  function goMonth(delta: number) {
-    const base = isMonthActive ? new Date(dateFilter.year, dateFilter.month, 1) : new Date(today.getFullYear(), today.getMonth(), 1);
-    base.setMonth(base.getMonth() + delta);
-    onChange({ mode: 'month', year: base.getFullYear(), month: base.getMonth() });
-  }
-
-  function handleDayClick(ds: string) {
-    if (!rangeStart || (rangeStart && rangeEnd)) {
-      setRangeStart(ds);
-      setRangeEnd(null);
-    } else {
-      const [s, e] = ds >= rangeStart ? [rangeStart, ds] : [ds, rangeStart];
-      setRangeStart(s);
-      setRangeEnd(e);
-      onChange({ mode: 'custom', start: s, end: e });
-      setCustomOpen(false);
-      setHoverDate(null);
-    }
-  }
-
-  // Second calendar month
-  const cal2Month = calMonth === 11 ? 0 : calMonth + 1;
-  const cal2Year = calMonth === 11 ? calYear + 1 : calYear;
-
-  function calPrev() {
-    if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); }
-    else setCalMonth(calMonth - 1);
-  }
-  function calNext() {
-    if (calMonth === 10) { setCalMonth(11); }
-    else if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); }
-    else setCalMonth(calMonth + 1);
-  }
-
-  return (
-    <div ref={ref} className="relative shrink-0 flex items-center gap-1.5">
-      {/* Inline month navigator */}
-      <div className={`flex items-center rounded-lg border bg-white ${isMonthActive ? 'border-ink-700' : 'border-sand-200'}`}>
-        <button
-          onClick={() => goMonth(-1)}
-          className="px-1.5 py-1 text-ink-400 hover:text-ink-700 transition-colors"
-          aria-label="Previous month"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <button
-          onClick={() => isMonthActive ? onClear() : onChange({ mode: 'month', year: today.getFullYear(), month: today.getMonth() })}
-          className={`text-xs font-medium px-1 min-w-[76px] text-center transition-colors ${isMonthActive ? 'text-ink-800' : 'text-ink-400 hover:text-ink-700'}`}
-        >
-          {monthYear}
-        </button>
-        <button
-          onClick={() => goMonth(1)}
-          className="px-1.5 py-1 text-ink-400 hover:text-ink-700 transition-colors"
-          aria-label="Next month"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Custom range button */}
-      <button
-        onClick={() => setCustomOpen((v) => !v)}
-        className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${
-          isCustomActive
-            ? 'bg-ink-800/10 text-ink-800 border-ink-800/20'
-            : 'bg-white border-sand-200 text-ink-500 hover:border-sand-300'
-        }`}
-      >
-        {customLabel}
-      </button>
-
-      {/* Calendar popover */}
-      {customOpen && (
-        <div className="absolute right-0 top-full mt-2 z-30 bg-white border border-sand-200 rounded-2xl shadow-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={calPrev} className="p-1.5 rounded-lg hover:bg-sand-100 text-ink-400 hover:text-ink-700 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button onClick={calNext} className="p-1.5 rounded-lg hover:bg-sand-100 text-ink-400 hover:text-ink-700 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex gap-8">
-            <CalendarMonth
-              year={calYear} month={calMonth}
-              rangeStart={rangeStart} rangeEnd={rangeEnd}
-              hoverDate={hoverDate} selecting={!!(rangeStart && !rangeEnd)}
-              onDayClick={handleDayClick} onDayHover={setHoverDate}
-            />
-            <CalendarMonth
-              year={cal2Year} month={cal2Month}
-              rangeStart={rangeStart} rangeEnd={rangeEnd}
-              hoverDate={hoverDate} selecting={!!(rangeStart && !rangeEnd)}
-              onDayClick={handleDayClick} onDayHover={setHoverDate}
-            />
-          </div>
-          {rangeStart && !rangeEnd && (
-            <p className="text-xs text-ink-400 text-center mt-3">Select end date</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 type VenmoFilter = 'all' | 'any' | 'pending' | 'requested' | 'settled';
 
 const VENMO_FILTER_OPTIONS: { value: VenmoFilter; label: string; hint: string }[] = [
@@ -392,14 +160,7 @@ export default function SpendingTransactions({
   });
   const [dateFilterActive, setDateFilterActive] = useState(externalDateFilterActive ?? false);
 
-  const handleDateFilterChange = (f: DateFilter) => {
-    setDateFilterActive(true);
-    setDateFilter(f);
-  };
-  const clearDateFilter = () => setDateFilterActive(false);
-
-  // Sync from the parent date picker (the header) whenever it changes. The user
-  // can still override locally via the calendar until the header changes again.
+  // Sync from the parent date picker (the header) whenever it changes.
   useEffect(() => {
     if (!externalDateFilter) return;
     if (externalDateFilterActive === false) {
@@ -689,7 +450,6 @@ export default function SpendingTransactions({
                 onFilterCategoriesChange([]);
                 onSearchChange('');
                 onAccountChange?.(null);
-                clearDateFilter();
                 setShowTransfers(true);
                 setVenmoFilter('all');
               }}
@@ -699,12 +459,6 @@ export default function SpendingTransactions({
             </button>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <DateControl
-              dateFilter={dateFilter}
-              dateFilterActive={dateFilterActive}
-              onChange={handleDateFilterChange}
-              onClear={clearDateFilter}
-            />
             {!selectMode && (
               <button
                 onClick={enterSelectMode}
