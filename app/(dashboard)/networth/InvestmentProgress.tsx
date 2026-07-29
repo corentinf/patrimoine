@@ -28,6 +28,10 @@ const ACCOUNT_COLORS = ['#4A6FA5', '#C4983B', '#8E6BAE', '#5B8A8A', '#8A7A64', '
 
 const LONG_PRESS_MS = 500;
 
+// Sentinel stored in hoveredAccountId when the $ total line itself (not one
+// of the per-account overlays) is hovered — no real account id can collide.
+const TOTAL_HOVER_ID = '__total__';
+
 interface AccountSeries {
   id: string;
   institution: string;
@@ -98,6 +102,26 @@ function PercentYTick({ x, y, payload }: any) {
   return (
     <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end">
       {`${payload.value >= 0 ? '+' : ''}${payload.value}%`}
+    </text>
+  );
+}
+
+// Recharts calls a Line/Area's `label` render prop once per data point — this
+// only draws at the last one, so the account name reads as a small callout
+// sitting right at the end of its own curve instead of repeating at every point.
+function CurveEndLabel({ x, y, index, lastIndex, text, color, anchor }: any) {
+  if (index !== lastIndex) return null;
+  return (
+    <text
+      x={anchor === 'start' ? x + 6 : x - 6}
+      y={y}
+      dy={anchor === 'start' ? -4 : 4}
+      textAnchor={anchor === 'start' ? 'start' : 'end'}
+      fontSize={11}
+      fontWeight={600}
+      fill={color}
+    >
+      {text}
     </text>
   );
 }
@@ -515,6 +539,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               <Tooltip content={<MultiSeriesTooltip formatValue={formatCurrency} showTotal />} />
               {selectedAccounts.map((a) => {
                 const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
+                const hovered = hoveredAccountId === a.id;
                 return (
                   <Area
                     key={a.id}
@@ -526,9 +551,12 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                     fill={accountColor(a.id)}
                     fillOpacity={dimmed ? 0.15 : 0.55}
                     strokeOpacity={dimmed ? 0.35 : 1}
-                    strokeWidth={hoveredAccountId === a.id ? 2.5 : 1.5}
+                    strokeWidth={hovered ? 2.5 : 1.5}
                     dot={false}
                     activeDot={{ r: 3 }}
+                    onMouseEnter={() => setHoveredAccountId(a.id)}
+                    onMouseLeave={() => setHoveredAccountId(null)}
+                    label={hovered ? (props: any) => <CurveEndLabel {...props} index={props.index} lastIndex={stackedData.length - 1} text={accountLabel(a)} color={accountColor(a.id)} anchor="end" /> : undefined}
                   />
                 );
               })}
@@ -591,15 +619,21 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               dataKey="value"
               name="Investments"
               stroke={up ? '#3D7A5F' : '#B85450'}
-              strokeWidth={3}
+              strokeWidth={hoveredAccountId === TOTAL_HOVER_ID ? 4 : 3}
               fill="url(#investFill)"
               dot={false}
               activeDot={{ r: 4, fill: up ? '#3D7A5F' : '#B85450' }}
+              onMouseEnter={() => setHoveredAccountId(TOTAL_HOVER_ID)}
+              onMouseLeave={() => setHoveredAccountId(null)}
+              label={hoveredAccountId === TOTAL_HOVER_ID ? (props: any) => (
+                <CurveEndLabel {...props} lastIndex={chartData.length - 1} text="Investments" color={up ? '#3D7A5F' : '#B85450'} anchor="end" />
+              ) : undefined}
             />
             {/* Dashed and thinner than the total's solid line so the two never
                 compete visually, on top of using an entirely separate palette. */}
             {showComparePct && selectedAccounts.map((a) => {
               const dimmed = hoveredAccountId !== null && hoveredAccountId !== a.id;
+              const hovered = hoveredAccountId === a.id;
               return (
                 <Line
                   key={a.id}
@@ -610,13 +644,35 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
                   stroke={accountColor(a.id)}
                   strokeDasharray="4 3"
                   strokeOpacity={dimmed ? 0.25 : 0.85}
-                  strokeWidth={hoveredAccountId === a.id ? 2.25 : 1.25}
+                  strokeWidth={hovered ? 2.25 : 1.25}
                   dot={false}
                   connectNulls={false}
                   activeDot={{ r: 3 }}
+                  label={hovered ? (props: any) => (
+                    <CurveEndLabel {...props} lastIndex={chartData.length - 1} text={accountLabel(a)} color={accountColor(a.id)} anchor="end" />
+                  ) : undefined}
                 />
               );
             })}
+            {/* Invisible, generously-wide duplicates layered on top purely for
+                hover detection — the real lines above are thin/dashed and too
+                small a target to reliably hover directly. */}
+            {showComparePct && selectedAccounts.map((a) => (
+              <Line
+                key={`${a.id}-hit`}
+                yAxisId="right"
+                type="monotone"
+                dataKey={(d: any) => d[`pct_${a.id}`]}
+                stroke="transparent"
+                strokeWidth={16}
+                dot={false}
+                activeDot={false}
+                isAnimationActive={false}
+                connectNulls={false}
+                onMouseEnter={() => setHoveredAccountId(a.id)}
+                onMouseLeave={() => setHoveredAccountId(null)}
+              />
+            ))}
           </ComposedChart>
         </ResponsiveContainer>
       ) : (
