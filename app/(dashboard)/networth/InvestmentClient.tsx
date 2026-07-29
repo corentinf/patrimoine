@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { formatCurrency, amountColor } from '@/app/lib/utils';
 import { isoDate, buildCombinedSeries, seriesChange } from '@/app/lib/investmentRange';
+import { usePrivacy } from '@/app/lib/privacy';
 import InvestmentProgress from './InvestmentProgress';
 import HoldingsTable, { type Holding } from './HoldingsTable';
 import type { InvestmentAccountSeries } from './page';
@@ -27,6 +28,10 @@ export default function InvestmentClient({
   priceDates,
   priceSeries,
 }: InvestmentClientProps) {
+  // Not otherwise used here — but subscribing is what makes this component
+  // re-render (and every formatCurrency() call below re-check demo mode)
+  // when the toggle in Header/Profile changes it.
+  usePrivacy();
   const { activePreset, resolvedRange } = useGlobalFilter();
   const range = activePreset ?? 'custom';
   const customFrom = activePreset ? undefined : resolvedRange.start;

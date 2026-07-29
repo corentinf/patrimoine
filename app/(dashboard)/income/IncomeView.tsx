@@ -9,6 +9,7 @@ import TransactionDetail from '../spending/TransactionDetail';
 import type { Category } from '../spending/CategoryManager';
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
+import { usePrivacy } from '@/app/lib/privacy';
 
 interface RawTransaction {
   id: string;
@@ -54,6 +55,10 @@ function applyDateFilter(txs: RawTransaction[], filter: DateFilter) {
 }
 
 export default function IncomeView({ transactions, categories, dailyIncome = [] }: Props) {
+  // Not otherwise used here — but subscribing is what makes this component
+  // re-render (and every formatCurrency() call below re-check demo mode)
+  // when the toggle in Header/Profile changes it.
+  usePrivacy();
   const {
     dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory,
     stepPeriod, canStepBackward, canStepForward,

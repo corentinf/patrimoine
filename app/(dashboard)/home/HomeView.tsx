@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { formatCurrency, amountColor, accountTypeConfig, getAccountLinkUrl } from '@/app/lib/utils';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { idxAtOrBefore, isoDate } from '@/app/lib/investmentRange';
+import { usePrivacy } from '@/app/lib/privacy';
 import NetWorthChart from '../networth/NetWorthChart';
 import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../components/AccountsPanel';
 
@@ -96,6 +97,10 @@ export default function HomeView({
   accounts,
 }: HomeViewProps) {
   const { resolvedRange, rangeLabel } = useGlobalFilter();
+  // Not otherwise used here — but subscribing is what makes this component
+  // re-render (and every formatCurrency() call below re-check demo mode)
+  // when the toggle in Header/Profile changes it.
+  usePrivacy();
   const todayIso = isoDate(new Date());
   const router = useRouter();
   const [modalAccount, setModalAccount] = useState<SidebarAccount | null | undefined>(undefined);

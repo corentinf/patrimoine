@@ -25,6 +25,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: 'View',
     items: [
       { keys: 'P', description: 'Toggle privacy mode (blur amounts)' },
+      { keys: 'D', description: 'Toggle demo mode (fake amounts)' },
     ],
   },
   {
@@ -94,7 +95,7 @@ export function KeyboardShortcutsProvider({ children }: { children: ReactNode })
   const [helpOpen, setHelpOpen] = useState(false);
   const router = useRouter();
   const { stepPeriod, resetFilter, canStepBackward, canStepForward } = useGlobalFilter();
-  const { toggle: togglePrivacy } = usePrivacy();
+  const { toggle: togglePrivacy, toggleFake } = usePrivacy();
 
   const openHelp = useCallback(() => setHelpOpen(true), []);
 
@@ -137,11 +138,15 @@ export function KeyboardShortcutsProvider({ children }: { children: ReactNode })
         togglePrivacy();
         return;
       }
+      if (e.key === 'd' || e.key === 'D') {
+        toggleFake();
+        return;
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [helpOpen, canStepBackward, canStepForward, stepPeriod, resetFilter, togglePrivacy, router]);
+  }, [helpOpen, canStepBackward, canStepForward, stepPeriod, resetFilter, togglePrivacy, toggleFake, router]);
 
   return (
     <ShortcutsContext.Provider value={{ openHelp }}>

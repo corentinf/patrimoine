@@ -5,6 +5,7 @@ import { formatCurrency, formatCurrencyPrecise, amountColor } from '@/app/lib/ut
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
+import { usePrivacy } from '@/app/lib/privacy';
 import SpendingCharts from './SpendingCharts';
 import SpendingProgress from './SpendingProgress';
 import SpendingTransactions from './SpendingTransactions';
@@ -393,6 +394,10 @@ function CategoryPill({
 }
 
 export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, dailySpending }: SpendingViewProps) {
+  // Not otherwise used here — but subscribing is what makes this component
+  // re-render (and every formatCurrency() call below re-check demo mode)
+  // when the toggle in Header/Profile changes it.
+  usePrivacy();
   const now = new Date();
   const {
     dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory,
