@@ -5,6 +5,7 @@ import { formatCurrency, formatCurrencyPrecise, amountColor } from '@/app/lib/ut
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
+import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
 import { usePrivacy } from '@/app/lib/privacy';
 import SpendingCharts from './SpendingCharts';
 import SpendingProgress from './SpendingProgress';
@@ -408,6 +409,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const selectedCategoryKey = category?.key ?? null;
   const { ref: txListRef, minHeight: txListMinHeight } = useStableMinHeight<HTMLDivElement>();
+  const tabsRef = useRef<HTMLDivElement>(null);
+  useMeasureCssVar(tabsRef, '--tabs-h');
 
   // Derived lookup maps for sub-category hierarchy
   const subCatToParent = useMemo(() => {
@@ -909,7 +912,11 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       </div>
 
       {/* Section tabs */}
-      <div className="flex items-center gap-0 border-b border-sand-200 overflow-x-auto">
+      <div
+        ref={tabsRef}
+        className="sticky z-10 bg-sand-50 flex items-center gap-0 border-b border-sand-200 overflow-x-auto"
+        style={{ top: 'var(--header-h, 96px)' }}
+      >
         {(['transactions', 'categories', 'subscriptions'] as const).map((tab) => (
           <button
             key={tab}

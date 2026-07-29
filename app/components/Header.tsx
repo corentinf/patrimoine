@@ -9,6 +9,7 @@ import { isFakeModeActive } from '@/app/lib/demoMode';
 import { fakeifyAmount } from '@/app/lib/utils';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { usePageFilterSlotContent } from '@/app/lib/pageFilterSlot';
+import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
 import { useShortcutsHelp } from './KeyboardShortcuts';
 import { PRESETS } from '@/app/lib/investmentRange';
 import PlaidLinkButton from './PlaidLink';
@@ -488,6 +489,8 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
   // re-render (and shortNum() below re-check demo mode) when the toggle in
   // Profile changes it, since shortNum reads a plain flag outside React state.
   usePrivacy();
+  const headerRef = useRef<HTMLElement>(null);
+  useMeasureCssVar(headerRef, '--header-h');
 
   const tabStats: Record<string, string> = {
     '/home': shortNum(netWorth),
@@ -497,7 +500,7 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
   };
 
   return (
-    <header className="hidden md:block sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200">
+    <header ref={headerRef} className="hidden md:block sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200">
       <div className="max-w-screen-xl mx-auto px-6 lg:px-10">
         <div className="h-14 flex items-center gap-6">
           <h1 className="font-display text-lg text-ink-800 tracking-tight flex-shrink-0">

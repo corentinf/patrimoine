@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { usePageFilterSlotContent } from '@/app/lib/pageFilterSlot';
+import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
 import { SyncDropdown, FilterBar } from './Header';
 import MobileFilterSheet from './MobileFilterSheet';
 
@@ -18,12 +19,15 @@ export default function MobileTopBar() {
   const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
   const pageFilterContent = usePageFilterSlotContent();
+  const headerRef = useRef<HTMLElement>(null);
+  useMeasureCssVar(headerRef, '--header-h');
 
   const pageLabel = Object.entries(PAGE_LABELS).find(([href]) => pathname.startsWith(href))?.[1] ?? 'Patrimoine';
 
   return (
     <>
       <header
+        ref={headerRef}
         className="md:hidden sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >

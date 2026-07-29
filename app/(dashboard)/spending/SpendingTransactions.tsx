@@ -634,7 +634,10 @@ export default function SpendingTransactions({
   return (
     <>
       <div>
-        <div className="sticky top-0 md:top-24 z-10 bg-sand-50 space-y-3 pb-3">
+        <div
+          className="sticky z-10 bg-sand-50 space-y-3 pb-3"
+          style={{ top: 'calc(var(--header-h, 96px) + var(--tabs-h, 41px))' }}
+        >
         {/* Row 1: Sort controls */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs text-ink-400 shrink-0">Sort by</span>
