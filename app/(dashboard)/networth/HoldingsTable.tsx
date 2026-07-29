@@ -150,6 +150,28 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   );
 }
 
+// Small inline trend line for a holding's value over the selected period —
+// plain SVG rather than Recharts since dozens of these render per page and
+// only need a stroked path, not a full chart instance each.
+function Sparkline({ points, gain, width = 64, height = 20 }: { points: number[]; gain: number | null; width?: number; height?: number }) {
+  if (points.length < 2) {
+    return <span className="text-ink-200 text-xs">—</span>;
+  }
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const stepX = width / (points.length - 1);
+  const path = points
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * stepX).toFixed(1)},${(height - ((v - min) / span) * height).toFixed(1)}`)
+    .join(' ');
+  const color = gain == null ? '#B8B3AB' : gain >= 0 ? '#3D7A5F' : '#B85450';
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible flex-shrink-0">
+      <path d={path} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 const NOTES_STORAGE_KEY = 'holding_notes_v1';
 
 function NoteCell({ holdingId }: { holdingId: string }) {
@@ -299,6 +321,17 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
     }
     const periodPct = periodBase && periodBase !== 0 && periodGain != null ? (periodGain / periodBase) * 100 : null;
 
+    // Trend line for the same window used for the gain figure above — sliced
+    // from the shared price-date axis, nulls (before this holding's price
+    // history begins) dropped rather than plotted as a dip to zero.
+    const vals = priceSeries[h.id];
+    let sparkPoints: number[] = [];
+    if (vals) {
+      const s = Math.max(startIdx, 0);
+      const e = Math.max(endIdx, s);
+      sparkPoints = vals.slice(s, e + 1).filter((v): v is number => v != null);
+    }
+
     return {
       ...h,
       _market_value: marketValue,
@@ -310,6 +343,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
       _lifetime_gain_pct: lifetimeGainPct,
       _portfolio_pct: portfolioPct,
       _group: group,
+      _spark: sparkPoints,
     };
   });
 
@@ -609,13 +643,16 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
               <div className="col-span-1 text-right font-mono text-sm text-ink-600">{Number(h.shares).toFixed(2)}</div>
               <div className="col-span-2 text-right font-mono text-sm text-ink-600">{formatCurrency(h._cost_basis)}</div>
               <div className="col-span-2 text-right font-mono text-sm font-medium text-ink-700">{formatCurrency(h._market_value)}</div>
-              <div className={`col-span-2 text-right font-mono text-sm font-medium ${h._gain == null ? 'text-ink-300' : h._gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {h._gain == null ? '—' : (
-                  <>
-                    {h._gain >= 0 ? '+' : ''}{formatCurrency(h._gain)}
-                    {h._gain_pct != null && <span className="text-xs ml-1 opacity-70">({h._gain_pct >= 0 ? '+' : ''}{h._gain_pct.toFixed(1)}%)</span>}
-                  </>
-                )}
+              <div className="col-span-2 flex flex-col items-end gap-1">
+                <div className={`font-mono text-sm font-medium ${h._gain == null ? 'text-ink-300' : h._gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                  {h._gain == null ? '—' : (
+                    <>
+                      {h._gain >= 0 ? '+' : ''}{formatCurrency(h._gain)}
+                      {h._gain_pct != null && <span className="text-xs ml-1 opacity-70">({h._gain_pct >= 0 ? '+' : ''}{h._gain_pct.toFixed(1)}%)</span>}
+                    </>
+                  )}
+                </div>
+                <Sparkline points={h._spark} gain={h._gain} />
               </div>
               <div className="col-span-2 flex flex-col items-end gap-1">
                 <span className="font-mono text-xs text-ink-600">{h._portfolio_pct.toFixed(1)}%</span>
@@ -630,6 +667,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
                 <p className="text-sm font-medium text-ink-700">{h.symbol || h.description}</p>
                 <p className="text-xs text-ink-400">{Number(h.shares).toFixed(2)} shares · {h._portfolio_pct.toFixed(1)}% of portfolio</p>
               </div>
+              <Sparkline points={h._spark} gain={h._gain} width={48} />
               <div className="text-right shrink-0">
                 <p className="font-mono text-sm font-medium text-ink-700">{formatCurrency(h._market_value)}</p>
                 <p className={`font-mono text-xs font-medium ${h._gain == null ? 'text-ink-300' : h._gain >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
