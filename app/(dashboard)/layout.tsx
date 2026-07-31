@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import Chat from '../components/Chat';
 import { KeyboardShortcutsProvider } from '../components/KeyboardShortcuts';
 import { PrivacyProvider } from '../lib/privacy';
+import { SyncStatusProvider } from '../lib/syncStatus';
 import { GlobalFilterProvider } from '../lib/globalFilter';
 import { PageFilterSlotProvider } from '../lib/pageFilterSlot';
 import { createServiceClient } from '../lib/supabase';
@@ -46,36 +47,38 @@ export default async function DashboardLayout({
 
   return (
     <PrivacyProvider>
-      <GlobalFilterProvider>
-        <PageFilterSlotProvider>
-          <KeyboardShortcutsProvider>
-            <div className="min-h-screen flex flex-col">
-              <Header
-                accounts={accounts}
-                netWorth={netWorth}
-                spending={monthStats.spending}
-                income={monthStats.income}
-                investmentTotal={investmentTotal}
-              />
-              <MobileTopBar />
+      <SyncStatusProvider>
+        <GlobalFilterProvider>
+          <PageFilterSlotProvider>
+            <KeyboardShortcutsProvider>
+              <div className="min-h-screen flex flex-col">
+                <Header
+                  accounts={accounts}
+                  netWorth={netWorth}
+                  spending={monthStats.spending}
+                  income={monthStats.income}
+                  investmentTotal={investmentTotal}
+                />
+                <MobileTopBar />
 
-              <div className="flex-1 max-w-screen-xl mx-auto px-4 md:px-6 lg:px-10 py-4 md:py-6 pb-24 md:pb-6 w-full">
-                <main>
-                  {children}
-                </main>
+                <div className="flex-1 max-w-screen-xl mx-auto px-4 md:px-6 lg:px-10 py-4 md:py-6 pb-24 md:pb-6 w-full">
+                  <main>
+                    {children}
+                  </main>
+                </div>
+
+                <Chat />
+                <Sidebar
+                  netWorth={netWorth}
+                  spending={monthStats.spending}
+                  income={monthStats.income}
+                  investmentTotal={investmentTotal}
+                />
               </div>
-
-              <Chat />
-              <Sidebar
-                netWorth={netWorth}
-                spending={monthStats.spending}
-                income={monthStats.income}
-                investmentTotal={investmentTotal}
-              />
-            </div>
-          </KeyboardShortcutsProvider>
-        </PageFilterSlotProvider>
-      </GlobalFilterProvider>
+            </KeyboardShortcutsProvider>
+          </PageFilterSlotProvider>
+        </GlobalFilterProvider>
+      </SyncStatusProvider>
     </PrivacyProvider>
   );
 }

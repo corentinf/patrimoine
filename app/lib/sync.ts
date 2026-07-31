@@ -313,6 +313,11 @@ export async function syncAll(
     result.snapshotCreated = true;
     emit({ type: 'progress', step: 'snapshot' });
 
+    await supabase.from('user_settings').upsert(
+      { user_id: userId, last_synced_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    );
+
   } catch (err: any) {
     result.errors.push(err.message);
   }
@@ -325,9 +330,7 @@ const DEFAULT_SUB_CATEGORIES = [
   { name: 'Ride Share',        parent: 'Transport',        icon: '🚕', color: '#3B82F6', sort_order: 42 },
   { name: 'Public Transit',    parent: 'Transport',        icon: '🚌', color: '#3B82F6', sort_order: 43 },
   { name: 'Parking',           parent: 'Transport',        icon: '🅿️', color: '#3B82F6', sort_order: 44 },
-  { name: 'Bakery & Cafe',     parent: 'Restaurants',      icon: '☕', color: '#F97316', sort_order: 31 },
-  { name: 'Fast Food',         parent: 'Restaurants',      icon: '🍔', color: '#F97316', sort_order: 32 },
-  { name: 'Bars & Nightlife',  parent: 'Restaurants',      icon: '🍺', color: '#F97316', sort_order: 33 },
+  { name: 'Fast Food',         parent: 'Food & Drink',     icon: '🍔', color: '#F97316', sort_order: 33 },
   { name: 'Gym & Fitness',     parent: 'Health & Fitness', icon: '🏋️', color: '#10B981', sort_order: 51 },
   { name: 'Doctor & Medical',  parent: 'Health & Fitness', icon: '🏥', color: '#10B981', sort_order: 52 },
   { name: 'Pharmacy',          parent: 'Health & Fitness', icon: '💊', color: '#10B981', sort_order: 53 },

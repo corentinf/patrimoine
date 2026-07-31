@@ -30,11 +30,14 @@ export async function GET() {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from('user_settings')
-    .select('monthly_income')
+    .select('monthly_income, last_synced_at')
     .eq('user_id', user.id)
     .single();
 
-  return NextResponse.json({ monthly_income: Number(data?.monthly_income ?? 0) });
+  return NextResponse.json({
+    monthly_income: Number(data?.monthly_income ?? 0),
+    last_synced_at: data?.last_synced_at ?? null,
+  });
 }
 
 export async function PATCH(req: NextRequest) {

@@ -15,6 +15,7 @@ import { PRESETS } from '@/app/lib/investmentRange';
 import PlaidLinkButton from './PlaidLink';
 import SimpleFINLinkButton from './SimpleFINLink';
 import { AccountsPanel, AccountModal, type SidebarAccount } from './AccountsPanel';
+import { useSyncStatus, formatLastSynced, type SyncStep } from '@/app/lib/syncStatus';
 
 const navItems = [
   { href: '/home', label: 'Home' },
@@ -22,9 +23,6 @@ const navItems = [
   { href: '/income', label: 'Income' },
   { href: '/networth', label: 'Investment' },
 ];
-
-type SyncPhase = 'idle' | 'syncing' | 'done' | 'error';
-type SyncStep = 'accounts' | 'transactions' | 'categorize' | 'snapshot';
 
 const SYNC_STEPS: { key: SyncStep; label: string }[] = [
   { key: 'accounts', label: 'Accounts & balances' },
@@ -34,11 +32,8 @@ const SYNC_STEPS: { key: SyncStep; label: string }[] = [
 ];
 
 export function SyncDropdown() {
-  const [phase, setPhase] = useState<SyncPhase>('idle');
+  const { phase, doneSteps, result, errorMsg, lastSyncedAt, justSynced, runSync } = useSyncStatus();
   const [open, setOpen] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [doneSteps, setDoneSteps] = useState<Set<SyncStep>>(new Set());
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,67 +46,26 @@ export function SyncDropdown() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [phase]);
 
-  const handleSync = async () => {
-    setPhase('syncing');
-    setOpen(true);
-    setResult(null);
-    setErrorMsg('');
-    setDoneSteps(new Set());
-    try {
-      const res = await fetch('/api/plaid/sync', { method: 'POST' });
-      if (!res.ok) {
-        const text = await res.text();
-        let msg = `Error ${res.status}`;
-        try { msg = JSON.parse(text).error || msg; } catch {}
-        setErrorMsg(msg); setPhase('error'); return;
-      }
-      if (!res.body) { setErrorMsg('No response body'); setPhase('error'); return; }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let event: any;
-          try { event = JSON.parse(line); } catch { continue; }
-          if (event.type === 'progress') {
-            setDoneSteps((prev) => { const next = new Set(prev); next.add(event.step); return next; });
-          } else if (event.done) {
-            if (event.ok) {
-              setResult(event);
-              setPhase('done');
-              setTimeout(() => window.location.reload(), 3000);
-            } else {
-              setErrorMsg(event.error || 'Sync failed');
-              setPhase('error');
-            }
-          }
-        }
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Sync failed');
-      setPhase('error');
-    }
-  };
-
-  const reset = () => { setPhase('idle'); setResult(null); setErrorMsg(''); setDoneSteps(new Set()); setOpen(false); };
+  const buttonLabel = phase === 'syncing'
+    ? 'Syncing…'
+    : phase === 'done' && justSynced
+    ? 'Synced just now'
+    : 'Sync now';
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex items-center gap-1.5">
       <button
-        onClick={() => phase === 'idle' ? handleSync() : setOpen((v) => !v)}
+        onClick={() => { if (phase === 'idle') { setOpen(true); runSync(); } else setOpen((v) => !v); }}
         disabled={phase === 'syncing'}
         className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-800 px-3 py-1.5 rounded-lg hover:bg-sand-50 transition-colors disabled:opacity-40"
       >
         <span className={phase === 'syncing' ? 'animate-spin inline-block' : ''}>↻</span>
-        Sync now
+        {buttonLabel}
       </button>
+
+      {phase === 'idle' && lastSyncedAt && (
+        <span className="text-xs text-ink-300">Last synced {formatLastSynced(lastSyncedAt)}</span>
+      )}
 
       {open && phase !== 'idle' && (
         <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-sand-200 rounded-xl shadow-lg p-3 space-y-2 z-50">
@@ -137,7 +91,7 @@ export function SyncDropdown() {
             <>
               <p className="text-xs font-medium text-red-600">Sync failed</p>
               <pre className="text-xs text-red-400 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">{errorMsg}</pre>
-              <button onClick={reset} className="text-xs text-ink-400 hover:text-ink-600">Try again</button>
+              <button onClick={() => runSync()} className="text-xs text-ink-400 hover:text-ink-600">Try again</button>
             </>
           )}
           {phase === 'done' && (
@@ -151,7 +105,6 @@ export function SyncDropdown() {
                 {result?.categorized > 0 && <li className="text-xs text-ink-500 flex items-center gap-1.5"><span className="text-green-500">✓</span> {result.categorized} categorized</li>}
                 {result?.holdingsUpdated > 0 && <li className="text-xs text-ink-500 flex items-center gap-1.5"><span className="text-green-500">✓</span> {result.holdingsUpdated} holdings updated</li>}
               </ul>
-              <p className="text-xs text-ink-300">Refreshing…</p>
             </>
           )}
         </div>
