@@ -14,7 +14,7 @@ interface SpendingChartsProps {
     color: string;
     icon: string;
     total: number;
-    count: number;
+    count?: number;
   }>;
   monthlyData: Array<{
     month: string;
@@ -29,6 +29,10 @@ interface SpendingChartsProps {
   barLabel?: string;
   onBarClick?: (monthKey: string) => void;
   selectedMonth?: string | null;
+  /** When set, the pie is showing one category's sub-categories instead of
+   *  the top-level breakdown — renders a label + back affordance above it. */
+  drilldown?: { label: string; icon: string; color: string } | null;
+  onDrilldownBack?: () => void;
 }
 
 function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
@@ -50,6 +54,8 @@ export default function SpendingCharts({
   barLabel = 'Monthly spending',
   onBarClick,
   selectedMonth,
+  drilldown,
+  onDrilldownBack,
 }: SpendingChartsProps) {
   const { blurred } = usePrivacy();
   // Take top 8 categories for pie chart, group rest as "Other"
@@ -132,9 +138,23 @@ export default function SpendingCharts({
           current period) so the container never disappears/reappears and
           shifts the page; height matches the chart card next to it via h-full. */}
       <div className="card h-full flex flex-col">
-        <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
-          By category
-        </h4>
+        {drilldown ? (
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={onDrilldownBack}
+              className="text-xs font-semibold text-ink-400 hover:text-ink-700 uppercase tracking-wider transition-colors flex-shrink-0"
+            >
+              ← Back
+            </button>
+            <h4 className="text-sm font-semibold text-ink-700 truncate flex items-center gap-1">
+              <span>{drilldown.icon}</span> {drilldown.label}
+            </h4>
+          </div>
+        ) : (
+          <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
+            By category
+          </h4>
+        )}
         {pieData.length > 0 ? (
           <>
             <ResponsiveContainer width="100%" height={240}>

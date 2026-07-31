@@ -551,12 +551,18 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     [segment, dateFilter],
   );
 
-  // Drop any category drill-down when the effective date window changes —
-  // it may no longer apply to the newly-filtered transactions.
+  // Drop any category drill-down when the base date filter changes (month
+  // step, preset, custom range) — it may no longer apply to the newly-
+  // filtered transactions. Deliberately keyed on `dateFilter`, not
+  // `viewFilter`/`segment`: a live hover preview over the "Spending over
+  // time" bars also moves `segment`, and that must NOT clear the pie
+  // chart's selection out from under the user mid-hover. Pin/unpin of a
+  // bar (a real, non-preview segment change) clears it explicitly via
+  // onPeriodSelect below instead.
   useEffect(() => {
     clearCategory();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewFilter]);
+  }, [dateFilter]);
 
   const dateFiltered = useMemo(
     () => applyDateFilter(transactions, viewFilter),
@@ -724,6 +730,31 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     })).sort((a, b) => b.total - a.total);
     return { sortedCategories: sorted, totalSpending: sorted.reduce((s, c) => s + c.total, 0) };
   }, [filteredTransactions, subCatToParent, catMeta]);
+
+  // Which parent category the pie chart should be "drilled into": the
+  // selection itself if it's a top-level category, or its parent if a
+  // specific sub-category is selected (so the sibling breakdown stays
+  // visible with that sub-category highlighted).
+  const drilldownParentId = useMemo(() => {
+    if (!selectedCategoryKey) return null;
+    return subCatToParent.get(selectedCategoryKey) ?? selectedCategoryKey;
+  }, [selectedCategoryKey, subCatToParent]);
+
+  const pieDrilldownRow = useMemo(
+    () => (drilldownParentId ? categoryRows.find((r) => r.key === drilldownParentId) ?? null : null),
+    [drilldownParentId, categoryRows],
+  );
+
+  // Pie chart data: the parent's sub-categories when drilled in, else the
+  // normal top-level breakdown.
+  const pieCategories = useMemo(() => {
+    if (pieDrilldownRow && pieDrilldownRow.subBreakdown.length > 0) {
+      return pieDrilldownRow.subBreakdown
+        .map((s) => ({ id: s.id, name: s.name, color: s.color, icon: s.icon, total: s.total }))
+        .sort((a, b) => b.total - a.total);
+    }
+    return sortedCategories;
+  }, [pieDrilldownRow, sortedCategories]);
 
 
   const saveBudget = async (categoryId: string) => {
@@ -969,29 +1000,40 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           onStepPeriod={stepPeriod}
           canStepBackward={canStepBackward}
           canStepForward={canStepForward}
-          onPeriodSelect={(range) => {
+          onPeriodSelect={(range, meta) => {
             if (!range) {
               clearSegment();
+              if (!meta?.preview) clearCategory();
               return;
             }
             const label = range.start === range.end
               ? new Date(range.start + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
               : `${range.start} – ${range.end}`;
             setSegment({ label, start: range.start, end: range.end });
+            if (!meta?.preview) clearCategory();
           }}
         />
         <div className="w-full xl:w-72 xl:flex-shrink-0">
           <SpendingCharts
-            categories={sortedCategories}
+            categories={pieCategories}
             monthlyData={[]}
             totalSpending={totalSpending}
             selectedCategoryKey={selectedCategoryKey}
+            drilldown={pieDrilldownRow && pieDrilldownRow.subBreakdown.length > 0
+              ? { label: pieDrilldownRow.name, icon: pieDrilldownRow.icon, color: pieDrilldownRow.color }
+              : null}
+            onDrilldownBack={clearCategory}
             onCategoryClick={(id) => {
               if (category?.key === id) {
                 clearCategory();
               } else {
-                const row = sortedCategories.find((c) => (c.id ?? '__uncategorized__') === id);
-                if (row) setCategory({ key: id, label: row.name, color: row.color, icon: row.icon });
+                const meta = catMeta.get(id);
+                setCategory({
+                  key: id,
+                  label: meta?.name ?? (id === '__uncategorized__' ? 'Uncategorized' : id),
+                  color: meta?.color ?? '#D1D5DB',
+                  icon: meta?.icon ?? '❓',
+                });
               }
               setActiveTab('transactions');
             }}

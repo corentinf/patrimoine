@@ -12,7 +12,9 @@ import { PRESETS, isoDate, resolveStart, type RangeKey } from '@/app/lib/investm
 export interface DailySpend { date: string; amount: number }
 interface SpendingProgressProps {
   data: DailySpend[];
-  onPeriodSelect?: (range: { start: string; end: string } | null) => void;
+  /** `preview` is true for a live hover preview (not a deliberate click) —
+   *  callers should use it to avoid treating a hover as a real filter change. */
+  onPeriodSelect?: (range: { start: string; end: string } | null, meta?: { preview: boolean }) => void;
   label?: string;
   color?: string;
   valueLabel?: string;
@@ -158,7 +160,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   useEffect(() => {
     setPinnedKey(null);
     setHoveredKey(null);
-    onPeriodSelect?.(null);
+    onPeriodSelect?.(null, { preview: false });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end, gran]);
 
@@ -312,10 +314,10 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                   // selected bar again always deselects it.
                   setPinnedKey(null);
                   setHoveredKey(null);
-                  onPeriodSelect(null);
+                  onPeriodSelect(null, { preview: false });
                 } else {
                   setPinnedKey(key);
-                  onPeriodSelect(bucketRange(key, gran));
+                  onPeriodSelect(bucketRange(key, gran), { preview: false });
                 }
               }}
               onMouseMove={(d: any) => {
@@ -326,13 +328,13 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                 const key = d?.activePayload?.[0]?.payload?.key;
                 if (!key || !onPeriodSelect || hoveredKey === key) return;
                 setHoveredKey(key);
-                onPeriodSelect(bucketRange(key, gran));
+                onPeriodSelect(bucketRange(key, gran), { preview: true });
               }}
               onMouseLeave={() => {
                 if (window.innerWidth < 768) return;
                 setHoveredKey(null);
                 if (!onPeriodSelect) return;
-                onPeriodSelect(pinnedKey ? bucketRange(pinnedKey, gran) : null);
+                onPeriodSelect(pinnedKey ? bucketRange(pinnedKey, gran) : null, { preview: true });
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
