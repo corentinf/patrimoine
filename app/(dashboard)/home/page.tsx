@@ -89,6 +89,17 @@ export default async function HomePage() {
   const totalAssets = assets.reduce((s, a) => s + Number(a.balance), 0);
   const totalLiabilities = liabilities.reduce((s, a) => s + Math.abs(Number(a.balance)), 0);
 
+  // Retirement accounts (401k/IRA) aren't accessible without penalty until
+  // retirement age — split them out so "available" reflects money that's
+  // actually usable now. Matched by name/institution rather than a fixed
+  // list so a newly-added 401k/IRA account is picked up automatically.
+  const isRetirementAccount = (a: (typeof accounts)[number]) =>
+    /401k|\bira\b/i.test(a.name) || /401k|\bira\b/i.test(a.institution || '');
+  const retirementBalance = assets
+    .filter(isRetirementAccount)
+    .reduce((s, a) => s + Number(a.balance), 0);
+  const availableNetWorth = totalAssets - retirementBalance - totalLiabilities;
+
   if (history.length === 0 && accounts.length === 0) {
     return (
       <div className="card text-center py-16">
@@ -110,6 +121,8 @@ export default async function HomePage() {
       totalLiabilities={totalLiabilities}
       assetsCount={assets.length}
       liabilitiesCount={liabilities.length}
+      availableNetWorth={availableNetWorth}
+      retirementBalance={retirementBalance}
       milestones={milestones}
       accounts={accounts}
     />

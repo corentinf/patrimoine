@@ -81,6 +81,8 @@ interface HomeViewProps {
   totalLiabilities: number;
   assetsCount: number;
   liabilitiesCount: number;
+  availableNetWorth: number;
+  retirementBalance: number;
   milestones: Milestone[];
   accounts: SidebarAccount[];
 }
@@ -93,6 +95,8 @@ export default function HomeView({
   totalLiabilities,
   assetsCount,
   liabilitiesCount,
+  availableNetWorth,
+  retirementBalance,
   milestones,
   accounts,
 }: HomeViewProps) {
@@ -162,6 +166,8 @@ export default function HomeView({
   const change = endValue - startValue;
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
 
+  const availablePct = currentNetWorth !== 0 ? (availableNetWorth / currentNetWorth) * 100 : 0;
+
   return (
     <div className="space-y-5">
       {modalAccount !== undefined && (
@@ -216,6 +222,32 @@ export default function HomeView({
           <p className="stat-value text-xl mt-1" data-sensitive>{formatCurrency(currentNetWorth)}</p>
         </div>
       </div>
+
+      {/* Available vs retirement-locked — always current, not scoped to the selected period */}
+      {retirementBalance > 0 && (
+        <div className="card px-5 py-4">
+          <div className="flex items-center gap-1.5 mb-3">
+            <h3 className="stat-label">Available vs retirement</h3>
+            <InfoTooltip
+              text="Available = everything except 401k/IRA balances, minus credit card debt. Retirement accounts aren't accessible without penalty until retirement age, so they're split out here."
+            />
+          </div>
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div>
+              <p className="text-xs text-ink-400">💵 Available now</p>
+              <p className="stat-value text-xl mt-0.5" data-sensitive>{formatCurrency(availableNetWorth)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-ink-400">🔒 Retirement (locked)</p>
+              <p className="stat-value text-xl mt-0.5 text-ink-500" data-sensitive>{formatCurrency(retirementBalance)}</p>
+            </div>
+          </div>
+          <div className="h-2 bg-sand-100 rounded-full overflow-hidden flex">
+            <div className="h-full bg-accent-green" style={{ width: `${Math.max(0, Math.min(100, availablePct))}%` }} />
+            <div className="h-full bg-ink-400" style={{ width: `${Math.max(0, 100 - availablePct)}%` }} />
+          </div>
+        </div>
+      )}
 
       {/* Accounts — always current, not scoped to the selected period */}
       {groupedAccounts.length > 0 && (
