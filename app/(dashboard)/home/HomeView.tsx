@@ -229,7 +229,7 @@ export default function HomeView({
           <div className="flex items-center gap-1.5 mb-3">
             <h3 className="stat-label">Available vs retirement</h3>
             <InfoTooltip
-              text="Available = everything except 401k/IRA balances, minus credit card debt. Retirement accounts aren't accessible without penalty until retirement age, so they're split out here."
+              text="Available = everything except 401k/IRA/HSA balances, minus credit card debt. Retirement and HSA accounts aren't accessible without penalty until retirement age, so they're split out here."
             />
           </div>
           <div className="flex items-start justify-between gap-4 mb-3">
