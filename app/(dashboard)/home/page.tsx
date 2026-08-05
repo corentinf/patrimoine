@@ -66,9 +66,11 @@ export default async function HomePage() {
     monthlyGrowthRate = growthValues.reduce((s, v) => s + v, 0) / growthValues.length;
   }
 
+  // Only upcoming milestones are worth showing — once reached they no longer
+  // need tracking.
   const milestoneTargets = [
     100_000, 250_000, 300_000, 400_000, 500_000, 750_000, 1_000_000,
-  ].filter((t) => t > currentNetWorth * 0.5);
+  ].filter((t) => t > currentNetWorth);
 
   const milestones = milestoneTargets.slice(0, 5).map((target) => {
     const passed = currentNetWorth >= target;
@@ -126,6 +128,7 @@ export default async function HomePage() {
       retirementBalance={retirementBalance}
       milestones={milestones}
       accounts={accounts}
+      monthlyGrowthRate={monthlyGrowthRate}
     />
   );
 }

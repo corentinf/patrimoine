@@ -1,18 +1,21 @@
 'use client';
 
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
 import { formatCurrency } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
+import { periodBoundaries } from '@/app/lib/chartBoundaries';
 
 interface NetWorthChartProps {
   data: Array<{
+    date: string;
     month: string;
-    netWorth: number;
-    assets: number;
-    liabilities: number;
+    netWorth?: number;
+    assets?: number;
+    liabilities?: number;
+    projected?: number;
   }>;
   trackingStartDate?: string | null;
   currentNetWorth?: number;
@@ -20,10 +23,12 @@ interface NetWorthChartProps {
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
+  const entries = payload.filter((p: any) => p.value !== undefined && p.value !== null);
+  if (!entries.length) return null;
   return (
     <div className="bg-ink-800 text-white px-3 py-2.5 rounded-lg text-xs shadow-lg space-y-1">
       <p className="font-medium text-sand-300 mb-1">{label}</p>
-      {payload.map((p: any) => (
+      {entries.map((p: any) => (
         <div key={p.dataKey} className="flex justify-between gap-6" style={{ color: p.color === '#4A443C' ? 'white' : p.color }}>
           <span className="capitalize">{p.name}</span>
           <span className="font-mono">{formatCurrency(p.value)}</span>
@@ -81,6 +86,9 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
     );
   }
 
+  const boundaries = periodBoundaries(data.map((d) => ({ date: d.date, label: d.month })));
+  const hasProjection = data.some((d) => d.projected !== undefined);
+
   return (
     <div className="card">
       <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
@@ -89,6 +97,16 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+          {boundaries.map((b) => (
+            <ReferenceLine
+              key={b.x}
+              yAxisId="left"
+              x={b.x}
+              stroke="#E2D9CA"
+              strokeDasharray="2 3"
+              label={{ value: b.text, position: 'insideTopLeft', fontSize: 9, fill: '#B8AD9A' }}
+            />
+          ))}
           <XAxis
             dataKey="month"
             tick={{ fontSize: 11, fill: '#8F897E' }}
@@ -128,6 +146,21 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
             dot={false}
             activeDot={{ r: 4, fill: '#4A443C' }}
           />
+          {hasProjection && (
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="projected"
+              name="Net worth (projected)"
+              stroke="#4A443C"
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+              strokeOpacity={0.55}
+              dot={false}
+              activeDot={{ r: 3, fill: '#4A443C' }}
+              isAnimationActive={false}
+            />
+          )}
           <Line
             yAxisId="left"
             type="monotone"
@@ -157,6 +190,12 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
           <span className="w-5 inline-block" style={{ borderTop: '2px solid #4A443C' }} />
           Net worth
         </div>
+        {hasProjection && (
+          <div className="flex items-center gap-1.5">
+            <span className="w-5 inline-block" style={{ borderTop: '2px dashed #4A443C', opacity: 0.55 }} />
+            Projected
+          </div>
+        )}
         <div className="flex items-center gap-1.5">
           <span className="w-5 inline-block" style={{ borderTop: '2px dashed #3D7A5F' }} />
           Assets

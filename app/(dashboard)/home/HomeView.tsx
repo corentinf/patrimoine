@@ -85,6 +85,7 @@ interface HomeViewProps {
   retirementBalance: number;
   milestones: Milestone[];
   accounts: SidebarAccount[];
+  monthlyGrowthRate: number | null;
 }
 
 export default function HomeView({
@@ -99,6 +100,7 @@ export default function HomeView({
   retirementBalance,
   milestones,
   accounts,
+  monthlyGrowthRate,
 }: HomeViewProps) {
   const { resolvedRange, rangeLabel } = useGlobalFilter();
   // Not otherwise used here — but subscribing is what makes this component
@@ -138,7 +140,15 @@ export default function HomeView({
       plotted = Array.from(lastByMonth.values());
     }
 
-    const points = plotted.map((s) => ({
+    const points: Array<{
+      date: string;
+      month: string;
+      netWorth?: number;
+      assets?: number;
+      liabilities?: number;
+      projected?: number;
+    }> = plotted.map((s) => ({
+      date: s.snapshot_date,
       month: format(new Date(s.snapshot_date + 'T12:00:00'), longRange ? 'MMM yy' : 'MMM d'),
       netWorth: Math.round(Number(s.net_worth)),
       assets: Math.round(Number(s.total_assets)),
@@ -152,6 +162,23 @@ export default function HomeView({
       points[points.length - 1] = { ...points[points.length - 1], netWorth: Math.round(currentNetWorth) };
     }
 
+    // Project forward from today using the same monthly growth rate the
+    // milestone ETAs use, so the two stay consistent with each other.
+    const PROJECTION_MONTHS = 6;
+    if (includesToday && points.length > 0 && monthlyGrowthRate !== null && monthlyGrowthRate > 0) {
+      const last = points[points.length - 1];
+      points[points.length - 1] = { ...last, projected: last.netWorth };
+      for (let i = 1; i <= PROJECTION_MONTHS; i++) {
+        const d = new Date();
+        d.setMonth(d.getMonth() + i);
+        points.push({
+          date: isoDate(d),
+          month: format(d, 'MMM yy'),
+          projected: Math.round(currentNetWorth + monthlyGrowthRate * i),
+        });
+      }
+    }
+
     const end = includesToday ? currentNetWorth : (endIdx >= 0 ? Number(history[endIdx].net_worth) : currentNetWorth);
     const start = startIdx >= 0 ? Number(history[startIdx].net_worth) : (filtered[0] ? Number(filtered[0].net_worth) : end);
 
@@ -161,12 +188,10 @@ export default function HomeView({
       endValue: end,
       hasChange: startIdx >= 0 && (startIdx !== endIdx || includesToday),
     };
-  }, [history, resolvedRange, todayIso, currentNetWorth]);
+  }, [history, resolvedRange, todayIso, currentNetWorth, monthlyGrowthRate]);
 
   const change = endValue - startValue;
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
-
-  const availablePct = currentNetWorth !== 0 ? (availableNetWorth / currentNetWorth) * 100 : 0;
 
   return (
     <div className="space-y-5">
@@ -222,32 +247,6 @@ export default function HomeView({
           <p className="stat-value text-xl mt-1" data-sensitive>{formatCurrency(currentNetWorth)}</p>
         </div>
       </div>
-
-      {/* Available vs retirement-locked — always current, not scoped to the selected period */}
-      {retirementBalance > 0 && (
-        <div className="card px-5 py-4">
-          <div className="flex items-center gap-1.5 mb-3">
-            <h3 className="stat-label">Available vs retirement</h3>
-            <InfoTooltip
-              text="Available = everything except 401k/IRA/HSA balances, minus credit card debt. Retirement and HSA accounts aren't accessible without penalty until retirement age, so they're split out here."
-            />
-          </div>
-          <div className="flex items-start justify-between gap-4 mb-3">
-            <div>
-              <p className="text-xs text-ink-400">💵 Available now</p>
-              <p className="stat-value text-xl mt-0.5" data-sensitive>{formatCurrency(availableNetWorth)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-ink-400">🔒 Retirement (locked)</p>
-              <p className="stat-value text-xl mt-0.5 text-ink-500" data-sensitive>{formatCurrency(retirementBalance)}</p>
-            </div>
-          </div>
-          <div className="h-2 bg-sand-100 rounded-full overflow-hidden flex">
-            <div className="h-full bg-accent-green" style={{ width: `${Math.max(0, Math.min(100, availablePct))}%` }} />
-            <div className="h-full bg-ink-400" style={{ width: `${Math.max(0, 100 - availablePct)}%` }} />
-          </div>
-        </div>
-      )}
 
       {/* Accounts — always current, not scoped to the selected period */}
       {groupedAccounts.length > 0 && (
@@ -357,9 +356,35 @@ export default function HomeView({
       {/* Milestones — projected from current trajectory, not scoped to the selected period */}
       {milestones.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-3">Milestones</h3>
+          <div className="flex items-center gap-1.5 mb-3">
+            <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Milestones</h3>
+            {retirementBalance > 0 && (
+              <InfoTooltip
+                text="Each bar splits 💵 available now vs 🔒 retirement-locked (401k/IRA/HSA), using your current account balances."
+              />
+            )}
+          </div>
           <div className="card p-0 divide-y divide-sand-100">
-            {milestones.map(({ target, passed, pct: milestonePct, eta }) => (
+            {retirementBalance > 0 && (
+              <div className="px-5 py-4 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs text-ink-400">💵 Available now</p>
+                  <p className="stat-value text-xl mt-0.5" data-sensitive>{formatCurrency(availableNetWorth)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-ink-400">🔒 Retirement (locked)</p>
+                  <p className="stat-value text-xl mt-0.5 text-ink-500" data-sensitive>{formatCurrency(retirementBalance)}</p>
+                </div>
+              </div>
+            )}
+            {milestones.map(({ target, passed, pct: milestonePct, eta }) => {
+              const availableSegPct = retirementBalance > 0
+                ? Math.max(0, Math.min(100, (availableNetWorth / target) * 100))
+                : milestonePct;
+              const retirementSegPct = retirementBalance > 0
+                ? Math.max(0, Math.min(100 - availableSegPct, (retirementBalance / target) * 100))
+                : 0;
+              return (
               <div key={target} className="px-5 py-3.5 flex items-center gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1.5">
@@ -368,11 +393,9 @@ export default function HomeView({
                     </span>
                     <span className="text-xs text-ink-300 font-mono">{milestonePct.toFixed(1)}%</span>
                   </div>
-                  <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${passed ? 'bg-accent-green' : 'bg-ink-400'}`}
-                      style={{ width: `${milestonePct}%` }}
-                    />
+                  <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
+                    <div className="h-full bg-accent-green transition-all" style={{ width: `${availableSegPct}%` }} />
+                    <div className="h-full bg-ink-400 transition-all" style={{ width: `${retirementSegPct}%` }} />
                   </div>
                 </div>
                 <div className="shrink-0 text-right w-28">
@@ -396,7 +419,8 @@ export default function HomeView({
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
