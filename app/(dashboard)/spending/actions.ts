@@ -77,7 +77,7 @@ export async function assignTransactionCategory(
   transactionId: string,
   categoryId: string,
 ) {
-  const { supabase } = await getSupabaseAndUser();
+  const { supabase, user } = await getSupabaseAndUser();
 
   // Look up this transaction's payee/description to bulk-update matching rows
   const { data: tx, error: lookupError } = await supabase
@@ -94,5 +94,35 @@ export async function assignTransactionCategory(
     : await query.eq('description', tx.description);
 
   if (error) throw new Error(error.message);
+
+  // Persist a rule so future transactions from this merchant (Plaid syncs,
+  // the categorizeAll rule/LLM pass) get the same category automatically.
+  const matchField = tx.payee ? 'payee' : 'description';
+  const matchPattern = (tx.payee || tx.description || '').trim();
+
+  if (matchPattern) {
+    const { data: existingRules } = await supabase
+      .from('category_rules')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('match_field', matchField)
+      .ilike('match_pattern', matchPattern);
+
+    if (existingRules?.length) {
+      await supabase
+        .from('category_rules')
+        .update({ category_id: categoryId, priority: 50 })
+        .in('id', existingRules.map((r) => r.id));
+    } else {
+      await supabase.from('category_rules').insert({
+        user_id: user.id,
+        category_id: categoryId,
+        match_field: matchField,
+        match_pattern: matchPattern,
+        priority: 50,
+      });
+    }
+  }
+
   revalidateTransactionPages();
 }

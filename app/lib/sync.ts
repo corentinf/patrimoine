@@ -77,6 +77,25 @@ export async function syncAll(
     const { data: cats } = await supabase.from('categories').select('id, name');
     const categoryIdByName = new Map((cats ?? []).map((c) => [c.name, c.id]));
 
+    // User-defined rules (including ones created by manually recategorizing a
+    // transaction) must win over Plaid's own personal_finance_category guess.
+    const { data: userRules } = await supabase
+      .from('category_rules')
+      .select('match_field, match_pattern, category_id')
+      .eq('user_id', userId)
+      .order('priority', { ascending: false });
+
+    const matchUserRule = (fields: { payee: string | null; description: string; memo: string | null }): string | null => {
+      if (!userRules?.length) return null;
+      for (const rule of userRules) {
+        const value = fields[rule.match_field as 'payee' | 'description' | 'memo'];
+        if (value && value.toLowerCase().includes(rule.match_pattern.toLowerCase())) {
+          return rule.category_id;
+        }
+      }
+      return null;
+    };
+
     const { data: items, error: itemsError } = await supabase
       .from('plaid_items')
       .select('*')
@@ -168,20 +187,24 @@ export async function syncAll(
         const { added, modified, removed, next_cursor, has_more } = txRes.data;
 
         const toUpsert = [...added, ...modified].map((tx) => {
+          const payee = tx.merchant_name ?? tx.name;
+          const description = tx.name;
+          const ruleCategoryId = matchUserRule({ payee, description, memo: null });
           const pfc = tx.personal_finance_category;
           const catName = pfc ? mapPlaidCategory(pfc.primary, pfc.detailed) : null;
+          const category_id = ruleCategoryId ?? (catName ? (categoryIdByName.get(catName) ?? null) : null);
           return {
             id: tx.transaction_id,
             user_id: userId,
             account_id: tx.account_id,
             // Plaid: positive amount = money leaving account; we store negative = expense
             amount: -tx.amount,
-            description: tx.name,
-            payee: tx.merchant_name ?? tx.name,
+            description,
+            payee,
             memo: null as null,
             posted_at: new Date(tx.date).toISOString(),
             transacted_at: tx.authorized_date ? new Date(tx.authorized_date).toISOString() : null,
-            category_id: catName ? (categoryIdByName.get(catName) ?? null) : null,
+            category_id,
           };
         });
 
