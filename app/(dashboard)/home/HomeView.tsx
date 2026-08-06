@@ -91,6 +91,8 @@ interface HomeViewProps {
   milestones: Milestone[];
   accounts: SidebarAccount[];
   monthlyGrowthRate: number | null;
+  assetsGrowthRate: number | null;
+  liabilitiesGrowthRate: number | null;
 }
 
 export default function HomeView({
@@ -106,6 +108,8 @@ export default function HomeView({
   milestones,
   accounts,
   monthlyGrowthRate,
+  assetsGrowthRate,
+  liabilitiesGrowthRate,
 }: HomeViewProps) {
   const { resolvedRange, rangeLabel } = useGlobalFilter();
   // Not otherwise used here — but subscribing is what makes this component
@@ -155,6 +159,8 @@ export default function HomeView({
       assets?: number;
       liabilities?: number;
       projected?: number;
+      projectedAssets?: number;
+      projectedLiabilities?: number;
     }> = plotted.map((s) => ({
       date: s.snapshot_date,
       month: format(new Date(s.snapshot_date + 'T12:00:00'), longRange ? 'MMM yy' : 'MMM d'),
@@ -165,17 +171,28 @@ export default function HomeView({
 
     // Reflect the live balance (not the last daily snapshot) whenever the
     // selected window reaches today, so the chart's endpoint matches the
-    // headline figure exactly.
+    // headline figures exactly — and so the projected lines below pick up
+    // from exactly where the actual lines end, with no visual jump.
     if (includesToday && points.length > 0) {
-      points[points.length - 1] = { ...points[points.length - 1], netWorth: Math.round(currentNetWorth) };
+      points[points.length - 1] = {
+        ...points[points.length - 1],
+        netWorth: Math.round(currentNetWorth),
+        assets: Math.round(totalAssets),
+        liabilities: Math.round(totalLiabilities),
+      };
     }
 
-    // Project forward from today using the same monthly growth rate the
+    // Project forward from today using the same monthly growth rates the
     // milestone ETAs use, so the two stay consistent with each other.
     const PROJECTION_MONTHS = 6;
     if (includesToday && points.length > 0 && monthlyGrowthRate !== null && monthlyGrowthRate > 0) {
       const last = points[points.length - 1];
-      points[points.length - 1] = { ...last, projected: last.netWorth };
+      points[points.length - 1] = {
+        ...last,
+        projected: last.netWorth,
+        projectedAssets: last.assets,
+        projectedLiabilities: last.liabilities,
+      };
       for (let i = 1; i <= PROJECTION_MONTHS; i++) {
         const d = new Date();
         d.setMonth(d.getMonth() + i);
@@ -183,6 +200,8 @@ export default function HomeView({
           date: isoDate(d),
           month: format(d, 'MMM yy'),
           projected: Math.round(currentNetWorth + monthlyGrowthRate * i),
+          projectedAssets: assetsGrowthRate !== null ? Math.max(0, Math.round(totalAssets + assetsGrowthRate * i)) : undefined,
+          projectedLiabilities: liabilitiesGrowthRate !== null ? Math.max(0, Math.round(totalLiabilities + liabilitiesGrowthRate * i)) : undefined,
         });
       }
     }
@@ -196,7 +215,7 @@ export default function HomeView({
       endValue: end,
       hasChange: startIdx >= 0 && (startIdx !== endIdx || includesToday),
     };
-  }, [history, resolvedRange, todayIso, currentNetWorth, monthlyGrowthRate]);
+  }, [history, resolvedRange, todayIso, currentNetWorth, monthlyGrowthRate, totalAssets, totalLiabilities, assetsGrowthRate, liabilitiesGrowthRate]);
 
   const change = endValue - startValue;
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;

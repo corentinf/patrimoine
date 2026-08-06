@@ -17,6 +17,8 @@ interface NetWorthChartProps {
     assets?: number;
     liabilities?: number;
     projected?: number;
+    projectedAssets?: number;
+    projectedLiabilities?: number;
   }>;
   trackingStartDate?: string | null;
   currentNetWorth?: number;
@@ -192,6 +194,21 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
             dot={false}
             activeDot={{ r: 3, fill: '#3D7A5F' }}
           />
+          {showProjectionLine && (
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="projectedAssets"
+              name="Assets (projected)"
+              stroke="#3D7A5F"
+              strokeWidth={1.5}
+              strokeDasharray="2 3"
+              strokeOpacity={0.55}
+              dot={false}
+              activeDot={{ r: 3, fill: '#3D7A5F' }}
+              isAnimationActive={false}
+            />
+          )}
           <Line
             yAxisId="right"
             type="monotone"
@@ -203,6 +220,21 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
             dot={false}
             activeDot={{ r: 3, fill: '#B85450' }}
           />
+          {showProjectionLine && (
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="projectedLiabilities"
+              name="Liabilities (projected)"
+              stroke="#B85450"
+              strokeWidth={1.5}
+              strokeDasharray="2 3"
+              strokeOpacity={0.55}
+              dot={false}
+              activeDot={{ r: 3, fill: '#B85450' }}
+              isAnimationActive={false}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
       <div className="flex gap-6 justify-center mt-3 text-xs text-ink-400">

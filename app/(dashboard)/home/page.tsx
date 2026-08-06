@@ -57,14 +57,17 @@ export default async function HomePage() {
   // projection is a current-trajectory estimate and isn't scoped to
   // whatever period the header filter has selected.
   const recentMonthly = monthlySnapshots.slice(-4);
-  let monthlyGrowthRate: number | null = null;
-  if (recentMonthly.length >= 2) {
-    const growthValues: number[] = [];
+  const avgMonthlyDelta = (field: 'net_worth' | 'total_assets' | 'total_liabilities'): number | null => {
+    if (recentMonthly.length < 2) return null;
+    const deltas: number[] = [];
     for (let i = 1; i < recentMonthly.length; i++) {
-      growthValues.push(Number(recentMonthly[i].net_worth) - Number(recentMonthly[i - 1].net_worth));
+      deltas.push(Number(recentMonthly[i][field]) - Number(recentMonthly[i - 1][field]));
     }
-    monthlyGrowthRate = growthValues.reduce((s, v) => s + v, 0) / growthValues.length;
-  }
+    return deltas.reduce((s, v) => s + v, 0) / deltas.length;
+  };
+  const monthlyGrowthRate = avgMonthlyDelta('net_worth');
+  const assetsGrowthRate = avgMonthlyDelta('total_assets');
+  const liabilitiesGrowthRate = avgMonthlyDelta('total_liabilities');
 
   // Only upcoming milestones are worth showing — once reached they no longer
   // need tracking.
@@ -129,6 +132,8 @@ export default async function HomePage() {
       milestones={milestones}
       accounts={accounts}
       monthlyGrowthRate={monthlyGrowthRate}
+      assetsGrowthRate={assetsGrowthRate}
+      liabilitiesGrowthRate={liabilitiesGrowthRate}
     />
   );
 }
