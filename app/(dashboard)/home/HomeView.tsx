@@ -115,8 +115,9 @@ export default function HomeView({
   const todayIso = isoDate(new Date());
   const router = useRouter();
   const [modalAccount, setModalAccount] = useState<SidebarAccount | null | undefined>(undefined);
-  const [selectedMilestoneIdx, setSelectedMilestoneIdx] = useState(0);
-  const selectedMilestone = milestones[Math.min(selectedMilestoneIdx, milestones.length - 1)];
+  // 0 = current net worth ("Today"), 1..n = milestones[idx - 1].
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const selectedMilestone = selectedIdx > 0 ? milestones[selectedIdx - 1] : null;
 
   const groupedAccounts = useMemo(() => {
     const byType: Record<string, SidebarAccount[]> = {};
@@ -210,8 +211,8 @@ export default function HomeView({
     return { availablePct, retirementPct };
   };
 
-  const today = splitPct(currentNetWorth);
-  const selectedSplit = selectedMilestone ? splitPct(selectedMilestone.target) : null;
+  const selectedTotal = selectedMilestone ? selectedMilestone.target : currentNetWorth;
+  const selectedSplit = splitPct(selectedTotal);
 
   return (
     <div className="space-y-5">
@@ -257,15 +258,70 @@ export default function HomeView({
           )}
         </div>
         <div className="card px-5 py-4 space-y-4">
-          {/* Today */}
+          {/* Selector: current net worth + upcoming milestones */}
+          <div className="flex items-center gap-1 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setSelectedIdx(0)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                selectedIdx === 0
+                  ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
+                  : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+              }`}
+            >
+              Current
+            </button>
+            {milestones.map((m, i) => (
+              <button
+                key={m.target}
+                type="button"
+                onClick={() => setSelectedIdx(i + 1)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  selectedIdx === i + 1
+                    ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
+                    : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                }`}
+              >
+                {compactTarget(m.target)}
+              </button>
+            ))}
+          </div>
+
+          {/* Selected bar */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-medium text-ink-700">Today</span>
-              <span className="text-sm font-mono text-ink-700" data-sensitive>{formatCurrency(currentNetWorth)}</span>
+              <span className={`text-sm font-medium ${selectedMilestone?.passed ? 'text-ink-400 line-through' : 'text-ink-700'}`}>
+                {selectedMilestone ? formatCurrency(selectedMilestone.target) : 'Today'}
+              </span>
+              {selectedMilestone ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-ink-300 font-mono">{selectedMilestone.pct.toFixed(1)}%</span>
+                  {selectedMilestone.passed ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-accent-green font-medium">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Reached
+                    </span>
+                  ) : selectedMilestone.eta ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-ink-400">
+                      ~{selectedMilestone.eta}
+                      <InfoTooltip
+                        align="right"
+                        text="Projected from your average net worth growth over the last few months — not scoped to whatever period you've selected up top."
+                      />
+                    </span>
+                  ) : (
+                    <span className="text-xs text-ink-300">—</span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-sm font-mono text-ink-700" data-sensitive>{formatCurrency(currentNetWorth)}</span>
+              )}
             </div>
             <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
-              <div className="h-full bg-accent-green transition-all" style={{ width: `${today.availablePct}%` }} />
-              <div className="h-full bg-ink-400 transition-all" style={{ width: `${today.retirementPct}%` }} />
+              <div className="h-full bg-accent-green transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
+              <div className="h-full bg-ink-400 transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
             </div>
             {retirementBalance > 0 && (
               <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-400">
@@ -274,70 +330,6 @@ export default function HomeView({
               </div>
             )}
           </div>
-
-          {milestones.length > 0 && (
-            <>
-              {/* Milestone selector */}
-              <div className="flex items-center gap-1 flex-wrap pt-3 border-t border-sand-100">
-                {milestones.map((m, i) => (
-                  <button
-                    key={m.target}
-                    type="button"
-                    onClick={() => setSelectedMilestoneIdx(i)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                      i === selectedMilestoneIdx
-                        ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
-                        : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-                    }`}
-                  >
-                    {compactTarget(m.target)}
-                  </button>
-                ))}
-              </div>
-
-              {/* Selected milestone */}
-              {selectedMilestone && selectedSplit && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-sm font-medium ${selectedMilestone.passed ? 'text-ink-400 line-through' : 'text-ink-700'}`}>
-                      {formatCurrency(selectedMilestone.target)}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-ink-300 font-mono">{selectedMilestone.pct.toFixed(1)}%</span>
-                      {selectedMilestone.passed ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-accent-green font-medium">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Reached
-                        </span>
-                      ) : selectedMilestone.eta ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-ink-400">
-                          ~{selectedMilestone.eta}
-                          <InfoTooltip
-                            align="right"
-                            text="Projected from your average net worth growth over the last few months — not scoped to whatever period you've selected up top."
-                          />
-                        </span>
-                      ) : (
-                        <span className="text-xs text-ink-300">—</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
-                    <div className="h-full bg-accent-green transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
-                    <div className="h-full bg-ink-400 transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
-                  </div>
-                  {retirementBalance > 0 && (
-                    <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-400">
-                      <span data-sensitive>💵 {formatCurrency(availableNetWorth)} available</span>
-                      <span data-sensitive>🔒 {formatCurrency(retirementBalance)} retirement</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
         </div>
       </div>
 
