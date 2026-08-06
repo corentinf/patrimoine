@@ -89,6 +89,8 @@ interface HomeViewProps {
   availableNetWorth: number;
   retirementBalance: number;
   milestones: Milestone[];
+  availableMilestones: Milestone[];
+  retirementMilestones: Milestone[];
   accounts: SidebarAccount[];
   monthlyGrowthRate: number | null;
   assetsGrowthRate: number | null;
@@ -106,6 +108,8 @@ export default function HomeView({
   availableNetWorth,
   retirementBalance,
   milestones,
+  availableMilestones,
+  retirementMilestones,
   accounts,
   monthlyGrowthRate,
   assetsGrowthRate,
@@ -119,9 +123,18 @@ export default function HomeView({
   const todayIso = isoDate(new Date());
   const router = useRouter();
   const [modalAccount, setModalAccount] = useState<SidebarAccount | null | undefined>(undefined);
-  // 0 = current net worth ("Today"), 1..n = milestones[idx - 1].
+  const [metric, setMetric] = useState<'total' | 'available' | 'retirement'>('total');
+  // 0 = current value ("Today"), 1..n = activeMilestones[idx - 1].
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const selectedMilestone = selectedIdx > 0 ? milestones[selectedIdx - 1] : null;
+  const selectMetric = (m: typeof metric) => { setMetric(m); setSelectedIdx(0); };
+
+  const metricConfig = {
+    total: { label: 'Total', icon: '💰', value: currentNetWorth, milestones },
+    available: { label: 'Available', icon: '💵', value: availableNetWorth, milestones: availableMilestones },
+    retirement: { label: 'Retirement', icon: '🔒', value: retirementBalance, milestones: retirementMilestones },
+  } as const;
+  const active = metricConfig[metric];
+  const selectedMilestone = selectedIdx > 0 ? (active.milestones[selectedIdx - 1] ?? null) : null;
 
   const groupedAccounts = useMemo(() => {
     const byType: Record<string, SidebarAccount[]> = {};
@@ -246,9 +259,11 @@ export default function HomeView({
     };
   };
 
-  const selectedTotal = selectedMilestone ? selectedMilestone.target : currentNetWorth;
-  const { available: selectedAvailable, retirement: selectedRetirement } = projectSplit(selectedMilestone);
+  const isTotalMetric = metric === 'total';
+  const selectedTotal = selectedMilestone ? selectedMilestone.target : active.value;
+  const { available: selectedAvailable, retirement: selectedRetirement } = projectSplit(isTotalMetric ? selectedMilestone : null);
   const selectedSplit = splitPct(selectedTotal, selectedAvailable, selectedRetirement);
+  const selectedFillPct = selectedMilestone ? selectedMilestone.pct : 100;
 
   return (
     <div className="space-y-5">
@@ -289,12 +304,32 @@ export default function HomeView({
           <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Milestones</h3>
           {retirementBalance > 0 && (
             <InfoTooltip
-              text="Bars split 💵 available vs 🔒 retirement-locked (401k/IRA/HSA). For a milestone, both figures are projected forward to its ETA using your current growth rate and today's available/retirement mix."
+              text="Track milestones for your Total net worth, Available (liquid) money, or Retirement-locked money (401k/IRA/HSA). Total bars also split 💵 available vs 🔒 retirement, projected forward to each milestone's ETA."
             />
           )}
         </div>
         <div className="card px-5 py-4 space-y-4">
-          {/* Selector: current net worth + upcoming milestones */}
+          {/* Metric tabs */}
+          {retirementBalance > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {(Object.keys(metricConfig) as Array<keyof typeof metricConfig>).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => selectMetric(key)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    metric === key
+                      ? 'bg-ink-800 text-white'
+                      : 'bg-sand-50 border border-sand-200 text-ink-500 hover:border-sand-300'
+                  }`}
+                >
+                  {metricConfig[key].icon} {metricConfig[key].label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Selector: current value + upcoming milestones for the active metric */}
           <div className="flex items-center gap-1 flex-wrap">
             <button
               type="button"
@@ -307,7 +342,7 @@ export default function HomeView({
             >
               Current
             </button>
-            {milestones.map((m, i) => (
+            {active.milestones.map((m, i) => (
               <button
                 key={m.target}
                 type="button"
@@ -344,7 +379,7 @@ export default function HomeView({
                       ~{selectedMilestone.eta}
                       <InfoTooltip
                         align="right"
-                        text="Projected from your average net worth growth over the last few months — not scoped to whatever period you've selected up top."
+                        text="Projected from this track's own current growth rate — not scoped to whatever period you've selected up top."
                       />
                     </span>
                   ) : (
@@ -352,14 +387,23 @@ export default function HomeView({
                   )}
                 </div>
               ) : (
-                <span className="text-sm font-mono text-ink-700" data-sensitive>{formatCurrency(currentNetWorth)}</span>
+                <span className="text-sm font-mono text-ink-700" data-sensitive>{formatCurrency(active.value)}</span>
               )}
             </div>
             <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
-              <div className="h-full bg-accent-green transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
-              <div className="h-full bg-ink-400 transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
+              {isTotalMetric ? (
+                <>
+                  <div className="h-full bg-accent-green transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
+                  <div className="h-full bg-ink-400 transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
+                </>
+              ) : (
+                <div
+                  className={`h-full transition-all ${metric === 'available' ? 'bg-accent-green' : 'bg-ink-400'}`}
+                  style={{ width: `${selectedFillPct}%` }}
+                />
+              )}
             </div>
-            {retirementBalance > 0 && (
+            {isTotalMetric && retirementBalance > 0 && (
               <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-400">
                 <span data-sensitive>
                   💵 {selectedMilestone ? '~' : ''}{formatCurrency(selectedAvailable)} available

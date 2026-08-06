@@ -69,25 +69,6 @@ export default async function HomePage() {
   const assetsGrowthRate = avgMonthlyDelta('total_assets');
   const liabilitiesGrowthRate = avgMonthlyDelta('total_liabilities');
 
-  // Only upcoming milestones are worth showing — once reached they no longer
-  // need tracking.
-  const milestoneTargets = [
-    100_000, 250_000, 300_000, 400_000, 500_000, 750_000, 1_000_000,
-  ].filter((t) => t > currentNetWorth);
-
-  const milestones = milestoneTargets.slice(0, 5).map((target) => {
-    const passed = currentNetWorth >= target;
-    const pct = passed ? 100 : Math.min((currentNetWorth / target) * 100, 100);
-    let eta: string | null = null;
-    if (!passed && monthlyGrowthRate !== null && monthlyGrowthRate > 0) {
-      const monthsNeeded = (target - currentNetWorth) / monthlyGrowthRate;
-      const etaDate = new Date();
-      etaDate.setMonth(etaDate.getMonth() + Math.ceil(monthsNeeded));
-      eta = etaDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    }
-    return { target, passed, pct, eta };
-  });
-
   // Account summary by type
   const assets = accounts.filter((a) => a.account_type !== 'credit');
   const liabilities = accounts.filter((a) => a.account_type === 'credit');
@@ -105,6 +86,41 @@ export default async function HomePage() {
     .filter(isRetirementAccount)
     .reduce((s, a) => s + Number(a.balance), 0);
   const availableNetWorth = totalAssets - retirementBalance - totalLiabilities;
+
+  // Only upcoming milestones are worth showing — once reached they no longer
+  // need tracking. Built once per metric (total net worth, available money,
+  // retirement-locked money) so each can be tracked toward its own targets.
+  // The ladder tops out at $1M, so every upcoming rung is kept (no slice cap)
+  // — otherwise a track starting further back (e.g. Available, Retirement)
+  // would have its higher targets like $1M truncated off the list.
+  const buildMilestones = (currentValue: number, growthRate: number | null) => {
+    const targets = [100_000, 250_000, 300_000, 400_000, 500_000, 750_000, 1_000_000]
+      .filter((t) => t > currentValue);
+    return targets.map((target) => {
+      const passed = currentValue >= target;
+      const pct = passed ? 100 : Math.min((currentValue / target) * 100, 100);
+      let eta: string | null = null;
+      if (!passed && growthRate !== null && growthRate > 0) {
+        const monthsNeeded = (target - currentValue) / growthRate;
+        const etaDate = new Date();
+        etaDate.setMonth(etaDate.getMonth() + Math.ceil(monthsNeeded));
+        eta = etaDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      }
+      return { target, passed, pct, eta };
+    });
+  };
+
+  // We don't track available/retirement balances historically (only total
+  // net worth snapshots), so approximate each track's growth rate as its
+  // current share of the overall trend.
+  const availableGrowthRate = monthlyGrowthRate !== null && currentNetWorth !== 0
+    ? monthlyGrowthRate * (availableNetWorth / currentNetWorth) : null;
+  const retirementGrowthRate = monthlyGrowthRate !== null && currentNetWorth !== 0
+    ? monthlyGrowthRate * (retirementBalance / currentNetWorth) : null;
+
+  const milestones = buildMilestones(currentNetWorth, monthlyGrowthRate);
+  const availableMilestones = buildMilestones(availableNetWorth, availableGrowthRate);
+  const retirementMilestones = buildMilestones(retirementBalance, retirementGrowthRate);
 
   if (history.length === 0 && accounts.length === 0) {
     return (
@@ -130,6 +146,8 @@ export default async function HomePage() {
       availableNetWorth={availableNetWorth}
       retirementBalance={retirementBalance}
       milestones={milestones}
+      availableMilestones={availableMilestones}
+      retirementMilestones={retirementMilestones}
       accounts={accounts}
       monthlyGrowthRate={monthlyGrowthRate}
       assetsGrowthRate={assetsGrowthRate}
