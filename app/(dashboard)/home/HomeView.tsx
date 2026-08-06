@@ -22,6 +22,11 @@ function accountSource(id: string): string {
   return 'Plaid';
 }
 
+function compactTarget(target: number): string {
+  if (target >= 1_000_000) return `$${target / 1_000_000}M`;
+  return `$${target / 1000}K`;
+}
+
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
@@ -110,6 +115,8 @@ export default function HomeView({
   const todayIso = isoDate(new Date());
   const router = useRouter();
   const [modalAccount, setModalAccount] = useState<SidebarAccount | null | undefined>(undefined);
+  const [selectedMilestoneIdx, setSelectedMilestoneIdx] = useState(0);
+  const selectedMilestone = milestones[Math.min(selectedMilestoneIdx, milestones.length - 1)];
 
   const groupedAccounts = useMemo(() => {
     const byType: Record<string, SidebarAccount[]> = {};
@@ -193,6 +200,19 @@ export default function HomeView({
   const change = endValue - startValue;
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
 
+  // Split any bar (today's balance or a milestone target) into 💵 available
+  // vs 🔒 retirement-locked segments, scaled against whatever `total` that
+  // bar represents (currentNetWorth for "Today", a milestone target otherwise).
+  const splitPct = (total: number) => {
+    if (retirementBalance <= 0 || total === 0) return { availablePct: 100, retirementPct: 0 };
+    const availablePct = Math.max(0, Math.min(100, (availableNetWorth / total) * 100));
+    const retirementPct = Math.max(0, Math.min(100 - availablePct, (retirementBalance / total) * 100));
+    return { availablePct, retirementPct };
+  };
+
+  const today = splitPct(currentNetWorth);
+  const selectedSplit = selectedMilestone ? splitPct(selectedMilestone.target) : null;
+
   return (
     <div className="space-y-5">
       {modalAccount !== undefined && (
@@ -225,6 +245,101 @@ export default function HomeView({
         trackingStartDate={trackingStartDate}
         currentNetWorth={currentNetWorth}
       />
+
+      {/* Milestones — always current, not scoped to the selected period */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-3">
+          <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Milestones</h3>
+          {retirementBalance > 0 && (
+            <InfoTooltip
+              text="Bars split 💵 available now vs 🔒 retirement-locked (401k/IRA/HSA), using your current account balances."
+            />
+          )}
+        </div>
+        <div className="card px-5 py-4 space-y-4">
+          {/* Today */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-medium text-ink-700">Today</span>
+              <span className="text-sm font-mono text-ink-700" data-sensitive>{formatCurrency(currentNetWorth)}</span>
+            </div>
+            <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
+              <div className="h-full bg-accent-green transition-all" style={{ width: `${today.availablePct}%` }} />
+              <div className="h-full bg-ink-400 transition-all" style={{ width: `${today.retirementPct}%` }} />
+            </div>
+            {retirementBalance > 0 && (
+              <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-400">
+                <span data-sensitive>💵 {formatCurrency(availableNetWorth)} available</span>
+                <span data-sensitive>🔒 {formatCurrency(retirementBalance)} retirement</span>
+              </div>
+            )}
+          </div>
+
+          {milestones.length > 0 && (
+            <>
+              {/* Milestone selector */}
+              <div className="flex items-center gap-1 flex-wrap pt-3 border-t border-sand-100">
+                {milestones.map((m, i) => (
+                  <button
+                    key={m.target}
+                    type="button"
+                    onClick={() => setSelectedMilestoneIdx(i)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      i === selectedMilestoneIdx
+                        ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
+                        : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                    }`}
+                  >
+                    {compactTarget(m.target)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Selected milestone */}
+              {selectedMilestone && selectedSplit && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-sm font-medium ${selectedMilestone.passed ? 'text-ink-400 line-through' : 'text-ink-700'}`}>
+                      {formatCurrency(selectedMilestone.target)}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-ink-300 font-mono">{selectedMilestone.pct.toFixed(1)}%</span>
+                      {selectedMilestone.passed ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-accent-green font-medium">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Reached
+                        </span>
+                      ) : selectedMilestone.eta ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-ink-400">
+                          ~{selectedMilestone.eta}
+                          <InfoTooltip
+                            align="right"
+                            text="Projected from your average net worth growth over the last few months — not scoped to whatever period you've selected up top."
+                          />
+                        </span>
+                      ) : (
+                        <span className="text-xs text-ink-300">—</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
+                    <div className="h-full bg-accent-green transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
+                    <div className="h-full bg-ink-400 transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
+                  </div>
+                  {retirementBalance > 0 && (
+                    <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-400">
+                      <span data-sensitive>💵 {formatCurrency(availableNetWorth)} available</span>
+                      <span data-sensitive>🔒 {formatCurrency(retirementBalance)} retirement</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Account summary — always current, not scoped to the selected period */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -353,77 +468,6 @@ export default function HomeView({
         </div>
       )}
 
-      {/* Milestones — projected from current trajectory, not scoped to the selected period */}
-      {milestones.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 mb-3">
-            <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Milestones</h3>
-            {retirementBalance > 0 && (
-              <InfoTooltip
-                text="Each bar splits 💵 available now vs 🔒 retirement-locked (401k/IRA/HSA), using your current account balances."
-              />
-            )}
-          </div>
-          <div className="card p-0 divide-y divide-sand-100">
-            {retirementBalance > 0 && (
-              <div className="px-5 py-4 flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs text-ink-400">💵 Available now</p>
-                  <p className="stat-value text-xl mt-0.5" data-sensitive>{formatCurrency(availableNetWorth)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-ink-400">🔒 Retirement (locked)</p>
-                  <p className="stat-value text-xl mt-0.5 text-ink-500" data-sensitive>{formatCurrency(retirementBalance)}</p>
-                </div>
-              </div>
-            )}
-            {milestones.map(({ target, passed, pct: milestonePct, eta }) => {
-              const availableSegPct = retirementBalance > 0
-                ? Math.max(0, Math.min(100, (availableNetWorth / target) * 100))
-                : milestonePct;
-              const retirementSegPct = retirementBalance > 0
-                ? Math.max(0, Math.min(100 - availableSegPct, (retirementBalance / target) * 100))
-                : 0;
-              return (
-              <div key={target} className="px-5 py-3.5 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-sm font-medium ${passed ? 'text-ink-400 line-through' : 'text-ink-700'}`}>
-                      {formatCurrency(target)}
-                    </span>
-                    <span className="text-xs text-ink-300 font-mono">{milestonePct.toFixed(1)}%</span>
-                  </div>
-                  <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
-                    <div className="h-full bg-accent-green transition-all" style={{ width: `${availableSegPct}%` }} />
-                    <div className="h-full bg-ink-400 transition-all" style={{ width: `${retirementSegPct}%` }} />
-                  </div>
-                </div>
-                <div className="shrink-0 text-right w-28">
-                  {passed ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-accent-green font-medium">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Reached
-                    </span>
-                  ) : eta ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-ink-400">
-                      ~{eta}
-                      <InfoTooltip
-                        align="right"
-                        text="Projected from your average net worth growth over the last few months — not scoped to whatever period you've selected up top."
-                      />
-                    </span>
-                  ) : (
-                    <span className="text-xs text-ink-300">—</span>
-                  )}
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

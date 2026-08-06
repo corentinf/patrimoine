@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
   ResponsiveContainer,
@@ -49,6 +50,7 @@ function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
 
 export default function NetWorthChart({ data, trackingStartDate, currentNetWorth }: NetWorthChartProps) {
   const { blurred } = usePrivacy();
+  const [showProjection, setShowProjection] = useState(true);
   if (data.length < 3) {
     return (
       <div className="card">
@@ -86,16 +88,34 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
     );
   }
 
-  const boundaries = periodBoundaries(data.map((d) => ({ date: d.date, label: d.month })));
   const hasProjection = data.some((d) => d.projected !== undefined);
+  const showProjectionLine = hasProjection && showProjection;
+  // Drop the future-only projected rows entirely when the toggle is off, so
+  // the x-axis doesn't stay stretched out over empty months.
+  const chartRows = showProjectionLine ? data : data.filter((d) => d.netWorth !== undefined);
+  const boundaries = periodBoundaries(chartRows.map((d) => ({ date: d.date, label: d.month })));
 
   return (
     <div className="card">
-      <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-4">
-        Net worth over time
-      </h4>
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">
+          Net worth over time
+        </h4>
+        {hasProjection && (
+          <button
+            type="button"
+            onClick={() => setShowProjection((v) => !v)}
+            className="flex items-center gap-2 text-xs text-ink-400 hover:text-ink-600 transition-colors"
+          >
+            Projection
+            <span className={`w-7 h-4 rounded-full transition-colors relative ${showProjection ? 'bg-ink-700' : 'bg-sand-300'}`}>
+              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${showProjection ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            </span>
+          </button>
+        )}
+      </div>
       <ResponsiveContainer width="100%" height={260}>
-        <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+        <LineChart data={chartRows} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
           {boundaries.map((b) => (
             <ReferenceLine
@@ -146,7 +166,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
             dot={false}
             activeDot={{ r: 4, fill: '#4A443C' }}
           />
-          {hasProjection && (
+          {showProjectionLine && (
             <Line
               yAxisId="left"
               type="monotone"
