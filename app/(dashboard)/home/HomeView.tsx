@@ -201,18 +201,35 @@ export default function HomeView({
   const change = endValue - startValue;
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
 
-  // Split any bar (today's balance or a milestone target) into 💵 available
-  // vs 🔒 retirement-locked segments, scaled against whatever `total` that
-  // bar represents (currentNetWorth for "Today", a milestone target otherwise).
-  const splitPct = (total: number) => {
-    if (retirementBalance <= 0 || total === 0) return { availablePct: 100, retirementPct: 0 };
-    const availablePct = Math.max(0, Math.min(100, (availableNetWorth / total) * 100));
-    const retirementPct = Math.max(0, Math.min(100 - availablePct, (retirementBalance / total) * 100));
+  // Split any bar into 💵 available vs 🔒 retirement-locked segments, scaled
+  // against whatever `total` that bar represents.
+  const splitPct = (total: number, available: number, retirement: number) => {
+    if (retirement <= 0 || total === 0) return { availablePct: 100, retirementPct: 0 };
+    const availablePct = Math.max(0, Math.min(100, (available / total) * 100));
+    const retirementPct = Math.max(0, Math.min(100 - availablePct, (retirement / total) * 100));
     return { availablePct, retirementPct };
   };
 
+  // Project the available/retirement split forward to a milestone's ETA —
+  // same growth rate that drives the ETA date, split proportionally by
+  // today's available-vs-retirement mix so the two figures still sum to the
+  // milestone target.
+  const projectSplit = (milestone: Milestone | null) => {
+    if (!milestone || monthlyGrowthRate === null || monthlyGrowthRate <= 0 || currentNetWorth === 0) {
+      return { available: availableNetWorth, retirement: retirementBalance };
+    }
+    const monthsNeeded = Math.max(0, (milestone.target - currentNetWorth) / monthlyGrowthRate);
+    const availableShare = availableNetWorth / currentNetWorth;
+    const retirementShare = retirementBalance / currentNetWorth;
+    return {
+      available: availableNetWorth + monthlyGrowthRate * monthsNeeded * availableShare,
+      retirement: retirementBalance + monthlyGrowthRate * monthsNeeded * retirementShare,
+    };
+  };
+
   const selectedTotal = selectedMilestone ? selectedMilestone.target : currentNetWorth;
-  const selectedSplit = splitPct(selectedTotal);
+  const { available: selectedAvailable, retirement: selectedRetirement } = projectSplit(selectedMilestone);
+  const selectedSplit = splitPct(selectedTotal, selectedAvailable, selectedRetirement);
 
   return (
     <div className="space-y-5">
@@ -253,7 +270,7 @@ export default function HomeView({
           <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Milestones</h3>
           {retirementBalance > 0 && (
             <InfoTooltip
-              text="Bars split 💵 available now vs 🔒 retirement-locked (401k/IRA/HSA), using your current account balances."
+              text="Bars split 💵 available vs 🔒 retirement-locked (401k/IRA/HSA). For a milestone, both figures are projected forward to its ETA using your current growth rate and today's available/retirement mix."
             />
           )}
         </div>
@@ -325,8 +342,12 @@ export default function HomeView({
             </div>
             {retirementBalance > 0 && (
               <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-400">
-                <span data-sensitive>💵 {formatCurrency(availableNetWorth)} available</span>
-                <span data-sensitive>🔒 {formatCurrency(retirementBalance)} retirement</span>
+                <span data-sensitive>
+                  💵 {selectedMilestone ? '~' : ''}{formatCurrency(selectedAvailable)} available
+                </span>
+                <span data-sensitive>
+                  🔒 {selectedMilestone ? '~' : ''}{formatCurrency(selectedRetirement)} retirement
+                </span>
               </div>
             )}
           </div>
