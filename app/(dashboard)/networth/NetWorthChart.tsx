@@ -52,7 +52,7 @@ function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
 
 export default function NetWorthChart({ data, trackingStartDate, currentNetWorth }: NetWorthChartProps) {
   const { blurred } = usePrivacy();
-  const [showProjection, setShowProjection] = useState(true);
+  const [showProjection, setShowProjection] = useState(false);
   if (data.length < 3) {
     return (
       <div className="card">
