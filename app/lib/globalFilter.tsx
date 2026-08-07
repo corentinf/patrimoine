@@ -128,6 +128,27 @@ export function GlobalFilterProvider({ children }: { children: ReactNode }) {
       return;
     }
     const todayIso = now.toISOString().substring(0, 10);
+
+    // "1M" is a two-way toggle rather than a plain preset: the first click
+    // shows the rolling last 30/31 days, a second click (while it's already
+    // active) switches to the actual current calendar month instead (e.g.
+    // "August") — from there the existing </> month-nav arrows already step
+    // back through "July", etc. A third click flips back to the rolling window.
+    if (key === '30d') {
+      const isRollingMonth = activePreset === '30d' && dateFilter.mode === 'custom';
+      setShowCustom(false);
+      setSegmentState(null);
+      setActivePreset('30d');
+      if (isRollingMonth) {
+        setDateFilter({ mode: 'month', year: now.getFullYear(), month: now.getMonth() });
+      } else {
+        const firstDate = new Date(now.getFullYear() - FALLBACK_FIRST_DATE_YEARS_BACK, now.getMonth(), now.getDate())
+          .toISOString().substring(0, 10);
+        setDateFilter({ mode: 'custom', start: resolveStart('30d', { now, firstDate }), end: todayIso });
+      }
+      return;
+    }
+
     // 'today' resolves via prevDate (meant for "just the latest data point vs. the
     // one before it" in a real series) — this context has no series, so special-case
     // it to exactly today rather than letting it fall back to firstDate.
