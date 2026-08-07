@@ -130,7 +130,10 @@ export default function TransactionRow({
     e.stopPropagation();
     const next = !isTransfer;
     onTransferChange(tx.id, next);
-    startTransition(() => toggleTransfer(tx.id, next));
+    startTransition(async () => {
+      await toggleTransfer(tx.id, next);
+      router.refresh();
+    });
   }
 
   async function handleVenmoSave(e: React.MouseEvent) {
