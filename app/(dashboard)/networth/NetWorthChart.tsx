@@ -31,12 +31,21 @@ function CustomTooltip({ active, payload, label }: any) {
   return (
     <div className="bg-ink-800 text-white px-3 py-2.5 rounded-lg text-xs shadow-lg space-y-1">
       <p className="font-medium text-sand-300 mb-1">{label}</p>
-      {entries.map((p: any) => (
-        <div key={p.dataKey} className="flex justify-between gap-6" style={{ color: p.color === '#4A443C' ? 'white' : p.color }}>
-          <span className="capitalize">{p.name}</span>
-          <span className="font-mono">{formatCurrency(p.value)}</span>
-        </div>
-      ))}
+      {entries.map((p: any) => {
+        // The line colors are tuned for the light chart background — used as
+        // text directly on this dark tooltip, Assets/Liabilities fall short
+        // of WCAG AA contrast (~3.4:1 / 3.6:1 against bg-ink-800, need 4.5:1).
+        // Swap in a lighter tint of the same hue instead.
+        const colorClass = p.color === '#3D7A5F' ? 'text-green-300'
+          : p.color === '#B85450' ? 'text-red-300'
+          : 'text-white';
+        return (
+          <div key={p.dataKey} className={`flex justify-between gap-6 ${colorClass}`}>
+            <span className="capitalize">{p.name}</span>
+            <span className="font-mono">{formatCurrency(p.value)}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
