@@ -29,6 +29,15 @@ const ACCOUNT_COLORS = ['#4A6FA5', '#C4983B', '#8E6BAE', '#5B8A8A', '#8A7A64', '
 
 const LONG_PRESS_MS = 500;
 
+// Tax-advantaged, employer/HSA-style accounts vs. everything you control
+// directly (Roth IRA included — its contributions are withdrawable anytime,
+// unlike a 401k/HSA, so it's grouped with the self-directed brokerage
+// accounts here rather than as "retirement").
+function isRetirementAccount(a: { name: string; institution: string }): boolean {
+  const haystack = `${a.name} ${a.institution}`.toLowerCase();
+  return haystack.includes('401k') || haystack.includes('hsa') || haystack.includes('health savings');
+}
+
 // Sentinel stored in hoveredAccountId when the $ total line itself (not one
 // of the per-account overlays) is hovered — no real account id can collide.
 const TOTAL_HOVER_ID = '__total__';
@@ -486,6 +495,36 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
 
   const accountLabel = (a: AccountSeries) => (a.name.length <= 24 ? a.name : a.institution);
 
+  // Retirement/Other group toggle — a shortcut on top of the per-account
+  // pills below, not a separate filter: picking a group just calls
+  // setSelected with that group's ids, same as clicking pills individually.
+  const retirementIds = useMemo(
+    () => new Set(accounts.filter(isRetirementAccount).map((a) => a.id)),
+    [accounts],
+  );
+  const otherIds = useMemo(
+    () => new Set(accounts.filter((a) => !isRetirementAccount(a)).map((a) => a.id)),
+    [accounts],
+  );
+  const allIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts]);
+  const showGroupToggle = retirementIds.size > 0 && otherIds.size > 0;
+
+  function setsEqual(a: Set<string>, b: Set<string>) {
+    return a.size === b.size && Array.from(a).every((x) => b.has(x));
+  }
+  const activeGroup: 'all' | 'retirement' | 'other' | null = setsEqual(selected, allIds)
+    ? 'all'
+    : setsEqual(selected, retirementIds)
+    ? 'retirement'
+    : setsEqual(selected, otherIds)
+    ? 'other'
+    : null;
+  const GROUP_OPTIONS: { key: 'all' | 'retirement' | 'other'; label: string; ids: Set<string> }[] = [
+    { key: 'all', label: 'All', ids: allIds },
+    { key: 'retirement', label: 'Retirement', ids: retirementIds },
+    { key: 'other', label: 'Other', ids: otherIds },
+  ];
+
   return (
     <div className="card space-y-5">
       {/* Header: stats left, presets right (desktop) */}
@@ -506,12 +545,16 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
             <span data-sensitive>{formatCurrency(startValue)}</span>
             {' → '}
             <span data-sensitive>{formatCurrency(endValue)}</span>
-            {costBasis != null && (
-              <span className="ml-2 text-ink-300">
-                · cost basis <span data-sensitive>{formatCurrency(costBasis)}</span>
-              </span>
-            )}
           </p>
+          {/* Contributions vs. growth — e.g. for a Roth IRA, contributions stay
+              withdrawable anytime, while growth is generally locked until 59½. */}
+          {costBasis != null && (
+            <p className="text-xs text-ink-300 mt-0.5">
+              <span data-sensitive>{formatCurrency(costBasis)}</span> invested
+              {' · '}
+              <span data-sensitive className={amountColor(endValue - costBasis)}>{formatCurrency(endValue - costBasis)}</span> growth
+            </p>
+          )}
         </div>
         {/* Presets: desktop only — top-right above chart */}
         {!controlled && (
@@ -529,6 +572,24 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
           </div>
         )}
       </div>
+
+      {/* Retirement/Other group toggle */}
+      {showGroupToggle && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400 mr-1">Group</span>
+          {GROUP_OPTIONS.map((g) => (
+            <button
+              key={g.key}
+              onClick={() => setSelected(new Set(g.ids))}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                activeGroup === g.key ? 'bg-ink-800/10 text-ink-800 font-semibold' : 'bg-sand-100 text-ink-400 hover:bg-sand-200'
+              }`}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Account filter — same interaction as the Spending page's category pills:
           click selects only that account, hover/long-press the + to add instead. */}
