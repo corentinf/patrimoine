@@ -2,12 +2,13 @@
 
 import { useMemo, useState, useEffect, useRef } from 'react';
 import {
-  BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { formatCurrency } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
 import { PRESETS, isoDate, resolveStart, type RangeKey } from '@/app/lib/investmentRange';
+import { periodBoundaries, BOUNDARY_STYLE } from '@/app/lib/chartBoundaries';
 
 export interface DailySpend { date: string; amount: number }
 interface SpendingProgressProps {
@@ -216,6 +217,14 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
 
   const yAxisCap = forceFullScale ? null : autoYAxisCap;
 
+  // Bucket boundaries already are the period at week/month granularity — the
+  // divider lines only add value in 'day' mode, where a run of daily bars
+  // otherwise gives no sense of where one week or month ends and the next begins.
+  const boundaries = useMemo(
+    () => (gran === 'day' ? periodBoundaries(chartData.map((d) => ({ date: d.key, label: d.label }))) : []),
+    [chartData, gran],
+  );
+
   const barChartData = useMemo(() => {
     if (!yAxisCap) return chartData;
     return chartData.map((d: any) => ({
@@ -338,6 +347,19 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+              {boundaries.map((b) => {
+                const s = BOUNDARY_STYLE[b.kind];
+                return (
+                  <ReferenceLine
+                    key={b.x}
+                    x={b.x}
+                    stroke={s.stroke}
+                    strokeWidth={s.strokeWidth}
+                    strokeDasharray={s.dash}
+                    label={{ value: b.text, position: 'insideTopLeft', fontSize: s.fontSize, fontWeight: s.fontWeight, fill: s.fill }}
+                  />
+                );
+              })}
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8F897E' }} axisLine={{ stroke: '#E2D9CA' }} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
               <YAxis
                 axisLine={false}

@@ -11,6 +11,7 @@ import {
   PRESETS, isoDate, resolveStart, buildCombinedSeries, buildPerAccountSeries,
   buildComparePercentSeries, seriesChange, type RangeKey,
 } from '@/app/lib/investmentRange';
+import { periodBoundaries, BOUNDARY_STYLE } from '@/app/lib/chartBoundaries';
 
 type ViewMode = 'total' | 'stacked';
 
@@ -398,6 +399,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
         ? Object.fromEntries(selectedAccounts.map((a) => [`pct_${a.id}`, overlay[a.id] as number | undefined]))
         : {};
       return {
+        date: p.date,
         label: format(new Date(p.date + 'T12:00:00'), 'MMM d'),
         value: Math.round(p.value),
         ...(costBasis != null ? { costBasis: Math.round(costBasis) } : {}),
@@ -405,6 +407,8 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
       };
     });
   }, [baseline, inRange, costBasis, compareOverlay, selectedAccounts]);
+
+  const chartBoundaries = useMemo(() => periodBoundaries(chartData), [chartData]);
 
   const { startValue, endValue, change, pct } = useMemo(
     () => seriesChange(data, start, end, liveValue),
@@ -458,10 +462,13 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
       ? [base, ...inRangePts]
       : inRangePts;
     return pts.map((p) => ({
+      date: p.date,
       label: format(new Date(p.date + 'T12:00:00'), 'MMM d'),
       ...Object.fromEntries(selectedAccounts.map((a) => [a.id, Math.round(Number(p[a.id] ?? 0))])),
     }));
   }, [effectiveView, dates, selectedAccounts, todayIso, start, end]);
+
+  const stackedBoundaries = useMemo(() => periodBoundaries(stackedData), [stackedData]);
 
   function selectOnlyAccount(id: string) {
     setSelected(new Set([id]));
@@ -605,6 +612,19 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               onMouseLeave={handleChartMouseLeave}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+              {stackedBoundaries.map((b) => {
+                const s = BOUNDARY_STYLE[b.kind];
+                return (
+                  <ReferenceLine
+                    key={b.x}
+                    x={b.x}
+                    stroke={s.stroke}
+                    strokeWidth={s.strokeWidth}
+                    strokeDasharray={s.dash}
+                    label={{ value: b.text, position: 'insideTopLeft', fontSize: s.fontSize, fontWeight: s.fontWeight, fill: s.fill }}
+                  />
+                );
+              })}
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 11, fill: '#8F897E' }}
@@ -668,6 +688,20 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+            {chartBoundaries.map((b) => {
+              const s = BOUNDARY_STYLE[b.kind];
+              return (
+                <ReferenceLine
+                  key={b.x}
+                  yAxisId="left"
+                  x={b.x}
+                  stroke={s.stroke}
+                  strokeWidth={s.strokeWidth}
+                  strokeDasharray={s.dash}
+                  label={{ value: b.text, position: 'insideTopLeft', fontSize: s.fontSize, fontWeight: s.fontWeight, fill: s.fill }}
+                />
+              );
+            })}
             <XAxis
               dataKey="label"
               tick={{ fontSize: 11, fill: '#8F897E' }}

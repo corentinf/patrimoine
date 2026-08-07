@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { formatCurrency } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
-import { periodBoundaries } from '@/app/lib/chartBoundaries';
+import { periodBoundaries, BOUNDARY_STYLE } from '@/app/lib/chartBoundaries';
 
 interface NetWorthChartProps {
   data: Array<{
@@ -119,16 +119,20 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={chartRows} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
-          {boundaries.map((b) => (
-            <ReferenceLine
-              key={b.x}
-              yAxisId="left"
-              x={b.x}
-              stroke="#E2D9CA"
-              strokeDasharray="2 3"
-              label={{ value: b.text, position: 'insideTopLeft', fontSize: 9, fill: '#B8AD9A' }}
-            />
-          ))}
+          {boundaries.map((b) => {
+            const s = BOUNDARY_STYLE[b.kind];
+            return (
+              <ReferenceLine
+                key={b.x}
+                yAxisId="left"
+                x={b.x}
+                stroke={s.stroke}
+                strokeWidth={s.strokeWidth}
+                strokeDasharray={s.dash}
+                label={{ value: b.text, position: 'insideTopLeft', fontSize: s.fontSize, fontWeight: s.fontWeight, fill: s.fill }}
+              />
+            );
+          })}
           <XAxis
             dataKey="month"
             tick={{ fontSize: 11, fill: '#8F897E' }}
