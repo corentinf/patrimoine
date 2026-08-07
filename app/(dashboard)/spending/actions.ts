@@ -135,26 +135,30 @@ export async function assignTransactionCategory(
   const matchPattern = (tx.payee || tx.description || '').trim();
 
   if (matchPattern) {
-    const { data: existingRules } = await supabase
+    const { data: existingRules, error: lookupRuleError } = await supabase
       .from('category_rules')
       .select('id')
       .eq('user_id', user.id)
       .eq('match_field', matchField)
       .ilike('match_pattern', matchPattern);
 
+    if (lookupRuleError) throw new Error(`Category saved, but rule lookup failed: ${lookupRuleError.message}`);
+
     if (existingRules?.length) {
-      await supabase
+      const { error: updateRuleError } = await supabase
         .from('category_rules')
         .update({ category_id: categoryId, priority: 50 })
         .in('id', existingRules.map((r) => r.id));
+      if (updateRuleError) throw new Error(`Category saved, but rule update failed: ${updateRuleError.message}`);
     } else {
-      await supabase.from('category_rules').insert({
+      const { error: insertRuleError } = await supabase.from('category_rules').insert({
         user_id: user.id,
         category_id: categoryId,
         match_field: matchField,
         match_pattern: matchPattern,
         priority: 50,
       });
+      if (insertRuleError) throw new Error(`Category saved, but rule creation failed: ${insertRuleError.message}`);
     }
   }
 
