@@ -7,7 +7,7 @@ async function getAccounts() {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from('accounts')
-    .select('id, name, institution, account_type, balance')
+    .select('id, name, institution, account_type, balance, is_shared, personal_percentage')
     .eq('is_hidden', false)
     .order('account_type')
     .order('institution');

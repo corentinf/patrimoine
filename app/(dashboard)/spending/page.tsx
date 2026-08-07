@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/app/lib/supabase';
+import { getPersonalAmount } from '@/app/lib/split';
 import SpendingView from './SpendingView';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,8 @@ async function getSpendingTransactions(months = 12) {
       is_transfer,
       is_reimbursable,
       source_tag,
-      account:accounts(id, name, institution),
+      split_settled_at,
+      account:accounts(id, name, institution, is_shared, personal_percentage),
       category:categories(id, name, color, icon, is_income)
     `)
     .in('account_id', visibleIds)
@@ -54,7 +56,7 @@ async function getMonthlySpending() {
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('amount, posted_at, account_id')
+    .select('amount, posted_at, account_id, account:accounts(is_shared, personal_percentage)')
     .in('account_id', visibleIds)
     .lt('amount', 0)
     .eq('is_transfer', false)
@@ -77,7 +79,7 @@ async function getDailySpending(): Promise<{ date: string; amount: number }[]> {
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('amount, posted_at')
+    .select('amount, posted_at, account:accounts(is_shared, personal_percentage)')
     .in('account_id', visibleIds)
     .lt('amount', 0)
     .eq('is_transfer', false)
@@ -88,9 +90,9 @@ async function getDailySpending(): Promise<{ date: string; amount: number }[]> {
   if (error) throw error;
 
   const byDay = new Map<string, number>();
-  for (const t of data ?? []) {
+  for (const t of (data ?? []) as any[]) {
     const day = t.posted_at.slice(0, 10);
-    byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(Number(t.amount ?? 0)));
+    byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(getPersonalAmount(Number(t.amount ?? 0), t.account)));
   }
   return Array.from(byDay.entries())
     .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))
@@ -149,6 +151,28 @@ async function getVenmoRequests() {
   return data || [];
 }
 
+// Candidates for the "match to pending Amex splits?" prompt: recent incoming
+// P2P payments (Venmo/Zelle/Cash App, auto-categorized as "Personal Payments"
+// — see migration_personal_payments.sql) that haven't been dismissed as a match.
+async function getPersonalPaymentCandidates() {
+  const supabase = createServiceClient();
+  const visibleIds = await getVisibleAccountIds(supabase);
+  if (!visibleIds.length) return [];
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, amount, payee, description, posted_at, category:categories(name)')
+    .in('account_id', visibleIds)
+    .gt('amount', 0)
+    .eq('is_transfer', false)
+    .eq('split_match_dismissed', false)
+    .order('posted_at', { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+  return (data ?? []).filter((tx: any) => tx.category?.name === 'Personal Payments');
+}
+
 async function getAllCategories() {
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -198,7 +222,7 @@ async function getIncomeCategories() {
 }
 
 export default async function SpendingPage() {
-  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets, dailySpending] = await Promise.all([
+  const [transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets, dailySpending, personalPaymentCandidates] = await Promise.all([
     getSpendingTransactions(12),
     getMonthlySpending(),
     getAllCategories(),
@@ -207,18 +231,20 @@ export default async function SpendingPage() {
     getMonthlyIncome(),
     getBudgets(),
     getDailySpending(),
+    getPersonalPaymentCandidates(),
   ]);
 
   return (
     <SpendingView
       transactions={transactions as any}
-      monthlyRaw={monthlyRaw}
+      monthlyRaw={monthlyRaw as any}
       allCategories={allCategories}
       venmoRequests={venmoRequests}
       subscriptionOverrides={subscriptionOverrides}
       monthlyIncome={monthlyIncome}
       budgets={budgets}
       dailySpending={dailySpending}
+      personalPaymentCandidates={personalPaymentCandidates as any}
     />
   );
 }

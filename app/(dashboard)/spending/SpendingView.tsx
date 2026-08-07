@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrency, formatCurrencyPrecise, amountColor } from '@/app/lib/utils';
+import { getPersonalAmount, isSharedAccount, type SplitAccount } from '@/app/lib/split';
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
@@ -16,6 +17,7 @@ import VenmoImport from './VenmoImport';
 import AmazonImport from './AmazonImport';
 import SubscriptionsSection from './SubscriptionsSection';
 import SavingsRateModule from './SavingsRateModule';
+import { settleSharedSplits, dismissSplitMatch } from './actions';
 
 interface RawTransaction {
   id: string;
@@ -29,7 +31,9 @@ interface RawTransaction {
   /** Secondary provenance badge (e.g. "Amazon") — separate from category,
    *  never counted in spending totals/budgets. */
   source_tag?: string | null;
-  account: { id: string; name: string; institution: string } | null;
+  /** Set once the shared-card portion of this transaction has been paid back. */
+  split_settled_at?: string | null;
+  account: { id: string; name: string; institution: string; is_shared?: boolean | null; personal_percentage?: number | null } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }
 
@@ -37,6 +41,15 @@ interface MonthlyRaw {
   amount: number;
   posted_at: string;
   account_id: string;
+  account?: SplitAccount | null;
+}
+
+interface PersonalPaymentCandidate {
+  id: string;
+  amount: number;
+  payee: string | null;
+  description: string | null;
+  posted_at: string;
 }
 
 interface VenmoRequest {
@@ -56,6 +69,7 @@ interface SpendingViewProps {
   monthlyIncome: number;
   budgets: Record<string, number>;
   dailySpending: { date: string; amount: number }[];
+  personalPaymentCandidates: PersonalPaymentCandidate[];
 }
 
 export type { DateFilter };
@@ -158,7 +172,7 @@ function sumByCategory(
   for (const tx of txs) {
     if (isExcludedFromSpending(tx)) continue;
     const cat = tx.category;
-    const amount = Math.abs(Number(tx.amount));
+    const amount = Math.abs(getPersonalAmount(Number(tx.amount), tx.account));
     const parentId = cat ? (subCatToParent.get(cat.id) ?? cat.id) : null;
     const key = parentId ?? '__uncategorized__';
 
@@ -436,7 +450,7 @@ function TagPill({ tag, active, hasActivity, onToggle }: { tag: string; active: 
   );
 }
 
-export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, dailySpending }: SpendingViewProps) {
+export default function SpendingView({ transactions, monthlyRaw, allCategories, venmoRequests, subscriptionOverrides, monthlyIncome, budgets: initialBudgets, dailySpending, personalPaymentCandidates }: SpendingViewProps) {
   // Not otherwise used here — but subscribing is what makes this component
   // re-render (and every formatCurrency() call below re-check demo mode)
   // when the toggle in Header/Profile changes it.
@@ -652,7 +666,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         if (!matches) continue;
       }
       const day = tx.posted_at.slice(0, 10);
-      byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(Number(tx.amount)));
+      byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(getPersonalAmount(Number(tx.amount), tx.account)));
     }
     return Array.from(byDay.entries())
       .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))
@@ -702,7 +716,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const prevTotalSpending = useMemo(() =>
     prevFiltered.reduce((sum, tx) => {
       if (isExcludedFromSpending(tx)) return sum;
-      return sum + Math.abs(Number(tx.amount));
+      return sum + Math.abs(getPersonalAmount(Number(tx.amount), tx.account));
     }, 0),
   [prevFiltered]);
 
@@ -730,6 +744,44 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     })).sort((a, b) => b.total - a.total);
     return { sortedCategories: sorted, totalSpending: sorted.reduce((s, c) => s + c.total, 0) };
   }, [filteredTransactions, subCatToParent, catMeta]);
+
+  // "Awaiting reimbursement" — Jenny's unpaid half of every shared-card charge.
+  // A running balance, not scoped to the selected date range like the stats above.
+  const awaitingReimbursement = useMemo(() => {
+    return transactions.reduce((sum, tx) => {
+      if (!isSharedAccount(tx.account) || tx.split_settled_at || isExcludedFromSpending(tx)) return sum;
+      const full = Math.abs(Number(tx.amount));
+      const personal = Math.abs(getPersonalAmount(Number(tx.amount), tx.account));
+      return sum + (full - personal);
+    }, 0);
+  }, [transactions]);
+
+  // Newest incoming personal payment whose amount roughly matches the running
+  // awaiting-reimbursement total — offered as a one-click "mark all settled".
+  const [dismissedMatchIds, setDismissedMatchIds] = useState<Set<string>>(new Set());
+  const matchCandidate = useMemo(() => {
+    if (awaitingReimbursement <= 0) return null;
+    const tolerance = Math.max(2, awaitingReimbursement * 0.03);
+    return personalPaymentCandidates.find((c) =>
+      !dismissedMatchIds.has(c.id) && Math.abs(c.amount - awaitingReimbursement) <= tolerance
+    ) ?? null;
+  }, [personalPaymentCandidates, awaitingReimbursement, dismissedMatchIds]);
+
+  const [matching, setMatching] = useState(false);
+  async function handleConfirmMatch() {
+    if (!matchCandidate) return;
+    setMatching(true);
+    try {
+      await settleSharedSplits();
+    } finally {
+      setMatching(false);
+    }
+  }
+  function handleDismissMatch() {
+    if (!matchCandidate) return;
+    setDismissedMatchIds((prev) => new Set(prev).add(matchCandidate.id));
+    dismissSplitMatch(matchCandidate.id);
+  }
 
   // Which parent category the pie chart should be "drilled into": the
   // selection itself if it's a top-level category, or its parent if a
@@ -814,7 +866,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     let largeSpend = 0;
     for (const tx of currentMonthTxs) {
       if (isExcludedFromSpending(tx)) continue;
-      const amount = Math.abs(Number(tx.amount));
+      const amount = Math.abs(getPersonalAmount(Number(tx.amount), tx.account));
       if (amount >= LARGE_THRESHOLD) largeSpend += amount;
       else recurringSpend += amount;
     }
@@ -959,6 +1011,15 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           <h2 className="font-display text-lg text-ink-800">Spending</h2>
           <span className="stat-label">Total spending</span>
           <span className="stat-value text-xl text-accent-red" data-sensitive>{formatCurrency(totalSpending)}</span>
+          {awaitingReimbursement > 0 && (
+            <span
+              className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-100"
+              title="Jenny's unpaid half of shared-card charges"
+            >
+              ½ Awaiting reimbursement
+              <span className="font-mono" data-sensitive>{formatCurrency(awaitingReimbursement)}</span>
+            </span>
+          )}
         </div>
         {/* Always mounted (even with no prior-period data) so this line's height
             is reserved — otherwise hovering a bar/category can toggle it away
@@ -990,6 +1051,31 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           />
         </div>
       </div>
+
+      {/* Match a recent incoming personal payment to pending Amex splits */}
+      {matchCandidate && (
+        <div className="card px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 bg-amber-50/60 border-amber-100">
+          <p className="text-sm text-ink-700">
+            <span className="font-mono font-medium" data-sensitive>{formatCurrencyPrecise(matchCandidate.amount)}</span>
+            {' '}from {matchCandidate.payee ?? matchCandidate.description ?? 'a personal payment'} — match to pending Amex splits?
+          </p>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleDismissMatch}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg text-ink-500 hover:bg-white/60 transition-colors"
+            >
+              Not this one
+            </button>
+            <button
+              onClick={handleConfirmMatch}
+              disabled={matching}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-ink-800 text-white hover:bg-ink-700 transition-colors disabled:opacity-50"
+            >
+              {matching ? 'Matching…' : 'Match'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Spending over time + By Category side by side */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-stretch">

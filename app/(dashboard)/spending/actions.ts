@@ -73,6 +73,40 @@ export async function markReimbursable(ids: string[], value: boolean) {
   revalidateTransactionPages();
 }
 
+// Confirms a Venmo/personal payment against the running "awaiting
+// reimbursement" total: marks every unsettled shared-card transaction (across
+// all is_shared accounts, e.g. the Amex Blue Cash Preferred) as paid back.
+export async function settleSharedSplits() {
+  const { supabase } = await getSupabaseAndUser();
+  const { data: sharedAccounts, error: acctError } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('is_shared', true);
+  if (acctError) throw new Error(acctError.message);
+
+  const accountIds = (sharedAccounts ?? []).map((a) => a.id);
+  if (accountIds.length) {
+    const { error } = await supabase
+      .from('transactions')
+      .update({ split_settled_at: new Date().toISOString() })
+      .in('account_id', accountIds)
+      .is('split_settled_at', null);
+    if (error) throw new Error(error.message);
+  }
+  revalidateTransactionPages();
+}
+
+// Dismisses a false-positive match suggestion so it stops being offered.
+export async function dismissSplitMatch(transactionId: string) {
+  const { supabase } = await getSupabaseAndUser();
+  const { error } = await supabase
+    .from('transactions')
+    .update({ split_match_dismissed: true })
+    .eq('id', transactionId);
+  if (error) throw new Error(error.message);
+  revalidateTransactionPages();
+}
+
 export async function assignTransactionCategory(
   transactionId: string,
   categoryId: string,

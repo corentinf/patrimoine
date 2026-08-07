@@ -109,7 +109,7 @@ export async function PATCH(request: NextRequest) {
   const { data: { user } } = await authClient.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { id, name, institution, account_type, balance } = await request.json();
+  const { id, name, institution, account_type, balance, is_shared, personal_percentage } = await request.json();
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -120,6 +120,10 @@ export async function PATCH(request: NextRequest) {
     updates.balance = Number(balance);
     updates.balance_date = new Date().toISOString();
   }
+  // Shared-card split — orthogonal to the manual/synced distinction above,
+  // so this is settable for any account (e.g. the synced Amex card).
+  if (is_shared !== undefined) updates.is_shared = Boolean(is_shared);
+  if (personal_percentage !== undefined) updates.personal_percentage = Number(personal_percentage);
 
   const supabase = createServiceClient();
   const { error } = await supabase.from('accounts').update(updates).eq('id', id);

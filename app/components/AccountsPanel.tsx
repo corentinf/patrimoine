@@ -15,6 +15,8 @@ export interface SidebarAccount {
   account_type: string;
   balance: number;
   balance_date?: string | null;
+  is_shared?: boolean | null;
+  personal_percentage?: number | null;
 }
 
 export function InstitutionLogo({
@@ -79,6 +81,10 @@ export function AccountModal({
   const [institution, setInstitution] = useState(account?.institution ?? '');
   const [accountType, setAccountType] = useState(account?.account_type ?? 'checking');
   const [balance, setBalance] = useState(account ? String(account.balance) : '');
+  const [isShared, setIsShared] = useState(account?.is_shared ?? false);
+  const [splitPercentage, setSplitPercentage] = useState(
+    account?.personal_percentage != null ? String(account.personal_percentage) : '50'
+  );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -99,13 +105,19 @@ export function AccountModal({
         res = await fetch('/api/accounts/manual', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: account.id, name, institution, account_type: accountType, balance: Number(balance) }),
+          body: JSON.stringify({
+            id: account.id, name, institution, account_type: accountType, balance: Number(balance),
+            is_shared: isShared, personal_percentage: Number(splitPercentage),
+          }),
         });
       } else {
         res = await fetch('/api/accounts/manual', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: account!.id, balance: Number(balance) }),
+          body: JSON.stringify({
+            id: account!.id, balance: Number(balance),
+            is_shared: isShared, personal_percentage: Number(splitPercentage),
+          }),
         });
       }
       const data = await res.json();
@@ -211,6 +223,37 @@ export function AccountModal({
               <p className="text-xs text-ink-300">This account is synced — only balance can be overridden.</p>
             )}
           </div>
+
+          {!isNew && (
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsShared((v) => !v)}
+                className="w-full flex items-center justify-between"
+              >
+                <span className="text-xs font-medium text-ink-500 text-left">
+                  Shared card — split all transactions {splitPercentage || 50}/{100 - Number(splitPercentage || 50)}
+                </span>
+                <span className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${isShared ? 'bg-ink-700' : 'bg-sand-300'}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${isShared ? 'translate-x-4' : 'translate-x-0'}`} />
+                </span>
+              </button>
+              {isShared && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-ink-400">Your share</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={splitPercentage}
+                    onChange={(e) => setSplitPercentage(e.target.value)}
+                    className="w-16 text-sm px-2 py-1 rounded-lg border border-sand-200 focus:outline-none focus:border-ink-400 text-ink-700"
+                  />
+                  <span className="text-xs text-ink-400">%</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {error && <p className="text-xs text-accent-red">{error}</p>}

@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatShortDate, amountColor, groupAndSortCategories, filterCategoryGroups } from '@/app/lib/utils';
+import { getPersonalAmount, isSharedAccount } from '@/app/lib/split';
 import { assignTransactionCategory, toggleTransfer } from './actions';
 import type { Category } from './CategoryManager';
 import type { FullTransaction } from './TransactionDetail';
@@ -249,6 +250,14 @@ export default function TransactionRow({
                 ↩ reimb.
               </span>
             )}
+            {isSharedAccount(tx.account) && (
+              <span
+                className="text-[10px] font-medium px-1.5 py-px rounded bg-amber-50 text-amber-600 border border-amber-100"
+                title="Shared card — split with Jenny"
+              >
+                ½
+              </span>
+            )}
             {tx.source_tag && (
               <span
                 className="text-[10px] font-medium px-1.5 py-px rounded bg-sand-100 text-ink-500 border border-sand-200"
@@ -325,9 +334,16 @@ export default function TransactionRow({
         </span>
 
         {/* Amount */}
-        <span className={`font-mono text-sm font-medium flex-shrink-0 w-20 text-right ${isTransfer ? 'text-ink-300 line-through' : amountColor(tx.amount)}`}>
-          {formatCurrencyPrecise(Math.abs(tx.amount))}
-        </span>
+        <div className="flex flex-col items-end flex-shrink-0 w-20">
+          <span className={`font-mono text-sm font-medium ${isTransfer ? 'text-ink-300 line-through' : amountColor(tx.amount)}`}>
+            {formatCurrencyPrecise(Math.abs(tx.amount))}
+          </span>
+          {!isTransfer && isSharedAccount(tx.account) && (
+            <span className="text-[10px] text-ink-300 font-mono whitespace-nowrap">
+              → {formatCurrencyPrecise(Math.abs(getPersonalAmount(tx.amount, tx.account)))}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Category picker dropdown */}

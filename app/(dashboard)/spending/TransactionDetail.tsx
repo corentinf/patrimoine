@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatDate, groupAndSortCategories, filterCategoryGroups } from '@/app/lib/utils';
+import { getPersonalAmount, isSharedAccount } from '@/app/lib/split';
 import { assignTransactionCategory, updateTransactionPayee } from './actions';
 import type { Category } from './CategoryManager';
 import VenmoSection from './VenmoSection';
@@ -19,7 +20,7 @@ export interface FullTransaction {
   /** Secondary provenance badge (e.g. "Amazon") — separate from category,
    *  never counted in spending totals/budgets. */
   source_tag?: string | null;
-  account: { name: string; institution: string } | null;
+  account: { name: string; institution: string; is_shared?: boolean | null; personal_percentage?: number | null } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }
 
@@ -220,9 +221,24 @@ export default function TransactionDetail({
 
           {/* Amount + meta */}
           <div className="px-5 py-5 border-b border-sand-100">
-            <p className="font-mono text-3xl font-semibold text-ink-800">
-              {formatCurrencyPrecise(Math.abs(tx.amount))}
-            </p>
+            <div className="flex items-baseline gap-2">
+              <p className="font-mono text-3xl font-semibold text-ink-800">
+                {formatCurrencyPrecise(Math.abs(tx.amount))}
+              </p>
+              {isSharedAccount(tx.account) && (
+                <span
+                  className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100"
+                  title="Shared card — split with Jenny"
+                >
+                  ½
+                </span>
+              )}
+            </div>
+            {isSharedAccount(tx.account) && (
+              <p className="text-sm text-ink-400 mt-0.5">
+                → {formatCurrencyPrecise(Math.abs(getPersonalAmount(tx.amount, tx.account)))} your share
+              </p>
+            )}
             <p className="text-sm text-ink-400 mt-1.5">
               {formatDate(tx.posted_at)}
               {tx.account && (
