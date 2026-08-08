@@ -120,7 +120,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
           >
             Projection
             <span className={`w-7 h-4 rounded-full transition-colors relative ${showProjection ? 'bg-ink-700' : 'bg-sand-300'}`}>
-              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${showProjection ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+              <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${showProjection ? 'translate-x-3' : 'translate-x-0'}`} />
             </span>
           </button>
         )}

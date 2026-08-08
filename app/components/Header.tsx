@@ -248,7 +248,7 @@ function ProfileMenu({ accounts }: { accounts: SidebarAccount[] }) {
                   Privacy mode
                 </span>
                 <span className={`w-7 h-4 rounded-full transition-colors relative ${blurred ? 'bg-ink-700' : 'bg-sand-300'}`}>
-                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${blurred ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${blurred ? 'translate-x-3' : 'translate-x-0'}`} />
                 </span>
               </button>
               <button
@@ -264,7 +264,7 @@ function ProfileMenu({ accounts }: { accounts: SidebarAccount[] }) {
                   Demo mode
                 </span>
                 <span className={`w-7 h-4 rounded-full transition-colors relative ${fake ? 'bg-ink-700' : 'bg-sand-300'}`}>
-                  <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${fake ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${fake ? 'translate-x-3' : 'translate-x-0'}`} />
                 </span>
               </button>
               <button
