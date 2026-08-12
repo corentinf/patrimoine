@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatCurrency, formatCurrencyPrecise, amountColor } from '@/app/lib/utils';
-import { getPersonalAmount, isSharedAccount, type SplitAccount } from '@/app/lib/split';
+import { getPersonalAmount, isShared, type SplitSource } from '@/app/lib/split';
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
@@ -31,8 +31,13 @@ interface RawTransaction {
   /** Secondary provenance badge (e.g. "Amazon") — separate from category,
    *  never counted in spending totals/budgets. */
   source_tag?: string | null;
-  /** Set once the shared-card portion of this transaction has been paid back. */
+  /** Set once the shared portion of this transaction has been paid back. */
   split_settled_at?: string | null;
+  /** Per-transaction split override — independent of the account's own
+   *  setting, for a one-off shared expense (e.g. a dinner split with a
+   *  friend on an otherwise-personal card). */
+  is_shared?: boolean | null;
+  personal_percentage?: number | null;
   account: { id: string; name: string; institution: string; is_shared?: boolean | null; personal_percentage?: number | null } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }
@@ -41,7 +46,9 @@ interface MonthlyRaw {
   amount: number;
   posted_at: string;
   account_id: string;
-  account?: SplitAccount | null;
+  is_shared?: boolean | null;
+  personal_percentage?: number | null;
+  account?: SplitSource | null;
 }
 
 interface PersonalPaymentCandidate {
@@ -172,7 +179,7 @@ function sumByCategory(
   for (const tx of txs) {
     if (isExcludedFromSpending(tx)) continue;
     const cat = tx.category;
-    const amount = Math.abs(getPersonalAmount(Number(tx.amount), tx.account));
+    const amount = Math.abs(getPersonalAmount(Number(tx.amount), tx.account, tx));
     const parentId = cat ? (subCatToParent.get(cat.id) ?? cat.id) : null;
     const key = parentId ?? '__uncategorized__';
 
@@ -324,7 +331,7 @@ const LONG_PRESS_MS = 500;
 // category to the current selection instead of replacing it. Touch has no
 // hover, so a long-press does the same "add" action there.
 function CategoryPill({
-  cat, active, hasActivity, hasSelection, onSelectOnly, onDeselect, onAddToSelection,
+  cat, active, hasActivity, hasSelection, onSelectOnly, onDeselect, onAddToSelection, isSubcategory,
 }: {
   cat: { name: string; icon: string; color: string };
   active: boolean;
@@ -333,6 +340,10 @@ function CategoryPill({
   onSelectOnly: () => void;
   onDeselect: () => void;
   onAddToSelection: () => void;
+  /** Sub-category pills render visibly smaller/muted than top-level ones —
+   *  same size made a group hard to tell apart from an unrelated top-level
+   *  pill sitting right next to it once expanded. */
+  isSubcategory?: boolean;
 }) {
   const [pressed, setPressed] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -376,18 +387,24 @@ function CategoryPill({
 
   return (
     <div
-      className={`relative group/catpill inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+      className={`relative group/catpill inline-flex items-center gap-1 rounded-full font-medium border transition-colors ${
+        isSubcategory ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs'
+      } ${
         pressed ? 'scale-95' : ''
       } ${
         active
           ? 'text-white border-transparent'
           : hasActivity
-            ? 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
-            : 'bg-white border-sand-100 text-ink-300 hover:border-sand-200'
+            ? isSubcategory
+              ? 'bg-sand-50 border-dashed border-sand-300 text-ink-500 hover:border-sand-400 hover:bg-sand-100'
+              : 'bg-white border-sand-200 text-ink-600 hover:border-sand-300'
+            : isSubcategory
+              ? 'bg-sand-50 border-dashed border-sand-200 text-ink-300 hover:border-sand-300'
+              : 'bg-white border-sand-100 text-ink-300 hover:border-sand-200'
       }`}
       style={{
         ...(active ? { backgroundColor: cat.color, borderColor: cat.color } : {}),
-        ...(!active && hasActivity ? { backgroundColor: cat.color + '14' } : {}),
+        ...(!active && hasActivity && !isSubcategory ? { backgroundColor: cat.color + '14' } : {}),
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -536,6 +553,23 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   }, [allCategories]);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
+  // Category row: collapsed by default to just the categories with activity
+  // in the current time frame (one line) — hovering (or pinning, via the
+  // button) reveals the full list. Since this row lives in the sticky page
+  // header (see useSetPageFilterSlot below), it also collapses back down
+  // whenever the page is scrolled, even if pinned, to give the transaction
+  // list room; hovering still peeks it open regardless of scroll.
+  const [categoryRowPinned, setCategoryRowPinned] = useState(false);
+  const [categoryRowHovered, setCategoryRowHovered] = useState(false);
+  const [pageScrolled, setPageScrolled] = useState(false);
+  useEffect(() => {
+    function onScroll() { setPageScrolled(window.scrollY > 4); }
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  const categoryRowExpanded = categoryRowHovered || (categoryRowPinned && !pageScrolled);
+
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [activeTab, setActiveTab] = useState<'categories' | 'subscriptions' | 'transactions'>('transactions');
   const [budgets, setBudgets] = useState<Record<string, number>>(initialBudgets);
@@ -639,6 +673,21 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     return map;
   }, [chipCategories, allCategories, activeCategoryNames]);
 
+  // Split once, into two fixed groups, rather than toggling between an
+  // "active only" and a re-sorted "everyone" list — that would reshuffle
+  // where each active pill sits (an inactive one could land alphabetically
+  // ahead of it) every time the row expands/collapses. Instead active pills
+  // live in their own row that never changes, and inactive ones reveal in a
+  // second row below without touching the first.
+  const activeChipCategories = useMemo(
+    () => chipCategories.filter((c) => chipHasActivity.get(c.name) || filterCategories.includes(c.name)),
+    [chipCategories, chipHasActivity, filterCategories],
+  );
+  const inactiveChipCategories = useMemo(
+    () => chipCategories.filter((c) => !(chipHasActivity.get(c.name) || filterCategories.includes(c.name))),
+    [chipCategories, chipHasActivity, filterCategories],
+  );
+
   // Whether each tag has any activity in the selected time frame (for dimming
   // pills that have nothing to show), mirroring chipHasActivity above.
   const tagHasActivity = useMemo(() => {
@@ -666,7 +715,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         if (!matches) continue;
       }
       const day = tx.posted_at.slice(0, 10);
-      byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(getPersonalAmount(Number(tx.amount), tx.account)));
+      byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(getPersonalAmount(Number(tx.amount), tx.account, tx)));
     }
     return Array.from(byDay.entries())
       .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))
@@ -716,7 +765,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const prevTotalSpending = useMemo(() =>
     prevFiltered.reduce((sum, tx) => {
       if (isExcludedFromSpending(tx)) return sum;
-      return sum + Math.abs(getPersonalAmount(Number(tx.amount), tx.account));
+      return sum + Math.abs(getPersonalAmount(Number(tx.amount), tx.account, tx));
     }, 0),
   [prevFiltered]);
 
@@ -749,9 +798,9 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   // A running balance, not scoped to the selected date range like the stats above.
   const awaitingReimbursement = useMemo(() => {
     return transactions.reduce((sum, tx) => {
-      if (!isSharedAccount(tx.account) || tx.split_settled_at || isExcludedFromSpending(tx)) return sum;
+      if (!isShared(tx, tx.account) || tx.split_settled_at || isExcludedFromSpending(tx)) return sum;
       const full = Math.abs(Number(tx.amount));
-      const personal = Math.abs(getPersonalAmount(Number(tx.amount), tx.account));
+      const personal = Math.abs(getPersonalAmount(Number(tx.amount), tx.account, tx));
       return sum + (full - personal);
     }, 0);
   }, [transactions]);
@@ -866,13 +915,79 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     let largeSpend = 0;
     for (const tx of currentMonthTxs) {
       if (isExcludedFromSpending(tx)) continue;
-      const amount = Math.abs(getPersonalAmount(Number(tx.amount), tx.account));
+      const amount = Math.abs(getPersonalAmount(Number(tx.amount), tx.account, tx));
       if (amount >= LARGE_THRESHOLD) largeSpend += amount;
       else recurringSpend += amount;
     }
     const paced = Math.round((recurringSpend / dayOfMonth) * daysInMonth);
     return { paced, largeTotal: Math.round(largeSpend) };
   }, [dateFilter, transactions, selectedAccount, now]);
+
+  // Shared between the active and inactive pill rows below.
+  // Returns an array of independent sibling pills (parent-group first, then
+  // each expanded sub-category) rather than one wrapping element — each pill
+  // needs to be its own item in the row's flex-wrap flow. Bundling them into
+  // a single inline-flex box made the whole group (parent included) jump to
+  // a new line together whenever it didn't fit the remaining row width,
+  // instead of just the overflowing sub-pills wrapping on their own.
+  function renderCategoryPill(cat: { name: string; icon: string; color: string }) {
+    const children = childrenByParentName.get(cat.name);
+    const isExpanded = expandedCategory === cat.name;
+    const items: React.ReactNode[] = [
+      <span key={cat.name} className="inline-flex items-center">
+        <CategoryPill
+          cat={cat}
+          active={filterCategories.includes(cat.name)}
+          hasActivity={chipHasActivity.get(cat.name) ?? false}
+          hasSelection={filterCategories.length > 0}
+          onSelectOnly={() => setFilterCategories([cat.name])}
+          onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== cat.name))}
+          onAddToSelection={() => {
+            if (!filterCategories.includes(cat.name)) setFilterCategories([...filterCategories, cat.name]);
+          }}
+        />
+        {children && children.length > 0 && (
+          <button
+            onClick={() => setExpandedCategory((v) => (v === cat.name ? null : cat.name))}
+            aria-label={`${isExpanded ? 'Hide' : 'Show'} ${cat.name} sub-categories`}
+            title="Sub-categories"
+            className={`ml-0.5 flex items-center justify-center w-4 h-4 rounded-full transition-colors ${
+              isExpanded ? 'text-ink-700 bg-sand-200' : 'text-ink-300 hover:text-ink-500 hover:bg-sand-100'
+            }`}
+          >
+            <svg className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
+      </span>,
+    ];
+    if (isExpanded && children) {
+      children.forEach((sub, i) => {
+        items.push(
+          <span
+            key={sub.name}
+            className="inline-flex animate-[pill-in_150ms_ease-out_backwards]"
+            style={{ animationDelay: `${i * 30}ms` }}
+          >
+            <CategoryPill
+              cat={sub}
+              isSubcategory
+              active={filterCategories.includes(sub.name)}
+              hasActivity={activeCategoryNames.has(sub.name)}
+              hasSelection={filterCategories.length > 0}
+              onSelectOnly={() => setFilterCategories([sub.name])}
+              onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== sub.name))}
+              onAddToSelection={() => {
+                if (!filterCategories.includes(sub.name)) setFilterCategories([...filterCategories, sub.name]);
+              }}
+            />
+          </span>,
+        );
+      });
+    }
+    return items;
+  }
 
   // Search + category-pills filters — rendered in the shared header (below the date
   // filter row) so they can drive the charts above as well as the transaction list.
@@ -903,100 +1018,82 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       {accounts.length > 1 && (
         <AccountDropdown accounts={accounts} selectedAccount={selectedAccount} onChange={setSelectedAccount} />
       )}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <button
-          onClick={() => { setFilterCategories([]); setFilterTags([]); setExpandedCategory(null); }}
-          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-            filterCategories.length === 0 && filterTags.length === 0 ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-          }`}
-        >
-          All
-        </button>
-        {chipCategories.map((cat) => {
-          const children = childrenByParentName.get(cat.name);
-          const isExpanded = expandedCategory === cat.name;
-          return (
-            <span key={cat.name} className="inline-flex items-center flex-wrap gap-1.5">
-              <span className="inline-flex items-center">
-                <CategoryPill
-                  cat={cat}
-                  active={filterCategories.includes(cat.name)}
-                  hasActivity={chipHasActivity.get(cat.name) ?? false}
-                  hasSelection={filterCategories.length > 0}
-                  onSelectOnly={() => setFilterCategories([cat.name])}
-                  onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== cat.name))}
-                  onAddToSelection={() => {
-                    if (!filterCategories.includes(cat.name)) setFilterCategories([...filterCategories, cat.name]);
-                  }}
-                />
-                {children && children.length > 0 && (
-                  <button
-                    onClick={() => setExpandedCategory((v) => (v === cat.name ? null : cat.name))}
-                    aria-label={`${isExpanded ? 'Hide' : 'Show'} ${cat.name} sub-categories`}
-                    title="Sub-categories"
-                    className={`ml-0.5 flex items-center justify-center w-4 h-4 rounded-full transition-colors ${
-                      isExpanded ? 'text-ink-700 bg-sand-200' : 'text-ink-300 hover:text-ink-500 hover:bg-sand-100'
-                    }`}
-                  >
-                    <svg className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                )}
-              </span>
-              {isExpanded && children && children.map((sub, i) => (
-                <span
-                  key={sub.name}
-                  className="inline-flex animate-[pill-in_150ms_ease-out_backwards]"
-                  style={{ animationDelay: `${i * 30}ms` }}
-                >
-                  <CategoryPill
-                    cat={sub}
-                    active={filterCategories.includes(sub.name)}
-                    hasActivity={activeCategoryNames.has(sub.name)}
-                    hasSelection={filterCategories.length > 0}
-                    onSelectOnly={() => setFilterCategories([sub.name])}
-                    onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== sub.name))}
-                    onAddToSelection={() => {
-                      if (!filterCategories.includes(sub.name)) setFilterCategories([...filterCategories, sub.name]);
-                    }}
-                  />
-                </span>
-              ))}
-            </span>
-          );
-        })}
-        {filterCategories.length > 0 && (
+      <div
+        onMouseEnter={() => setCategoryRowHovered(true)}
+        onMouseLeave={() => setCategoryRowHovered(false)}
+      >
+        {/* Active categories — fixed position, wraps to as many lines as it
+            needs, never reshuffled by hover/pin/scroll. */}
+        <div className="flex items-center flex-wrap gap-1.5">
           <button
-            onClick={() => { setFilterCategories([]); setExpandedCategory(null); }}
-            className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
+            onClick={() => { setFilterCategories([]); setFilterTags([]); setExpandedCategory(null); }}
+            className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+              filterCategories.length === 0 && filterTags.length === 0 ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+            }`}
           >
-            Deselect all
+            All
           </button>
-        )}
-        {availableTags.length > 0 && (
-          <span className="w-full flex items-center gap-1.5 flex-wrap pl-3 border-l-2 border-sand-200 ml-1">
-            <span className="text-xs text-ink-300 whitespace-nowrap">Tags ›</span>
-            {availableTags.map((tag) => (
-              <TagPill
-                key={tag}
-                tag={tag}
-                active={filterTags.includes(tag)}
-                hasActivity={tagHasActivity.get(tag) ?? false}
-                onToggle={() => setFilterTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])}
-              />
-            ))}
-            {filterTags.length > 0 && (
-              <button
-                onClick={() => setFilterTags([])}
-                className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
-              >
-                Clear tags
-              </button>
-            )}
-          </span>
+          {inactiveChipCategories.length > 0 && (
+            <button
+              onClick={() => setCategoryRowPinned((v) => !v)}
+              aria-label={categoryRowPinned ? 'Unpin inactive categories' : 'Keep inactive categories expanded'}
+              title={categoryRowPinned ? 'Unpin inactive categories' : 'Keep inactive categories expanded'}
+              className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full transition-colors ${
+                categoryRowPinned ? 'text-ink-700 bg-sand-200' : 'text-ink-300 hover:text-ink-500 hover:bg-sand-100'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill={categoryRowPinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+            </button>
+          )}
+          {activeChipCategories.flatMap(renderCategoryPill)}
+          {filterCategories.length > 0 && (
+            <button
+              onClick={() => { setFilterCategories([]); setExpandedCategory(null); }}
+              className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
+            >
+              Deselect all
+            </button>
+          )}
+        </div>
+        {/* Inactive categories — revealed below on hover/pin, collapsing back
+            on scroll (this row lives in the sticky header). Never affects the
+            active row's layout above. */}
+        {inactiveChipCategories.length > 0 && (
+          <div
+            className={`transition-[grid-template-rows] duration-300 ease-in-out grid ${categoryRowExpanded ? 'grid-rows-[1fr] mt-1.5' : 'grid-rows-[0fr]'}`}
+          >
+            <div className="overflow-hidden min-h-0">
+              <div className="flex items-center flex-wrap gap-1.5">
+                {inactiveChipCategories.flatMap(renderCategoryPill)}
+              </div>
+            </div>
+          </div>
         )}
       </div>
+      {availableTags.length > 0 && (
+        <span className="w-full flex items-center gap-1.5 flex-wrap pl-3 border-l-2 border-sand-200 ml-1">
+          <span className="text-xs text-ink-300 whitespace-nowrap">Tags ›</span>
+          {availableTags.map((tag) => (
+            <TagPill
+              key={tag}
+              tag={tag}
+              active={filterTags.includes(tag)}
+              hasActivity={tagHasActivity.get(tag) ?? false}
+              onToggle={() => setFilterTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])}
+            />
+          ))}
+          {filterTags.length > 0 && (
+            <button
+              onClick={() => setFilterTags([])}
+              className="text-xs text-ink-400 hover:text-ink-600 transition-colors"
+            >
+              Clear tags
+            </button>
+          )}
+        </span>
+      )}
     </div>,
   );
 
