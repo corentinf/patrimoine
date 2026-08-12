@@ -846,6 +846,20 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     [drilldownParentId, categoryRows],
   );
 
+  // Selecting a category via the pie chart / breakdown table sets `category`
+  // (a drill-down, keyed by id) — a separate mechanism from the header pills'
+  // own `filterCategories` (a multi-select, keyed by name). Resolve the
+  // drill-down's id(s) to name(s) so the matching pill can visually highlight
+  // in sync, without merging the two selection mechanisms themselves.
+  const drilldownCategoryName = useMemo(
+    () => (drilldownParentId ? catMeta.get(drilldownParentId)?.name ?? null : null),
+    [drilldownParentId, catMeta],
+  );
+  const drilldownSubCategoryName = useMemo(
+    () => (selectedCategoryKey && selectedCategoryKey !== drilldownParentId ? catMeta.get(selectedCategoryKey)?.name ?? null : null),
+    [selectedCategoryKey, drilldownParentId, catMeta],
+  );
+
   // Pie chart data: the parent's sub-categories when drilled in, else the
   // normal top-level breakdown.
   const pieCategories = useMemo(() => {
@@ -937,12 +951,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
       <span key={cat.name} className="inline-flex items-center">
         <CategoryPill
           cat={cat}
-          active={filterCategories.includes(cat.name)}
+          active={filterCategories.includes(cat.name) || cat.name === drilldownCategoryName}
           hasActivity={chipHasActivity.get(cat.name) ?? false}
           hasSelection={filterCategories.length > 0}
-          onSelectOnly={() => setFilterCategories([cat.name])}
-          onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== cat.name))}
+          onSelectOnly={() => { clearCategory(); setFilterCategories([cat.name]); }}
+          onDeselect={() => { clearCategory(); setFilterCategories(filterCategories.filter((n) => n !== cat.name)); }}
           onAddToSelection={() => {
+            clearCategory();
             if (!filterCategories.includes(cat.name)) setFilterCategories([...filterCategories, cat.name]);
           }}
         />
@@ -973,12 +988,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             <CategoryPill
               cat={sub}
               isSubcategory
-              active={filterCategories.includes(sub.name)}
+              active={filterCategories.includes(sub.name) || sub.name === drilldownSubCategoryName}
               hasActivity={activeCategoryNames.has(sub.name)}
               hasSelection={filterCategories.length > 0}
-              onSelectOnly={() => setFilterCategories([sub.name])}
-              onDeselect={() => setFilterCategories(filterCategories.filter((n) => n !== sub.name))}
+              onSelectOnly={() => { clearCategory(); setFilterCategories([sub.name]); }}
+              onDeselect={() => { clearCategory(); setFilterCategories(filterCategories.filter((n) => n !== sub.name)); }}
               onAddToSelection={() => {
+                clearCategory();
                 if (!filterCategories.includes(sub.name)) setFilterCategories([...filterCategories, sub.name]);
               }}
             />
