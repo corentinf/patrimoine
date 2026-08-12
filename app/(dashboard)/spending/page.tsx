@@ -34,6 +34,8 @@ async function getSpendingTransactions(months = 12) {
       is_reimbursable,
       source_tag,
       split_settled_at,
+      is_shared,
+      personal_percentage,
       account:accounts(id, name, institution, is_shared, personal_percentage),
       category:categories(id, name, color, icon, is_income)
     `)
@@ -56,7 +58,7 @@ async function getMonthlySpending() {
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('amount, posted_at, account_id, account:accounts(is_shared, personal_percentage)')
+    .select('amount, posted_at, account_id, is_shared, personal_percentage, account:accounts(is_shared, personal_percentage)')
     .in('account_id', visibleIds)
     .lt('amount', 0)
     .eq('is_transfer', false)
@@ -79,7 +81,7 @@ async function getDailySpending(): Promise<{ date: string; amount: number }[]> {
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('amount, posted_at, account:accounts(is_shared, personal_percentage)')
+    .select('amount, posted_at, is_shared, personal_percentage, account:accounts(is_shared, personal_percentage)')
     .in('account_id', visibleIds)
     .lt('amount', 0)
     .eq('is_transfer', false)
@@ -92,7 +94,7 @@ async function getDailySpending(): Promise<{ date: string; amount: number }[]> {
   const byDay = new Map<string, number>();
   for (const t of (data ?? []) as any[]) {
     const day = t.posted_at.slice(0, 10);
-    byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(getPersonalAmount(Number(t.amount ?? 0), t.account)));
+    byDay.set(day, (byDay.get(day) ?? 0) + Math.abs(getPersonalAmount(Number(t.amount ?? 0), t.account, t)));
   }
   return Array.from(byDay.entries())
     .map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100 }))

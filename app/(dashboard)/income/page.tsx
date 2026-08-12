@@ -20,7 +20,8 @@ async function getIncomeTransactions(months = 12) {
     .from('transactions')
     .select(`
       id, amount, description, payee, memo, posted_at, account_id, is_transfer, is_reimbursable,
-      account:accounts(id, name, institution),
+      is_shared, personal_percentage,
+      account:accounts(id, name, institution, is_shared, personal_percentage),
       category:categories(id, name, color, icon, is_income)
     `)
     .in('account_id', visibleIds)

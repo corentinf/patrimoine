@@ -3,8 +3,8 @@
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatShortDate, amountColor, groupAndSortCategories, filterCategoryGroups } from '@/app/lib/utils';
-import { getPersonalAmount, isSharedAccount } from '@/app/lib/split';
-import { assignTransactionCategory, toggleTransfer } from './actions';
+import { getPersonalAmount, isShared } from '@/app/lib/split';
+import { assignTransactionCategory, toggleTransfer, toggleTransactionShared } from './actions';
 import type { Category } from './CategoryManager';
 import type { FullTransaction } from './TransactionDetail';
 
@@ -42,12 +42,14 @@ interface TransactionRowProps {
   knownVenmoNames: string[];
   localCategory: Category | null;
   localIsTransfer: boolean;
+  localIsShared: boolean;
   isReimbursable: boolean;
   selectMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
-  onCategoryChange: (txId: string, cat: Category) => void;
+  onCategoryChange: (txId: string, cat: Category, applyToAll: boolean) => void;
   onTransferChange: (txId: string, value: boolean) => void;
+  onSharedChange: (txId: string, value: boolean) => void;
   onRowClick: () => void;
   /** Hide the Venmo request affordance — Venmo requests don't apply to money coming in. */
   hideVenmo?: boolean;
@@ -60,12 +62,14 @@ export default function TransactionRow({
   knownVenmoNames,
   localCategory,
   localIsTransfer,
+  localIsShared,
   isReimbursable,
   selectMode,
   selected,
   onToggleSelect,
   onCategoryChange,
   onTransferChange,
+  onSharedChange,
   onRowClick,
   hideVenmo = false,
 }: TransactionRowProps) {
@@ -78,6 +82,9 @@ export default function TransactionRow({
   const catColor = effectiveCategory?.color ?? '#D1D5DB';
   const displayName = tx.payee ?? tx.description ?? 'Unknown';
   const isTransfer = localIsTransfer;
+  // Reflects the optimistic override for the split helpers below, so the
+  // badge/amount line and the toggle button itself update instantly.
+  const effectiveTx = { ...tx, is_shared: localIsShared };
 
   // Category picker
   const rowRef = useRef<HTMLDivElement>(null);
@@ -85,6 +92,10 @@ export default function TransactionRow({
   const [catPickerUp, setCatPickerUp] = useState(false);
   const [catSearch, setCatSearch] = useState('');
   const filteredCatGroups = filterCategoryGroups(groupAndSortCategories(allCategories), catSearch);
+  // Default on: picking a category applies it to every past transaction from
+  // this merchant and remembers it for future syncs too. Uncheck to make this
+  // a one-off — just this transaction, no rule created/updated.
+  const [applyToAll, setApplyToAll] = useState(true);
 
   function toggleCatPicker(e: React.MouseEvent) {
     e.stopPropagation();
@@ -117,11 +128,11 @@ export default function TransactionRow({
 
   function handleCategorySelect(cat: Category, e: React.MouseEvent) {
     e.stopPropagation();
-    onCategoryChange(tx.id, cat);
+    onCategoryChange(tx.id, cat, applyToAll);
     setShowCatPicker(false);
     setCatSearch('');
     startTransition(async () => {
-      await assignTransactionCategory(tx.id, cat.id);
+      await assignTransactionCategory(tx.id, cat.id, applyToAll);
       router.refresh();
     });
   }
@@ -132,6 +143,16 @@ export default function TransactionRow({
     onTransferChange(tx.id, next);
     startTransition(async () => {
       await toggleTransfer(tx.id, next);
+      router.refresh();
+    });
+  }
+
+  function handleSharedToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    const next = !localIsShared;
+    onSharedChange(tx.id, next);
+    startTransition(async () => {
+      await toggleTransactionShared(tx.id, next);
       router.refresh();
     });
   }
@@ -253,7 +274,7 @@ export default function TransactionRow({
                 ↩ reimb.
               </span>
             )}
-            {isSharedAccount(tx.account) && (
+            {isShared(effectiveTx, tx.account) && (
               <span
                 className="text-[10px] font-medium px-1.5 py-px rounded bg-amber-50 text-amber-600 border border-amber-100"
                 title="Shared card — split with Jenny"
@@ -319,6 +340,19 @@ export default function TransactionRow({
                 style={{ filter: 'brightness(0) saturate(100%) invert(80%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(90%)' }} />
             </button>
           ))}
+          {/* Shared-expense toggle — split this one transaction 50/50,
+              independent of whether its account has its own split setting. */}
+          {!isTransfer && (
+            <button
+              onClick={handleSharedToggle}
+              title={localIsShared ? 'Remove shared-expense flag' : 'Mark as a shared expense (50/50)'}
+              className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] font-semibold transition-colors ${
+                localIsShared ? 'bg-amber-100 text-amber-700' : 'text-ink-300 hover:text-ink-600 hover:bg-sand-100'
+              }`}
+            >
+              ½
+            </button>
+          )}
           {/* Transfer toggle */}
           <button
             onClick={handleTransferToggle}
@@ -341,9 +375,9 @@ export default function TransactionRow({
           <span className={`font-mono text-sm font-medium ${isTransfer ? 'text-ink-300 line-through' : amountColor(tx.amount)}`}>
             {formatCurrencyPrecise(Math.abs(tx.amount))}
           </span>
-          {!isTransfer && isSharedAccount(tx.account) && (
+          {!isTransfer && isShared(effectiveTx, tx.account) && (
             <span className="text-[10px] text-ink-300 font-mono whitespace-nowrap">
-              → {formatCurrencyPrecise(Math.abs(getPersonalAmount(tx.amount, tx.account)))}
+              → {formatCurrencyPrecise(Math.abs(getPersonalAmount(tx.amount, tx.account, effectiveTx)))}
             </span>
           )}
         </div>
@@ -410,6 +444,18 @@ export default function TransactionRow({
             <p className="px-4 py-3 text-sm text-ink-300 text-center">No categories found</p>
           )}
           </div>
+          <label
+            className="flex items-center gap-2 px-3 py-2 border-t border-sand-100 text-xs text-ink-500 flex-shrink-0 cursor-pointer hover:bg-sand-50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={applyToAll}
+              onChange={(e) => setApplyToAll(e.target.checked)}
+              className="w-3.5 h-3.5 rounded accent-ink-800 cursor-pointer flex-shrink-0"
+            />
+            Apply to all &quot;{displayName}&quot; transactions (past &amp; future)
+          </label>
         </div>
       )}
 

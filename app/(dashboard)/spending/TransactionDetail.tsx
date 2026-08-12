@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatDate, groupAndSortCategories, filterCategoryGroups } from '@/app/lib/utils';
-import { getPersonalAmount, isSharedAccount } from '@/app/lib/split';
+import { getPersonalAmount, isShared } from '@/app/lib/split';
 import { assignTransactionCategory, updateTransactionPayee } from './actions';
 import type { Category } from './CategoryManager';
 import VenmoSection from './VenmoSection';
@@ -20,6 +20,10 @@ export interface FullTransaction {
   /** Secondary provenance badge (e.g. "Amazon") — separate from category,
    *  never counted in spending totals/budgets. */
   source_tag?: string | null;
+  /** Per-transaction split override — independent of the account's own
+   *  setting, for a one-off shared expense. */
+  is_shared?: boolean | null;
+  personal_percentage?: number | null;
   account: { name: string; institution: string; is_shared?: boolean | null; personal_percentage?: number | null } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }
@@ -28,7 +32,7 @@ interface TransactionDetailProps {
   transaction: FullTransaction;
   allCategories: Category[];
   onClose: () => void;
-  onCategoryChange: (txId: string, cat: Category) => void;
+  onCategoryChange: (txId: string, cat: Category, applyToAll: boolean) => void;
   onPayeeChange: (txId: string, payee: string) => void;
   /** Hide the Venmo request section — Venmo requests don't apply to money coming in. */
   hideVenmo?: boolean;
@@ -51,6 +55,10 @@ export default function TransactionDetail({
   const [payeeDraft, setPayeeDraft] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [catSearch, setCatSearch] = useState('');
+  // Default on: picking a category applies it to every past transaction from
+  // this merchant and remembers it for future syncs too. Uncheck to make this
+  // a one-off — just this transaction, no rule created/updated.
+  const [applyToAll, setApplyToAll] = useState(true);
 
   const [enrichment, setEnrichment] = useState<{
     businessName: string;
@@ -94,11 +102,11 @@ export default function TransactionDetail({
 
   function handleCategorySelect(cat: Category) {
     setLocalCategory(cat);
-    onCategoryChange(tx.id, cat);
+    onCategoryChange(tx.id, cat, applyToAll);
     setShowCategoryPicker(false);
     setCatSearch('');
     startTransition(async () => {
-      await assignTransactionCategory(tx.id, cat.id);
+      await assignTransactionCategory(tx.id, cat.id, applyToAll);
       router.refresh();
     });
   }
@@ -225,7 +233,7 @@ export default function TransactionDetail({
               <p className="font-mono text-3xl font-semibold text-ink-800">
                 {formatCurrencyPrecise(Math.abs(tx.amount))}
               </p>
-              {isSharedAccount(tx.account) && (
+              {isShared(tx, tx.account) && (
                 <span
                   className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100"
                   title="Shared card — split with Jenny"
@@ -234,9 +242,9 @@ export default function TransactionDetail({
                 </span>
               )}
             </div>
-            {isSharedAccount(tx.account) && (
+            {isShared(tx, tx.account) && (
               <p className="text-sm text-ink-400 mt-0.5">
-                → {formatCurrencyPrecise(Math.abs(getPersonalAmount(tx.amount, tx.account)))} your share
+                → {formatCurrencyPrecise(Math.abs(getPersonalAmount(tx.amount, tx.account, tx)))} your share
               </p>
             )}
             <p className="text-sm text-ink-400 mt-1.5">
@@ -380,6 +388,15 @@ export default function TransactionDetail({
                   <p className="px-4 py-3 text-sm text-ink-300 text-center">No categories found</p>
                 )}
                 </div>
+                <label className="flex items-center gap-2 px-3 py-2 border-t border-sand-100 text-xs text-ink-500 flex-shrink-0 cursor-pointer hover:bg-sand-50">
+                  <input
+                    type="checkbox"
+                    checked={applyToAll}
+                    onChange={(e) => setApplyToAll(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-ink-800 cursor-pointer flex-shrink-0"
+                  />
+                  Apply to all &quot;{displayPayee}&quot; transactions (past &amp; future)
+                </label>
               </div>
             )}
           </div>

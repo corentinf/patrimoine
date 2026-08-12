@@ -63,6 +63,24 @@ export async function toggleTransfer(id: string, value: boolean) {
   revalidateTransactionPages();
 }
 
+// Marks a single transaction as a one-off shared expense (e.g. a dinner
+// you'll get half back for) — independent of whichever account it's on.
+// Always resets to a fresh 50/50 when turning on, since a previously-settled
+// or custom percentage from some earlier share wouldn't mean anything here.
+export async function toggleTransactionShared(id: string, value: boolean) {
+  const { supabase } = await getSupabaseAndUser();
+  const { error } = await supabase
+    .from('transactions')
+    .update(
+      value
+        ? { is_shared: true, personal_percentage: 50, split_settled_at: null }
+        : { is_shared: false },
+    )
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidateTransactionPages();
+}
+
 export async function markReimbursable(ids: string[], value: boolean) {
   const { supabase } = await getSupabaseAndUser();
   const { error } = await supabase
@@ -84,15 +102,24 @@ export async function settleSharedSplits() {
     .eq('is_shared', true);
   if (acctError) throw new Error(acctError.message);
 
+  const now = new Date().toISOString();
   const accountIds = (sharedAccounts ?? []).map((a) => a.id);
   if (accountIds.length) {
     const { error } = await supabase
       .from('transactions')
-      .update({ split_settled_at: new Date().toISOString() })
+      .update({ split_settled_at: now })
       .in('account_id', accountIds)
       .is('split_settled_at', null);
     if (error) throw new Error(error.message);
   }
+  // Individually-shared transactions (toggleTransactionShared) aren't tied to
+  // a shared account, so they need their own catch-all update too.
+  const { error: individualError } = await supabase
+    .from('transactions')
+    .update({ split_settled_at: now })
+    .eq('is_shared', true)
+    .is('split_settled_at', null);
+  if (individualError) throw new Error(individualError.message);
   revalidateTransactionPages();
 }
 
@@ -110,8 +137,23 @@ export async function dismissSplitMatch(transactionId: string) {
 export async function assignTransactionCategory(
   transactionId: string,
   categoryId: string,
+  // Default: apply to every past transaction from this merchant and persist
+  // a rule so future ones auto-tag too. false = just this one transaction,
+  // no bulk update, no rule touched — for a merchant used inconsistently on
+  // purpose (e.g. "Amazon" covering both Groceries and Electronics).
+  applyToAll: boolean = true,
 ) {
   const { supabase, user } = await getSupabaseAndUser();
+
+  if (!applyToAll) {
+    const { error } = await supabase
+      .from('transactions')
+      .update({ category_id: categoryId })
+      .eq('id', transactionId);
+    if (error) throw new Error(error.message);
+    revalidateTransactionPages();
+    return;
+  }
 
   // Look up this transaction's payee/description to bulk-update matching rows
   const { data: tx, error: lookupError } = await supabase

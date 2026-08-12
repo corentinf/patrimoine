@@ -21,7 +21,9 @@ interface RawTransaction {
   account_id: string;
   is_transfer: boolean;
   is_reimbursable: boolean;
-  account: { id: string; name: string; institution: string } | null;
+  is_shared?: boolean | null;
+  personal_percentage?: number | null;
+  account: { id: string; name: string; institution: string; is_shared?: boolean | null; personal_percentage?: number | null } | null;
   category: { id: string; name: string; color: string; icon: string; is_income: boolean } | null;
 }
 
@@ -76,6 +78,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, Category>>({});
   const [payeeOverrides, setPayeeOverrides] = useState<Record<string, string>>({});
   const [transferOverrides, setTransferOverrides] = useState<Record<string, boolean>>({});
+  const [sharedOverrides, setSharedOverrides] = useState<Record<string, boolean>>({});
   const [detailTxId, setDetailTxId] = useState<string | null>(null);
 
   function getEffectiveCategory(tx: RawTransaction): RawTransaction['category'] {
@@ -349,15 +352,17 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
                 knownVenmoNames={[]}
                 localCategory={categoryOverrides[tx.id] ?? null}
                 localIsTransfer={transferOverrides[tx.id] ?? tx.is_transfer}
+                localIsShared={sharedOverrides[tx.id] ?? tx.is_shared ?? false}
                 isReimbursable={tx.is_reimbursable}
                 selectMode={false}
                 selected={false}
                 onToggleSelect={() => {}}
                 hideVenmo
-                onCategoryChange={(txId, cat) => {
+                onCategoryChange={(txId, cat, applyToAll) => {
                   const source = transactions.find((t) => t.id === txId);
                   setCategoryOverrides((prev) => {
                     const next = { ...prev };
+                    if (!applyToAll) { next[txId] = cat; return next; }
                     for (const t of transactions) {
                       const matches = source?.payee
                         ? t.payee === source.payee
@@ -369,6 +374,9 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
                 }}
                 onTransferChange={(txId, value) =>
                   setTransferOverrides((prev) => ({ ...prev, [txId]: value }))
+                }
+                onSharedChange={(txId, value) =>
+                  setSharedOverrides((prev) => ({ ...prev, [txId]: value }))
                 }
                 onRowClick={() => setDetailTxId(tx.id)}
               />
@@ -407,10 +415,11 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
             allCategories={categories}
             onClose={() => setDetailTxId(null)}
             hideVenmo
-            onCategoryChange={(txId, cat) => {
+            onCategoryChange={(txId, cat, applyToAll) => {
               const source = transactions.find((t) => t.id === txId);
               setCategoryOverrides((prev) => {
                 const next = { ...prev };
+                if (!applyToAll) { next[txId] = cat; return next; }
                 for (const t of transactions) {
                   const matches = source?.payee
                     ? t.payee === source.payee

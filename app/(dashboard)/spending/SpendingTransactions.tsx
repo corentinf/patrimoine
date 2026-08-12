@@ -203,6 +203,7 @@ export default function SpendingTransactions({
   const [categoryOverrides, setCategoryOverrides] = useState<Record<string, Category>>({});
   const [payeeOverrides, setPayeeOverrides] = useState<Record<string, string>>({});
   const [transferOverrides, setTransferOverrides] = useState<Record<string, boolean>>({});
+  const [sharedOverrides, setSharedOverrides] = useState<Record<string, boolean>>({});
   const [reimbursableOverrides, setReimbursableOverrides] = useState<Record<string, boolean>>({});
 
   // Bulk select
@@ -573,14 +574,16 @@ export default function SpendingTransactions({
                 knownVenmoNames={knownVenmoNames}
                 localCategory={categoryOverrides[tx.id] ?? null}
                 localIsTransfer={transferOverrides[tx.id] ?? tx.is_transfer}
+                localIsShared={sharedOverrides[tx.id] ?? tx.is_shared ?? false}
                 isReimbursable={getEffectiveReimbursable(tx)}
                 selectMode={selectMode}
                 selected={selectedIds.has(tx.id)}
                 onToggleSelect={() => toggleOne(tx.id)}
-                onCategoryChange={(txId, cat) => {
+                onCategoryChange={(txId, cat, applyToAll) => {
                   const source = transactions.find((t) => t.id === txId);
                   setCategoryOverrides((prev) => {
                     const next = { ...prev };
+                    if (!applyToAll) { next[txId] = cat; return next; }
                     for (const t of transactions) {
                       const matches = source?.payee
                         ? t.payee === source.payee
@@ -592,6 +595,9 @@ export default function SpendingTransactions({
                 }}
                 onTransferChange={(txId, value) =>
                   setTransferOverrides((prev) => ({ ...prev, [txId]: value }))
+                }
+                onSharedChange={(txId, value) =>
+                  setSharedOverrides((prev) => ({ ...prev, [txId]: value }))
                 }
                 onRowClick={() => setDetailTxId(tx.id)}
               />
@@ -627,12 +633,14 @@ export default function SpendingTransactions({
           transaction={detailTx}
           allCategories={allCategories}
           onClose={() => setDetailTxId(null)}
-          onCategoryChange={(txId, cat) => {
+          onCategoryChange={(txId, cat, applyToAll) => {
             // Mirror server behaviour: bulk-update all transactions sharing
-            // the same original payee (or description when payee is absent).
+            // the same original payee (or description when payee is absent) —
+            // unless this was a one-off assignment (applyToAll unchecked).
             const source = transactions.find((t) => t.id === txId);
             setCategoryOverrides((prev) => {
               const next = { ...prev };
+              if (!applyToAll) { next[txId] = cat; return next; }
               for (const t of transactions) {
                 const matches = source?.payee
                   ? t.payee === source.payee
