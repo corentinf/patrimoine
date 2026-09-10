@@ -1,13 +1,15 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { formatCurrency, amountColor, accountTypeConfig, getAccountLinkUrl } from '@/app/lib/utils';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { idxAtOrBefore, isoDate } from '@/app/lib/investmentRange';
 import { usePrivacy } from '@/app/lib/privacy';
+import { buildMilestones, type Milestone, type ProjectionRow, type ScenarioKey } from '@/app/lib/projection';
 import NetWorthChart from '../networth/NetWorthChart';
+import ProjectionCard from './ProjectionCard';
 import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../components/AccountsPanel';
 
 const ACCOUNT_TYPE_ORDER = ['checking', 'savings', 'investment', 'credit'];
@@ -74,13 +76,6 @@ interface Snapshot {
   breakdown?: Record<string, number> | null;
 }
 
-interface Milestone {
-  target: number;
-  passed: boolean;
-  pct: number;
-  eta: string | null;
-}
-
 interface HomeViewProps {
   history: Snapshot[]; // ascending by snapshot_date
   currentNetWorth: number;
@@ -91,9 +86,6 @@ interface HomeViewProps {
   liabilitiesCount: number;
   availableNetWorth: number;
   retirementBalance: number;
-  milestones: Milestone[];
-  availableMilestones: Milestone[];
-  retirementMilestones: Milestone[];
   accounts: SidebarAccount[];
   monthlyGrowthRate: number | null;
   assetsGrowthRate: number | null;
@@ -110,9 +102,6 @@ export default function HomeView({
   liabilitiesCount,
   availableNetWorth,
   retirementBalance,
-  milestones,
-  availableMilestones,
-  retirementMilestones,
   accounts,
   monthlyGrowthRate,
   assetsGrowthRate,
@@ -130,6 +119,56 @@ export default function HomeView({
   // 0 = current value ("Today"), 1..n = activeMilestones[idx - 1].
   const [selectedIdx, setSelectedIdx] = useState(0);
   const selectMetric = (m: typeof metric) => { setMetric(m); setSelectedIdx(0); };
+
+  // AI-generated projection: fetched from cache on mount (free — GET never
+  // calls the model), only regenerated on an explicit user click (POST).
+  const [projection, setProjection] = useState<ProjectionRow | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState<ScenarioKey>('regular');
+  const [projectionLoading, setProjectionLoading] = useState(false);
+  const [projectionError, setProjectionError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/networth/projection')
+      .then((r) => r.json())
+      .then((d) => { if (d.projection) setProjection(d.projection); })
+      .catch(() => {});
+  }, []);
+
+  async function regenerateProjection() {
+    setProjectionLoading(true);
+    setProjectionError('');
+    try {
+      const res = await fetch('/api/networth/projection', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.projection) setProjection(data.projection);
+      else setProjectionError(data.error || 'Failed to generate projection');
+    } catch {
+      setProjectionError('Failed to generate projection');
+    } finally {
+      setProjectionLoading(false);
+    }
+  }
+
+  // Whichever scenario is selected drives both the chart's dashed Projected
+  // line and every milestone ETA below — falls back to the simple recent-
+  // trend average (server-computed) until a projection has been generated.
+  const scenario = projection?.scenarios[selectedScenario];
+  const effectiveNetWorthDelta = scenario ? scenario.monthlyNetWorthDelta : monthlyGrowthRate;
+  const effectiveAssetsDelta = scenario ? scenario.monthlyAssetsDelta : assetsGrowthRate;
+  const effectiveLiabilitiesDelta = scenario ? scenario.monthlyLiabilitiesDelta : liabilitiesGrowthRate;
+
+  // We don't track available/retirement balances historically (only total
+  // net worth snapshots), so approximate each track's growth rate as its
+  // current share of the overall trend — same convention as before, just
+  // fed by whichever growth rate (AI scenario or fallback) is active.
+  const availableGrowthRate = effectiveNetWorthDelta !== null && currentNetWorth !== 0
+    ? effectiveNetWorthDelta * (availableNetWorth / currentNetWorth) : null;
+  const retirementGrowthRate = effectiveNetWorthDelta !== null && currentNetWorth !== 0
+    ? effectiveNetWorthDelta * (retirementBalance / currentNetWorth) : null;
+
+  const milestones = useMemo(() => buildMilestones(currentNetWorth, effectiveNetWorthDelta), [currentNetWorth, effectiveNetWorthDelta]);
+  const availableMilestones = useMemo(() => buildMilestones(availableNetWorth, availableGrowthRate), [availableNetWorth, availableGrowthRate]);
+  const retirementMilestones = useMemo(() => buildMilestones(retirementBalance, retirementGrowthRate), [retirementBalance, retirementGrowthRate]);
 
   const metricConfig = {
     total: { label: 'Total', icon: '💰', value: currentNetWorth, milestones },
@@ -261,10 +300,11 @@ export default function HomeView({
       };
     }
 
-    // Project forward from today using the same monthly growth rates the
-    // milestone ETAs use, so the two stay consistent with each other.
+    // Project forward from today using the same monthly growth rate the
+    // milestone ETAs use (the selected AI scenario, or the fallback trend
+    // average), so the two stay consistent with each other.
     const PROJECTION_MONTHS = 6;
-    if (includesToday && points.length > 0 && monthlyGrowthRate !== null && monthlyGrowthRate > 0) {
+    if (includesToday && points.length > 0 && effectiveNetWorthDelta !== null && effectiveNetWorthDelta > 0) {
       const last = points[points.length - 1];
       points[points.length - 1] = {
         ...last,
@@ -278,9 +318,9 @@ export default function HomeView({
         points.push({
           date: isoDate(d),
           month: format(d, 'MMM yy'),
-          projected: Math.round(currentNetWorth + monthlyGrowthRate * i),
-          projectedAssets: assetsGrowthRate !== null ? Math.max(0, Math.round(totalAssets + assetsGrowthRate * i)) : undefined,
-          projectedLiabilities: liabilitiesGrowthRate !== null ? Math.max(0, Math.round(totalLiabilities + liabilitiesGrowthRate * i)) : undefined,
+          projected: Math.round(currentNetWorth + effectiveNetWorthDelta * i),
+          projectedAssets: effectiveAssetsDelta !== null ? Math.max(0, Math.round(totalAssets + effectiveAssetsDelta * i)) : undefined,
+          projectedLiabilities: effectiveLiabilitiesDelta !== null ? Math.max(0, Math.round(totalLiabilities + effectiveLiabilitiesDelta * i)) : undefined,
         });
       }
     }
@@ -294,7 +334,7 @@ export default function HomeView({
       endValue: end,
       hasChange: startIdx >= 0 && (startIdx !== endIdx || includesToday),
     };
-  }, [history, resolvedRange, todayIso, currentNetWorth, monthlyGrowthRate, totalAssets, totalLiabilities, assetsGrowthRate, liabilitiesGrowthRate, accountMeta]);
+  }, [history, resolvedRange, todayIso, currentNetWorth, totalAssets, totalLiabilities, accountMeta, effectiveNetWorthDelta, effectiveAssetsDelta, effectiveLiabilitiesDelta]);
 
   const change = endValue - startValue;
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
@@ -313,15 +353,15 @@ export default function HomeView({
   // today's available-vs-retirement mix so the two figures still sum to the
   // milestone target.
   const projectSplit = (milestone: Milestone | null) => {
-    if (!milestone || monthlyGrowthRate === null || monthlyGrowthRate <= 0 || currentNetWorth === 0) {
+    if (!milestone || effectiveNetWorthDelta === null || effectiveNetWorthDelta <= 0 || currentNetWorth === 0) {
       return { available: availableNetWorth, retirement: retirementBalance };
     }
-    const monthsNeeded = Math.max(0, (milestone.target - currentNetWorth) / monthlyGrowthRate);
+    const monthsNeeded = Math.max(0, (milestone.target - currentNetWorth) / effectiveNetWorthDelta);
     const availableShare = availableNetWorth / currentNetWorth;
     const retirementShare = retirementBalance / currentNetWorth;
     return {
-      available: availableNetWorth + monthlyGrowthRate * monthsNeeded * availableShare,
-      retirement: retirementBalance + monthlyGrowthRate * monthsNeeded * retirementShare,
+      available: availableNetWorth + effectiveNetWorthDelta * monthsNeeded * availableShare,
+      retirement: retirementBalance + effectiveNetWorthDelta * monthsNeeded * retirementShare,
     };
   };
 
@@ -483,6 +523,16 @@ export default function HomeView({
           </div>
         </div>
       </div>
+
+      {/* Projection — AI-generated, cached, only regenerated on explicit click */}
+      <ProjectionCard
+        projection={projection}
+        selectedScenario={selectedScenario}
+        onSelectScenario={setSelectedScenario}
+        onRegenerate={regenerateProjection}
+        loading={projectionLoading}
+        error={projectionError}
+      />
 
       {/* Account summary — always current, not scoped to the selected period */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

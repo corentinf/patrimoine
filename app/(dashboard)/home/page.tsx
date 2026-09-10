@@ -87,40 +87,12 @@ export default async function HomePage() {
     .reduce((s, a) => s + Number(a.balance), 0);
   const availableNetWorth = totalAssets - retirementBalance - totalLiabilities;
 
-  // Only upcoming milestones are worth showing — once reached they no longer
-  // need tracking. Built once per metric (total net worth, available money,
-  // retirement-locked money) so each can be tracked toward its own targets.
-  // The ladder tops out at $1M, so every upcoming rung is kept (no slice cap)
-  // — otherwise a track starting further back (e.g. Available, Retirement)
-  // would have its higher targets like $1M truncated off the list.
-  const buildMilestones = (currentValue: number, growthRate: number | null) => {
-    const targets = [100_000, 250_000, 300_000, 400_000, 500_000, 750_000, 1_000_000]
-      .filter((t) => t > currentValue);
-    return targets.map((target) => {
-      const passed = currentValue >= target;
-      const pct = passed ? 100 : Math.min((currentValue / target) * 100, 100);
-      let eta: string | null = null;
-      if (!passed && growthRate !== null && growthRate > 0) {
-        const monthsNeeded = (target - currentValue) / growthRate;
-        const etaDate = new Date();
-        etaDate.setMonth(etaDate.getMonth() + Math.ceil(monthsNeeded));
-        eta = etaDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      }
-      return { target, passed, pct, eta };
-    });
-  };
-
-  // We don't track available/retirement balances historically (only total
-  // net worth snapshots), so approximate each track's growth rate as its
-  // current share of the overall trend.
-  const availableGrowthRate = monthlyGrowthRate !== null && currentNetWorth !== 0
-    ? monthlyGrowthRate * (availableNetWorth / currentNetWorth) : null;
-  const retirementGrowthRate = monthlyGrowthRate !== null && currentNetWorth !== 0
-    ? monthlyGrowthRate * (retirementBalance / currentNetWorth) : null;
-
-  const milestones = buildMilestones(currentNetWorth, monthlyGrowthRate);
-  const availableMilestones = buildMilestones(availableNetWorth, availableGrowthRate);
-  const retirementMilestones = buildMilestones(retirementBalance, retirementGrowthRate);
+  // Milestone ETAs (total/available/retirement, each parameterized by a
+  // monthly growth rate) are computed client-side in HomeView via the shared
+  // buildMilestones (app/lib/projection.ts), so they can be re-derived
+  // instantly when the user picks a different AI projection scenario there —
+  // this page only needs to supply the raw balances and the fallback
+  // recent-trend growth rates below.
 
   if (history.length === 0 && accounts.length === 0) {
     return (
@@ -145,9 +117,6 @@ export default async function HomePage() {
       liabilitiesCount={liabilities.length}
       availableNetWorth={availableNetWorth}
       retirementBalance={retirementBalance}
-      milestones={milestones}
-      availableMilestones={availableMilestones}
-      retirementMilestones={retirementMilestones}
       accounts={accounts}
       monthlyGrowthRate={monthlyGrowthRate}
       assetsGrowthRate={assetsGrowthRate}
