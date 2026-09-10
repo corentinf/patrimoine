@@ -12,6 +12,8 @@ import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../compon
 
 const ACCOUNT_TYPE_ORDER = ['checking', 'savings', 'investment', 'credit'];
 
+type AccountGroup = 'cash' | 'investment' | 'retirement' | 'credit';
+
 // Sync source is fully determined by the id prefix sync.ts assigns (see
 // app/lib/sync.ts) — sfin_ for SimpleFIN, manual_ for hand-entered balances
 // (401k/HSA/etc — accounts.balance is set once and never refreshed by
@@ -69,6 +71,7 @@ interface Snapshot {
   net_worth: number;
   total_assets: number;
   total_liabilities: number;
+  breakdown?: Record<string, number> | null;
 }
 
 interface Milestone {
@@ -147,6 +150,40 @@ export default function HomeView({
       .filter((g) => g.accounts.length > 0);
   }, [accounts]);
 
+  // Per-account balance history, reconstructed the same way as the Investment
+  // page's getInvestmentData() (app/(dashboard)/networth/page.tsx): each
+  // net-worth snapshot's `breakdown` jsonb stores every account's balance that
+  // day, keyed "<institution> — <name>" (see captureNetWorthSnapshot in
+  // lib/sync.ts) — forward-fill across the full history so accounts that sync
+  // less often (manual 401k/HSA) don't drop out between updates.
+  const accountKey = (a: SidebarAccount) => `${a.institution} — ${a.name}`;
+
+  // Same 401k/IRA/HSA name-matching convention already used for retirementBalance
+  // in page.tsx and for the Investment page's own group toggle
+  // (InvestmentProgress.tsx's isRetirementAccount) — retirement takes priority
+  // over account_type since a 401k/HSA is still stored as an ordinary account row.
+  const isRetirementAccount = (a: SidebarAccount) =>
+    /401k|\bira\b|hsa/i.test(a.name) || /401k|\bira\b|hsa/i.test(a.institution || '');
+
+  const accountMeta = useMemo(() => {
+    const instCounts = new Map<string, number>();
+    for (const a of accounts) instCounts.set(a.institution, (instCounts.get(a.institution) ?? 0) + 1);
+    return accounts.map((a) => {
+      const dup = (instCounts.get(a.institution) ?? 0) > 1;
+      const label = dup
+        ? `${a.institution}${a.mask ? ` ••••${a.mask}` : a.name ? ` · ${a.name}` : ''}`
+        : (a.institution || a.name);
+      const group: AccountGroup = isRetirementAccount(a)
+        ? 'retirement'
+        : a.account_type === 'credit'
+        ? 'credit'
+        : a.account_type === 'investment'
+        ? 'investment'
+        : 'cash';
+      return { id: a.id, label, currentValue: Number(a.balance), key: accountKey(a), group };
+    });
+  }, [accounts]);
+
   const { chartData, startValue, endValue, hasChange } = useMemo(() => {
     const dates = history.map((h) => h.snapshot_date);
     const startIdx = idxAtOrBefore(dates, resolvedRange.start);
@@ -165,6 +202,23 @@ export default function HomeView({
       plotted = Array.from(lastByMonth.values());
     }
 
+    // Forward-filled per-account values aligned to the full (unfiltered) history,
+    // then looked up per plotted date below — a gap in one account's breakdown
+    // (e.g. a manual balance untouched for weeks) carries the last known value
+    // forward instead of dropping out of its curve.
+    const dateIndex = new Map(dates.map((d, i) => [d, i]));
+    const accountValues = new Map<string, (number | null)[]>();
+    for (const meta of accountMeta) {
+      const values: (number | null)[] = new Array(history.length).fill(null);
+      let last: number | null = null;
+      history.forEach((s, i) => {
+        const b = s.breakdown ?? {};
+        if (meta.key in b) last = Number(b[meta.key]);
+        values[i] = last;
+      });
+      accountValues.set(meta.id, values);
+    }
+
     const points: Array<{
       date: string;
       month: string;
@@ -174,24 +228,36 @@ export default function HomeView({
       projected?: number;
       projectedAssets?: number;
       projectedLiabilities?: number;
-    }> = plotted.map((s) => ({
-      date: s.snapshot_date,
-      month: format(new Date(s.snapshot_date + 'T12:00:00'), longRange ? 'MMM yy' : 'MMM d'),
-      netWorth: Math.round(Number(s.net_worth)),
-      assets: Math.round(Number(s.total_assets)),
-      liabilities: Math.round(Number(s.total_liabilities)),
-    }));
+    } & Record<`acct_${string}`, number | undefined>> = plotted.map((s) => {
+      const idx = dateIndex.get(s.snapshot_date);
+      const acctFields: Record<`acct_${string}`, number | undefined> = {};
+      for (const meta of accountMeta) {
+        const v = idx !== undefined ? accountValues.get(meta.id)![idx] : null;
+        if (v !== null) acctFields[`acct_${meta.id}`] = v;
+      }
+      return {
+        date: s.snapshot_date,
+        month: format(new Date(s.snapshot_date + 'T12:00:00'), longRange ? 'MMM yy' : 'MMM d'),
+        netWorth: Math.round(Number(s.net_worth)),
+        assets: Math.round(Number(s.total_assets)),
+        liabilities: Math.round(Number(s.total_liabilities)),
+        ...acctFields,
+      };
+    });
 
     // Reflect the live balance (not the last daily snapshot) whenever the
     // selected window reaches today, so the chart's endpoint matches the
     // headline figures exactly — and so the projected lines below pick up
     // from exactly where the actual lines end, with no visual jump.
     if (includesToday && points.length > 0) {
+      const liveAcctFields: Record<`acct_${string}`, number> = {};
+      for (const meta of accountMeta) liveAcctFields[`acct_${meta.id}`] = meta.currentValue;
       points[points.length - 1] = {
         ...points[points.length - 1],
         netWorth: Math.round(currentNetWorth),
         assets: Math.round(totalAssets),
         liabilities: Math.round(totalLiabilities),
+        ...liveAcctFields,
       };
     }
 
@@ -228,7 +294,7 @@ export default function HomeView({
       endValue: end,
       hasChange: startIdx >= 0 && (startIdx !== endIdx || includesToday),
     };
-  }, [history, resolvedRange, todayIso, currentNetWorth, monthlyGrowthRate, totalAssets, totalLiabilities, assetsGrowthRate, liabilitiesGrowthRate]);
+  }, [history, resolvedRange, todayIso, currentNetWorth, monthlyGrowthRate, totalAssets, totalLiabilities, assetsGrowthRate, liabilitiesGrowthRate, accountMeta]);
 
   const change = endValue - startValue;
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
@@ -296,6 +362,7 @@ export default function HomeView({
         data={chartData}
         trackingStartDate={trackingStartDate}
         currentNetWorth={currentNetWorth}
+        accounts={accountMeta}
       />
 
       {/* Milestones — always current, not scoped to the selected period */}
