@@ -109,7 +109,10 @@ export async function syncAll(
 
     // ── Phase 1: Accounts ──────────────────────────────────────────────────
     for (const item of (items ?? [])) {
-      const accountsRes = await plaidClient.accountsGet({ access_token: item.access_token });
+      // accountsGet returns Plaid's last cached balance, which can lag the
+      // real balance by up to a day. accountsBalanceGet forces a live pull
+      // from the institution so displayed balances are actually current.
+      const accountsRes = await plaidClient.accountsBalanceGet({ access_token: item.access_token });
       for (const account of accountsRes.data.accounts) {
         const { error } = await supabase.from('accounts').upsert({
           id: account.account_id,
