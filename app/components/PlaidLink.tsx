@@ -10,7 +10,7 @@ export default function PlaidLinkButton() {
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess: async (publicToken, metadata) => {
-      await fetch('/api/plaid/exchange-token', {
+      const exchangeRes = await fetch('/api/plaid/exchange-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -18,6 +18,11 @@ export default function PlaidLinkButton() {
           institution: metadata.institution,
         }),
       });
+      if (!exchangeRes.ok) {
+        const { error } = await exchangeRes.json().catch(() => ({ error: null }));
+        window.alert(error ?? 'Could not connect this bank.');
+        return;
+      }
       // Trigger a sync immediately so new accounts appear
       await fetch('/api/plaid/sync', { method: 'POST' });
       window.location.reload();

@@ -111,17 +111,21 @@ export async function syncAll(
     // ── Phase 1: Accounts ──────────────────────────────────────────────────
     for (const item of (items ?? [])) {
       // accountsGet returns Plaid's last cached balance, which can lag the
-      // real balance by up to a day. accountsBalanceGet forces a live pull
-      // from the institution so displayed balances are actually current.
-      // Not every item supports the Balance product (e.g. investment-only
-      // institutions return 400), and one failing item must not abort the
-      // whole sync — fall back to the cached balance and record the error.
+      // real balance. accountsBalanceGet forces a live pull from the
+      // institution, but requires the Balance product on the Plaid account
+      // (otherwise 400 INVALID_PRODUCT) — so it's opt-in via
+      // PLAID_LIVE_BALANCE=true. Even when enabled, one failing item must not
+      // abort the whole sync: fall back to the cached balance and record it.
+      const liveBalance = process.env.PLAID_LIVE_BALANCE === 'true';
       let accountsRes;
       try {
+        if (!liveBalance) throw new Error('live balance disabled');
         accountsRes = await plaidClient.accountsBalanceGet({ access_token: item.access_token });
       } catch (balErr: any) {
-        const code = balErr?.response?.data?.error_code ?? balErr.message;
-        result.errors.push(`Live balance unavailable for ${item.institution_name ?? 'Plaid item'} (${code}); using cached balance`);
+        if (liveBalance) {
+          const code = balErr?.response?.data?.error_code ?? balErr.message;
+          result.errors.push(`Live balance unavailable for ${item.institution_name ?? 'Plaid item'} (${code}); using cached balance`);
+        }
         try {
           accountsRes = await plaidClient.accountsGet({ access_token: item.access_token });
         } catch (getErr: any) {

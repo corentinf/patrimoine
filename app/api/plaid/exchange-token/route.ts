@@ -30,6 +30,28 @@ export async function POST(request: NextRequest) {
     const { access_token, item_id } = exchangeRes.data;
 
     const serviceClient = createServiceClient();
+
+    // Each Link run creates a brand-new item with new account IDs, so linking
+    // an institution twice double-counts its balances and transactions. Refuse
+    // and remove the just-created item from Plaid so it doesn't keep billing.
+    const institutionId = institution?.institution_id ?? null;
+    if (institutionId) {
+      const { data: existing } = await serviceClient
+        .from('plaid_items')
+        .select('item_id')
+        .eq('user_id', user.id)
+        .eq('institution_id', institutionId)
+        .neq('item_id', item_id)
+        .limit(1);
+      if (existing?.length) {
+        await plaidClient.itemRemove({ access_token }).catch(() => {});
+        return NextResponse.json(
+          { error: `${institution?.name ?? 'This institution'} is already connected` },
+          { status: 409 },
+        );
+      }
+    }
+
     const { error } = await serviceClient.from('plaid_items').upsert({
       user_id: user.id,
       item_id,
