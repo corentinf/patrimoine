@@ -205,6 +205,26 @@ export default function HomeView({
   const isRetirementAccount = (a: SidebarAccount) =>
     isLockedRetirementAccount(a) || isIraAccount(a);
 
+  // Which accounts make up the Available and Retirement milestone totals —
+  // mirrors the split computed in page.tsx (retirement = non-credit accounts
+  // matching isRetirementAccount; available = the other assets minus credit
+  // balances) so the listed rows always sum to the figure shown above them.
+  const breakdown = useMemo(() => {
+    const row = (a: SidebarAccount, amount: number) => ({
+      id: a.id,
+      label: `${a.institution} · ${a.name}`,
+      amount,
+    });
+    const assets = accounts.filter((a) => a.account_type !== 'credit');
+    const retirement = assets.filter(isRetirementAccount).map((a) => row(a, Number(a.balance)));
+    const available = [
+      ...assets.filter((a) => !isRetirementAccount(a)).map((a) => row(a, Number(a.balance))),
+      ...accounts.filter((a) => a.account_type === 'credit').map((a) => row(a, -Math.abs(Number(a.balance)))),
+    ];
+    const byAmount = (x: { amount: number }, y: { amount: number }) => y.amount - x.amount;
+    return { available: available.sort(byAmount), retirement: retirement.sort(byAmount) };
+  }, [accounts]);
+
   const accountMeta = useMemo(() => {
     const instCounts = new Map<string, number>();
     for (const a of accounts) instCounts.set(a.institution, (instCounts.get(a.institution) ?? 0) + 1);
@@ -502,11 +522,11 @@ export default function HomeView({
               {isTotalMetric ? (
                 <>
                   <div className="h-full bg-accent-green transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
-                  <div className="h-full bg-ink-400 transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
+                  <div className="h-full bg-sand-400 transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
                 </>
               ) : (
                 <div
-                  className={`h-full transition-all ${metric === 'available' ? 'bg-accent-green' : 'bg-ink-400'}`}
+                  className={`h-full transition-all ${metric === 'available' ? 'bg-accent-green' : 'bg-sand-400'}`}
                   style={{ width: `${selectedFillPct}%` }}
                 />
               )}
@@ -519,6 +539,29 @@ export default function HomeView({
                 <span data-sensitive>
                   🔒 {selectedMilestone ? '~' : ''}{formatCurrency(selectedRetirement)} retirement
                 </span>
+              </div>
+            )}
+            {!isTotalMetric && retirementBalance > 0 && (
+              <div className="mt-4 pt-3 border-t border-sand-100">
+                <p className="text-[11px] text-ink-400 mb-2">
+                  {metric === 'available'
+                    ? 'Included in Available today — everything except 401(k)/403(b)/HSA/IRA accounts, net of credit card balances'
+                    : 'Included in Retirement today — 401(k), 403(b), HSA and IRA accounts'}
+                </p>
+                <ul className="space-y-1">
+                  {breakdown[metric].map((row) => (
+                    <li key={row.id} className="flex items-center justify-between text-xs text-ink-500">
+                      <span className="truncate pr-3">{row.label}</span>
+                      <span className={`font-mono ${row.amount < 0 ? 'text-accent-red' : 'text-ink-700'}`} data-sensitive>
+                        {row.amount < 0 ? '−' : ''}{formatCurrency(Math.abs(row.amount))}
+                      </span>
+                    </li>
+                  ))}
+                  <li className="flex items-center justify-between text-xs font-medium text-ink-700 pt-1 mt-1 border-t border-sand-100">
+                    <span>Total</span>
+                    <span className="font-mono" data-sensitive>{formatCurrency(active.value)}</span>
+                  </li>
+                </ul>
               </div>
             )}
           </div>
