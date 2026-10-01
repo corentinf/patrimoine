@@ -25,7 +25,14 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = pathname.startsWith('/login') || pathname.startsWith('/auth');
+  // /api/cron/* (Vercel cron, Bearer CRON_SECRET) and /api/plaid/webhook
+  // (Plaid, JWT-verified) are server-to-server calls with no session cookie;
+  // each route authenticates itself, so they must bypass the login redirect.
+  const isPublic =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/api/cron/') ||
+    pathname === '/api/plaid/webhook';
   const isGate = pathname.startsWith('/gate') || pathname.startsWith('/api/gate');
 
   if (!user && !isPublic) {

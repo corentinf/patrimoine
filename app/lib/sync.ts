@@ -112,7 +112,22 @@ export async function syncAll(
       // accountsGet returns Plaid's last cached balance, which can lag the
       // real balance by up to a day. accountsBalanceGet forces a live pull
       // from the institution so displayed balances are actually current.
-      const accountsRes = await plaidClient.accountsBalanceGet({ access_token: item.access_token });
+      // Not every item supports the Balance product (e.g. investment-only
+      // institutions return 400), and one failing item must not abort the
+      // whole sync — fall back to the cached balance and record the error.
+      let accountsRes;
+      try {
+        accountsRes = await plaidClient.accountsBalanceGet({ access_token: item.access_token });
+      } catch (balErr: any) {
+        const code = balErr?.response?.data?.error_code ?? balErr.message;
+        result.errors.push(`Live balance unavailable for ${item.institution_name ?? 'Plaid item'} (${code}); using cached balance`);
+        try {
+          accountsRes = await plaidClient.accountsGet({ access_token: item.access_token });
+        } catch (getErr: any) {
+          result.errors.push(`Accounts fetch failed for ${item.institution_name ?? 'Plaid item'}: ${getErr?.response?.data?.error_code ?? getErr.message}`);
+          continue;
+        }
+      }
       for (const account of accountsRes.data.accounts) {
         const { error } = await supabase.from('accounts').upsert({
           id: account.account_id,
