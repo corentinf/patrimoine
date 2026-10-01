@@ -12,6 +12,7 @@ import {
   buildComparePercentSeries, seriesChange, type RangeKey,
 } from '@/app/lib/investmentRange';
 import { periodBoundaries, BOUNDARY_STYLE } from '@/app/lib/chartBoundaries';
+import { isLockedRetirementAccount } from '@/app/lib/accounts';
 
 type ViewMode = 'total' | 'stacked';
 
@@ -33,10 +34,7 @@ const LONG_PRESS_MS = 500;
 // directly (Roth IRA included — its contributions are withdrawable anytime,
 // unlike a 401k/HSA, so it's grouped with the self-directed brokerage
 // accounts here rather than as "retirement").
-function isRetirementAccount(a: { name: string; institution: string }): boolean {
-  const haystack = `${a.name} ${a.institution}`.toLowerCase();
-  return haystack.includes('401k') || haystack.includes('hsa') || haystack.includes('health savings');
-}
+const isRetirementAccount = isLockedRetirementAccount;
 
 // Sentinel stored in hoveredAccountId when the $ total line itself (not one
 // of the per-account overlays) is hovered — no real account id can collide.

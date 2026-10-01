@@ -7,6 +7,7 @@ import { formatCurrency, amountColor, accountTypeConfig, getAccountLinkUrl } fro
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { idxAtOrBefore, isoDate } from '@/app/lib/investmentRange';
 import { usePrivacy } from '@/app/lib/privacy';
+import { isLockedRetirementAccount, isIraAccount } from '@/app/lib/accounts';
 import { buildMilestones, type Milestone, type ProjectionRow, type ScenarioKey } from '@/app/lib/projection';
 import NetWorthChart from '../networth/NetWorthChart';
 import ProjectionCard from './ProjectionCard';
@@ -202,7 +203,7 @@ export default function HomeView({
   // (InvestmentProgress.tsx's isRetirementAccount) — retirement takes priority
   // over account_type since a 401k/HSA is still stored as an ordinary account row.
   const isRetirementAccount = (a: SidebarAccount) =>
-    /401k|\bira\b|hsa/i.test(a.name) || /401k|\bira\b|hsa/i.test(a.institution || '');
+    isLockedRetirementAccount(a) || isIraAccount(a);
 
   const accountMeta = useMemo(() => {
     const instCounts = new Map<string, number>();

@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { createServiceClient } from './supabase';
 import { plaidClient, mapAccountType } from './plaid';
 import { fetchAccounts as fetchSimpleFINAccounts, inferAccountType, getInstitutionName } from './simplefin';
@@ -362,6 +363,10 @@ export async function syncAll(
   } catch (err: any) {
     result.errors.push(err.message);
   }
+
+  // Pages are ISR-cached (home revalidates every 300s); drop the cache so
+  // freshly synced balances show up immediately instead of up to 5 min later.
+  try { revalidatePath('/', 'layout'); } catch {}
 
   return result;
 }

@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/app/lib/supabase';
 import HomeView from './HomeView';
+import { isLockedRetirementAccount, isIraAccount } from '@/app/lib/accounts';
 
 export const revalidate = 300;
 
@@ -81,7 +82,7 @@ export default async function HomePage() {
   // than a fixed list so a newly-added 401k/IRA/HSA account is picked up
   // automatically.
   const isRetirementAccount = (a: (typeof accounts)[number]) =>
-    /401k|\bira\b|hsa/i.test(a.name) || /401k|\bira\b|hsa/i.test(a.institution || '');
+    isLockedRetirementAccount(a) || isIraAccount(a);
   const retirementBalance = assets
     .filter(isRetirementAccount)
     .reduce((s, a) => s + Number(a.balance), 0);
