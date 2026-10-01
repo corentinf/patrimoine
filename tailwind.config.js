@@ -36,6 +36,7 @@ module.exports = {
           red:    '#B85450',
           blue:   '#4A6FA5',
           gold:   '#C4983B',
+          purple: '#7B6BA8',
         },
       },
       fontFamily: {

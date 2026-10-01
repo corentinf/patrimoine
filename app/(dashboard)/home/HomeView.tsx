@@ -210,9 +210,19 @@ export default function HomeView({
   // matching isRetirementAccount; available = the other assets minus credit
   // balances) so the listed rows always sum to the figure shown above them.
   const breakdown = useMemo(() => {
+    const shortLabel = (a: SidebarAccount) => {
+      const n = a.name.toLowerCase();
+      if (/401\s*\(?k/.test(n)) return `${a.institution} 401(k)`;
+      if (/\bhsa\b|health savings/.test(n)) return `${a.institution} HSA`;
+      if (/\bira\b/.test(n)) return `${a.institution} ${/roth/.test(n) ? 'Roth IRA' : 'IRA'}`;
+      if (a.account_type === 'credit') return `${a.institution} card${a.mask ? ` ••${a.mask}` : ''}`;
+      if (a.account_type === 'checking') return `${a.institution} checking`;
+      if (a.account_type === 'savings') return `${a.institution} savings`;
+      return a.institution || a.name;
+    };
     const row = (a: SidebarAccount, amount: number) => ({
       id: a.id,
-      label: `${a.institution} · ${a.name}`,
+      short: shortLabel(a),
       amount,
     });
     const assets = accounts.filter((a) => a.account_type !== 'credit');
@@ -224,6 +234,38 @@ export default function HomeView({
     const byAmount = (x: { amount: number }, y: { amount: number }) => y.amount - x.amount;
     return { available: available.sort(byAmount), retirement: retirement.sort(byAmount) };
   }, [accounts]);
+
+  // Popover listing the accounts behind one side of the Available/Retirement
+  // split. Opens on hover or keyboard focus of its `group` wrapper;
+  // the pt-2 wrapper bridges the gap so moving the pointer onto it keeps it open.
+  const renderBreakdownPopover = (
+    rows: { id: string; short: string; amount: number }[],
+    total: number,
+    align: 'left' | 'right',
+    todayNote = false,
+  ) => (
+    <div className={`absolute top-full z-20 hidden group-hover:block group-focus-within:block pt-2 ${align === 'right' ? 'right-0' : 'left-0'}`}>
+      <div className="min-w-[18rem] bg-white border border-sand-200 rounded-lg shadow-lg p-3">
+        {todayNote && (
+          <p className="text-[11px] text-ink-400 mb-2">Today's balances (the figure above is projected)</p>
+        )}
+        <ul className="space-y-1.5">
+          {rows.map((r) => (
+            <li key={r.id} className="flex items-center justify-between gap-6 text-xs text-ink-500">
+              <span className="whitespace-nowrap">{r.short}</span>
+              <span className={`font-mono ${r.amount < 0 ? 'text-accent-red' : 'text-ink-700'}`} data-sensitive>
+                {r.amount < 0 ? '−' : ''}{formatCurrency(Math.abs(r.amount))}
+              </span>
+            </li>
+          ))}
+          <li className="flex items-center justify-between gap-6 text-xs font-medium text-ink-700 pt-1.5 mt-1.5 border-t border-sand-100">
+            <span>{todayNote ? 'Total today' : 'Total'}</span>
+            <span className="font-mono" data-sensitive>{formatCurrency(total)}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
 
   const accountMeta = useMemo(() => {
     const instCounts = new Map<string, number>();
@@ -486,8 +528,11 @@ export default function HomeView({
             ))}
           </div>
 
-          {/* Selected bar */}
-          <div>
+          {/* Selected bar — on the Available/Retirement tabs the whole row + bar is the hover target */}
+          <div
+            className={isTotalMetric ? undefined : 'relative group cursor-default outline-none'}
+            tabIndex={isTotalMetric ? undefined : 0}
+          >
             <div className="flex items-center justify-between mb-1.5">
               <span className={`text-sm font-medium ${selectedMilestone?.passed ? 'text-ink-400 line-through' : 'text-ink-700'}`}>
                 {selectedMilestone ? formatCurrency(selectedMilestone.target) : 'Today'}
@@ -522,46 +567,41 @@ export default function HomeView({
               {isTotalMetric ? (
                 <>
                   <div className="h-full bg-accent-green transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
-                  <div className="h-full bg-sand-400 transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
+                  <div className="h-full bg-accent-purple transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
                 </>
               ) : (
                 <div
-                  className={`h-full transition-all ${metric === 'available' ? 'bg-accent-green' : 'bg-sand-400'}`}
+                  className={`h-full transition-all ${metric === 'available' ? 'bg-accent-green' : 'bg-accent-purple'}`}
                   style={{ width: `${selectedFillPct}%` }}
                 />
               )}
             </div>
-            {isTotalMetric && retirementBalance > 0 && (
-              <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-400">
-                <span data-sensitive>
-                  💵 {selectedMilestone ? '~' : ''}{formatCurrency(selectedAvailable)} available
-                </span>
-                <span data-sensitive>
-                  🔒 {selectedMilestone ? '~' : ''}{formatCurrency(selectedRetirement)} retirement
-                </span>
-              </div>
+            {!isTotalMetric && renderBreakdownPopover(
+              breakdown[metric],
+              active.value,
+              'right',
+              !!selectedMilestone,
             )}
-            {!isTotalMetric && retirementBalance > 0 && (
-              <div className="mt-4 pt-3 border-t border-sand-100">
-                <p className="text-[11px] text-ink-400 mb-2">
-                  {metric === 'available'
-                    ? 'Included in Available today — everything except 401(k)/403(b)/HSA/IRA accounts, net of credit card balances'
-                    : 'Included in Retirement today — 401(k), 403(b), HSA and IRA accounts'}
-                </p>
-                <ul className="space-y-1">
-                  {breakdown[metric].map((row) => (
-                    <li key={row.id} className="flex items-center justify-between text-xs text-ink-500">
-                      <span className="truncate pr-3">{row.label}</span>
-                      <span className={`font-mono ${row.amount < 0 ? 'text-accent-red' : 'text-ink-700'}`} data-sensitive>
-                        {row.amount < 0 ? '−' : ''}{formatCurrency(Math.abs(row.amount))}
-                      </span>
-                    </li>
-                  ))}
-                  <li className="flex items-center justify-between text-xs font-medium text-ink-700 pt-1 mt-1 border-t border-sand-100">
-                    <span>Total</span>
-                    <span className="font-mono" data-sensitive>{formatCurrency(active.value)}</span>
-                  </li>
-                </ul>
+            {isTotalMetric && retirementBalance > 0 && (
+              <div className="grid grid-cols-2 gap-x-8 mt-3 text-ink-400">
+                <div className="relative group cursor-default outline-none" tabIndex={0}>
+                  <div className="flex items-baseline gap-2" data-sensitive>
+                    <span className="text-lg font-mono text-ink-700">
+                      {selectedMilestone ? '~' : ''}{formatCurrency(selectedAvailable)}
+                    </span>
+                    <span className="text-xs">💵 available</span>
+                  </div>
+                  {renderBreakdownPopover(breakdown.available, availableNetWorth, 'left', !!selectedMilestone)}
+                </div>
+                <div className="relative group cursor-default outline-none" tabIndex={0}>
+                  <div className="flex items-baseline justify-end gap-2" data-sensitive>
+                    <span className="text-lg font-mono text-ink-700">
+                      {selectedMilestone ? '~' : ''}{formatCurrency(selectedRetirement)}
+                    </span>
+                    <span className="text-xs">🔒 retirement</span>
+                  </div>
+                  {renderBreakdownPopover(breakdown.retirement, retirementBalance, 'right', !!selectedMilestone)}
+                </div>
               </div>
             )}
           </div>
