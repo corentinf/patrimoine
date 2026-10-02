@@ -13,11 +13,21 @@ import { useEffect, useRef, useState } from 'react';
 export function useStableMinHeight<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [minHeight, setMinHeight] = useState(0);
+  const lastWidth = useRef<number | null>(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
+      // Content that wraps (pills, chips) legitimately changes height when the
+      // available width changes — drop the floor so it re-measures at the new
+      // width instead of staying pinned at a height from the old one.
+      if (lastWidth.current !== null && Math.abs(entry.contentRect.width - lastWidth.current) > 1) {
+        lastWidth.current = entry.contentRect.width;
+        setMinHeight(0);
+        return;
+      }
+      lastWidth.current = entry.contentRect.width;
       setMinHeight((prev) => Math.max(prev, entry.contentRect.height));
     });
     ro.observe(el);

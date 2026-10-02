@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { createBrowserClient } from '@/app/lib/supabase';
 import { usePrivacy } from '@/app/lib/privacy';
 import { isFakeModeActive } from '@/app/lib/demoMode';
@@ -10,6 +10,7 @@ import { fakeifyAmount } from '@/app/lib/utils';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { usePageFilterSlotContent } from '@/app/lib/pageFilterSlot';
 import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
+import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
 import { useShortcutsHelp } from './KeyboardShortcuts';
 import { PRESETS } from '@/app/lib/investmentRange';
 import PlaidLinkButton from './PlaidLink';
@@ -293,32 +294,76 @@ function ProfileMenu({ accounts }: { accounts: SidebarAccount[] }) {
 
 export function FilterBar() {
   const {
-    dateFilter, activePreset, showCustom, rangeLabel, canStepForward, canStepBackward,
-    stepPeriod, applyPreset, resetFilter, setCustomStart, setCustomEnd,
+    activePreset, resolvedRange, rangeLabel, canStepForward, canStepBackward,
+    stepPeriod, applyPreset, resetFilter, setRange,
     segment, clearSegment, category, clearCategory,
   } = useGlobalFilter();
   const now = new Date();
+  const [editingRange, setEditingRange] = useState(false);
+  // Same idea as PageFiltersRow: the day/category chips can wrap onto a new line.
+  const { ref: rowRef, minHeight: rowMinHeight } = useStableMinHeight<HTMLDivElement>();
 
   return (
-    <div className="border-t border-sand-100 flex flex-wrap items-center gap-x-5 gap-y-1.5 py-2">
+    <div className="border-t border-sand-100 py-2">
+    <div ref={rowRef} style={{ minHeight: rowMinHeight || undefined }} className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
       <div className="flex items-center gap-1">
         <button
           onClick={() => stepPeriod(-1)}
           disabled={!canStepBackward}
-          className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
+          className="px-2.5 py-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
           aria-label="Previous period"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <span className="text-xs font-semibold min-w-[92px] text-center text-ink-800 bg-sand-100 rounded-md px-2 py-1">
-          {rangeLabel}
-        </span>
+        {editingRange ? (
+          // Edit the dates in place — each pick applies immediately; Done/Escape closes.
+          <div
+            className="flex items-center gap-1 bg-sand-100 rounded-md px-2 py-0.5"
+            onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setEditingRange(false); }}
+          >
+            <input
+              type="date"
+              autoFocus
+              value={resolvedRange.start}
+              max={resolvedRange.end}
+              onChange={(e) => setRange(e.target.value, resolvedRange.end)}
+              aria-label="Start date"
+              className="text-xs font-semibold bg-transparent text-ink-800 focus:outline-none"
+            />
+            <span className="text-ink-300">–</span>
+            <input
+              type="date"
+              value={resolvedRange.end}
+              min={resolvedRange.start}
+              max={now.toISOString().substring(0, 10)}
+              onChange={(e) => setRange(resolvedRange.start, e.target.value)}
+              aria-label="End date"
+              className="text-xs font-semibold bg-transparent text-ink-800 focus:outline-none"
+            />
+            <button
+              onClick={() => setEditingRange(false)}
+              className="ml-1 px-1.5 text-xs text-ink-500 hover:text-ink-800"
+              aria-label="Done"
+              title="Done"
+            >
+              ✓
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setEditingRange(true)}
+            title="Click to choose dates"
+            className="text-xs font-semibold min-w-[120px] text-center text-ink-800 bg-sand-100 hover:bg-sand-200 transition-colors rounded-md px-4 py-1"
+          >
+            {rangeLabel}
+          </button>
+        )}
         <button
           onClick={() => stepPeriod(1)}
           disabled={!canStepForward}
-          className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
+          className="px-2.5 py-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
           aria-label="Next period"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -326,20 +371,20 @@ export function FilterBar() {
           </svg>
         </button>
         <button
-          onClick={resetFilter}
+          onClick={() => { setEditingRange(false); resetFilter(); }}
           title="Reset to current month"
-          className="ml-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors"
+          className="ml-1.5 px-3 py-1 rounded-md text-xs text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
         >
           Reset
         </button>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         {PRESETS.map((p) => (
           <button
             key={p.key}
-            onClick={() => applyPreset(p.key)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            onClick={() => { setEditingRange(false); applyPreset(p.key); }}
+            className={`px-5 py-1 rounded-lg text-xs font-medium transition-colors ${
               activePreset === p.key
                 ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
                 : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
@@ -348,38 +393,7 @@ export function FilterBar() {
             {p.label}
           </button>
         ))}
-        <button
-          onClick={() => applyPreset('custom')}
-          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-            showCustom
-              ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
-              : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-          }`}
-        >
-          Custom
-        </button>
       </div>
-
-      {showCustom && dateFilter.mode === 'custom' && (
-        <div className="flex items-center gap-1.5 text-xs">
-          <input
-            type="date"
-            value={dateFilter.start}
-            max={dateFilter.end}
-            onChange={(e) => setCustomStart(e.target.value)}
-            className="text-xs px-1.5 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
-          />
-          <span className="text-ink-300">–</span>
-          <input
-            type="date"
-            value={dateFilter.end}
-            min={dateFilter.start}
-            max={now.toISOString().substring(0, 10)}
-            onChange={(e) => setCustomEnd(e.target.value)}
-            className="text-xs px-1.5 py-1 border border-sand-200 rounded-md focus:outline-none focus:border-ink-400 text-ink-700"
-          />
-        </div>
-      )}
 
       {(segment || category) && (
         <div className="flex items-center gap-1.5">
@@ -407,17 +421,30 @@ export function FilterBar() {
         </div>
       )}
     </div>
+    </div>
+  );
+}
+
+// The pills/chips in this row wrap onto a different number of lines as the page's
+// filters narrow (e.g. hovering a chart bar leaves fewer categories). Pin the row
+// at the tallest height it has reached so the header — and everything under it —
+// doesn't jump. Split into an inner component so the floor resets when the page
+// (and therefore the slot content) goes away.
+function StablePageFiltersRow({ children }: { children: ReactNode }) {
+  const { ref, minHeight } = useStableMinHeight<HTMLDivElement>();
+  return (
+    <div className="border-t border-sand-100 py-2">
+      <div ref={ref} style={{ minHeight: minHeight || undefined }}>
+        {children}
+      </div>
+    </div>
   );
 }
 
 export function PageFiltersRow() {
   const content = usePageFilterSlotContent();
   if (!content) return null;
-  return (
-    <div className="border-t border-sand-100 py-2">
-      {content}
-    </div>
-  );
+  return <StablePageFiltersRow>{content}</StablePageFiltersRow>;
 }
 
 function shortNum(rawN: number): string {
@@ -454,7 +481,7 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
 
   return (
     <header ref={headerRef} className="hidden md:block sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200">
-      <div className="max-w-screen-xl mx-auto px-6 lg:px-10">
+      <div className="max-w-[2000px] mx-auto px-6 lg:px-10 2xl:px-14">
         <div className="h-14 flex items-center gap-6">
           <h1 className="font-display text-lg text-ink-800 tracking-tight flex-shrink-0">
             Patrimoine

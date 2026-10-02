@@ -33,6 +33,8 @@ interface GlobalFilterContextValue {
   resetFilter: () => void;
   setCustomStart: (v: string) => void;
   setCustomEnd: (v: string) => void;
+  /** Apply an arbitrary start/end (works from month and preset modes too). Ignores empty/inverted input. */
+  setRange: (start: string, end: string) => void;
   segment: SegmentSelection | null;
   setSegment: (seg: SegmentSelection | null) => void;
   clearSegment: () => void;
@@ -179,6 +181,13 @@ export function GlobalFilterProvider({ children }: { children: ReactNode }) {
   const setCustomEnd = (v: string) => {
     if (dateFilter.mode === 'custom') setDateFilter({ ...dateFilter, end: v });
   };
+  const setRange = (start: string, end: string) => {
+    if (!start || !end || start > end) return;
+    setShowCustom(false);
+    setActivePreset(null);
+    setSegmentState(null);
+    setDateFilter({ mode: 'custom', start, end });
+  };
 
   const resolvedRange = useMemo(() => {
     if (dateFilter.mode === 'month') {
@@ -231,7 +240,7 @@ export function GlobalFilterProvider({ children }: { children: ReactNode }) {
   const value: GlobalFilterContextValue = {
     dateFilter, activePreset, showCustom, resolvedRange, rangeLabel, canStepForward, canStepBackward,
     goMonth, goToMonth, stepPeriod, applyPreset, activateCustom, backToMonth, resetFilter,
-    setCustomStart, setCustomEnd,
+    setCustomStart, setCustomEnd, setRange,
     segment, setSegment, clearSegment,
     category, setCategory, clearCategory,
   };
