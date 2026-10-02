@@ -1117,45 +1117,37 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const spendingPct = prevTotalSpending > 0 ? (spendingChange / prevTotalSpending) * 100 : null;
 
   return (
-    <div className="space-y-5">
-      {/* Hero: title + total spending + savings rate */}
-      <div className="card px-5 py-4">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="font-display text-lg text-ink-800">Spending</h2>
-          <span className="stat-label">Total spending</span>
-          <span className="stat-value text-xl text-accent-red" data-sensitive>{formatCurrency(totalSpending)}</span>
-          {awaitingReimbursement > 0 && (
-            <span
-              className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-100"
-              title="Jenny's unpaid half of shared-card charges"
-            >
-              ½ Awaiting reimbursement
-              <span className="font-mono" data-sensitive>{formatCurrency(awaitingReimbursement)}</span>
-            </span>
+    <div className="space-y-6">
+      {/* Hero: total spending and savings rate side by side (compact) */}
+      <div className="card px-5 py-3.5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto] gap-x-8 gap-y-3 items-start">
+        <div>
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <span className="stat-label">Total spending</span>
+            <span className="stat-value text-xl text-accent-red" data-sensitive>{formatCurrency(totalSpending)}</span>
+          </div>
+          {/* Always mounted (even with no prior-period data) so this line's height
+              is reserved — otherwise hovering a bar/category can toggle it away
+              and the whole page jumps vertically. */}
+          <p className={`text-xs font-mono mt-1 ${prevTotalSpending > 0 ? amountColor(-spendingChange) : 'invisible'}`}>
+            {prevTotalSpending > 0 ? (
+              <>
+                {spendingChange >= 0 ? '+' : ''}{formatCurrency(spendingChange)}
+                {spendingPct !== null && ` (${spendingPct >= 0 ? '+' : ''}${spendingPct.toFixed(1)}%)`} vs prior period
+              </>
+            ) : '—'}
+          </p>
+          {pacedTotal !== null && (
+            <p className="text-xs text-ink-400 mt-1">
+              on pace for ~<span className="font-mono text-ink-600">{formatCurrency(pacedTotal.paced)}</span>
+              {pacedTotal.largeTotal > 0 && (
+                <span className="text-ink-300">
+                  {' '}(excl. <span className="font-mono">{formatCurrency(pacedTotal.largeTotal)}</span> in large purchases)
+                </span>
+              )}
+            </p>
           )}
         </div>
-        {/* Always mounted (even with no prior-period data) so this line's height
-            is reserved — otherwise hovering a bar/category can toggle it away
-            and the whole page jumps vertically. */}
-        <p className={`text-xs font-mono mt-1 ${prevTotalSpending > 0 ? amountColor(-spendingChange) : 'invisible'}`}>
-          {prevTotalSpending > 0 ? (
-            <>
-              {spendingChange >= 0 ? '+' : ''}{formatCurrency(spendingChange)}
-              {spendingPct !== null && ` (${spendingPct >= 0 ? '+' : ''}${spendingPct.toFixed(1)}%)`} vs prior period
-            </>
-          ) : '—'}
-        </p>
-        {pacedTotal !== null && (
-          <p className="text-xs text-ink-400 mt-1">
-            on pace for ~<span className="font-mono text-ink-600">{formatCurrency(pacedTotal.paced)}</span>
-            {pacedTotal.largeTotal > 0 && (
-              <span className="text-ink-300">
-                {' '}(excl. <span className="font-mono">{formatCurrency(pacedTotal.largeTotal)}</span> in large purchases)
-              </span>
-            )}
-          </p>
-        )}
-        <div className="mt-3 pt-3 border-t border-sand-100">
+        <div className="sm:border-l sm:border-sand-100 sm:pl-8">
           <SavingsRateModule
             currentSpending={totalSpending}
             prevSpending={prevTotalSpending}
@@ -1163,6 +1155,15 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             periodDays={periodDays}
           />
         </div>
+        {awaitingReimbursement > 0 && (
+          <span
+            className="sm:col-span-2 xl:col-span-1 justify-self-start xl:justify-self-end inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-100"
+            title="Jenny's unpaid half of shared-card charges"
+          >
+            ½ Awaiting reimbursement
+            <span className="font-mono" data-sensitive>{formatCurrency(awaitingReimbursement)}</span>
+          </span>
+        )}
       </div>
 
       {/* Match a recent incoming personal payment to pending Amex splits */}
@@ -1190,8 +1191,12 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         </div>
       )}
 
-      {/* Spending over time + By Category side by side */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-stretch">
+      {/* Dashboard grid: chart + tabbed content in the main column, by-category donut as a
+          right rail from xl. The tab bar and its content share ONE grid cell on purpose —
+          a sticky element can only stick within its own grid area, so the sticky tab bar
+          (and the sticky controls inside the transaction list) need the full list height. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(340px,24vw,460px)] gap-6 items-start">
+        <div className="min-w-0 xl:col-start-1">
         <SpendingProgress
           data={narrowedDailySpending ?? dailySpending}
           rangeStart={resolvedRange.start}
@@ -1212,7 +1217,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             if (!meta?.preview) clearCategory();
           }}
         />
-        <div className="w-full xl:w-72 xl:flex-shrink-0">
+        </div>
+        <div className="w-full min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:sticky xl:top-[calc(var(--header-h,96px)_+_1.5rem)]">
           <SpendingCharts
             categories={pieCategories}
             monthlyData={[]}
@@ -1238,12 +1244,12 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             }}
           />
         </div>
-      </div>
 
+      <div className="min-w-0 xl:col-start-1 space-y-5">
       {/* Section tabs */}
       <div
         ref={tabsRef}
-        className="sticky z-10 bg-sand-50 flex items-center gap-0 border-b border-sand-200 overflow-x-auto"
+        className="sticky z-10 bg-sand-50 flex flex-wrap items-center gap-x-0 gap-y-1 border-b border-sand-200"
         style={{ top: 'var(--header-h, 96px)' }}
       >
         {(['transactions', 'categories', 'subscriptions'] as const).map((tab) => (
@@ -1265,7 +1271,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           </button>
         ))}
         {activeTab === 'transactions' && (
-          <div className="ml-auto flex items-center gap-2 pb-px">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 pb-px">
             <AICategorizeButton />
             <VenmoImport />
             <AmazonImport />
@@ -1451,7 +1457,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
       {/* Tab: Transactions */}
       {activeTab === 'transactions' && (
-        <div ref={txListRef} style={{ minHeight: txListMinHeight || undefined }}>
+        <div ref={txListRef} className="!mt-2" style={{ minHeight: txListMinHeight || undefined }}>
           {selectedCategoryKey && (() => {
             const row = categoryRows.find((r) => r.key === selectedCategoryKey);
             return row ? (
@@ -1492,6 +1498,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           )}
         </div>
       )}
+      </div>
+      </div>
 
       {/* Category manager modal */}
       {showCategoryManager && (

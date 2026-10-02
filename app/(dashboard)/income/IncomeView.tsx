@@ -213,9 +213,11 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
   }
 
   return (
-    <div className="space-y-5">
+    // Below xl: one column in DOM order (hero, pills, chart, donut, list). From xl: the
+    // donut moves to a sticky right rail spanning the four main-column rows.
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(340px,24vw,460px)] gap-6 items-start">
       {/* Hero: title + total income */}
-      <div className="card px-5 py-4">
+      <div className="card px-5 py-4 xl:col-start-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="font-display text-lg text-ink-800">Income</h2>
           <span className="stat-label">Total income</span>
@@ -237,7 +239,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
       {/* Category quick filter — always mounted (even with zero categories
           for the current bar/segment) so this row's height is reserved and
           hovering different bars doesn't push the chart/content below up and down. */}
-      <div className="flex flex-wrap items-center gap-1.5 min-h-[30px]">
+      <div className="flex flex-wrap items-center gap-1.5 min-h-[30px] xl:col-start-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-400 mr-1">Categories</span>
         {categoryRows.length > 0 ? categoryRows.map((cat) => (
           <button
@@ -262,8 +264,8 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
         )}
       </div>
 
-      {/* Income over time + By Category side by side */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-stretch">
+      {/* Income over time */}
+      <div className="min-w-0 xl:col-start-1">
         <SpendingProgress
           data={narrowedDailyIncome ?? dailyIncome}
           rangeStart={resolvedRange.start}
@@ -285,7 +287,11 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
             setSegment({ label, start: range.start, end: range.end });
           }}
         />
-        <div className="w-full xl:w-72 xl:flex-shrink-0">
+      </div>
+
+      {/* By category — right rail from xl, stays in view while the list scrolls */}
+      <div className="w-full min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-4 xl:sticky xl:top-[calc(var(--header-h,96px)_+_1.5rem)]">
+        <div className="w-full">
           <SpendingCharts
             categories={categoryRows.map((c) => ({ id: c.id, name: c.name, color: c.color, icon: c.icon, total: c.total, count: c.count }))}
             monthlyData={[]}
@@ -304,7 +310,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
       </div>
 
       {/* Transaction list */}
-      <div>
+      <div className="min-w-0 xl:col-start-1">
         <div className="sticky top-0 md:top-24 z-10 bg-sand-50 pb-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs text-ink-400 shrink-0">Sort by</span>

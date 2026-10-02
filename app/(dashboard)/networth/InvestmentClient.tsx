@@ -45,7 +45,7 @@ export default function InvestmentClient({
 
   return (
     <>
-      <div className="card px-5 py-4">
+      <div className="card px-5 py-4 xl:col-span-2">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="font-display text-lg text-ink-800">Investment holdings</h2>
           <span className="stat-label">Total value</span>
@@ -56,15 +56,17 @@ export default function InvestmentClient({
         </p>
       </div>
 
-      <InvestmentProgress
-        dates={dates}
-        accounts={accounts}
-        rangeStart={resolvedRange.start}
-        rangeEnd={resolvedRange.end}
-      />
+      <div className="min-w-0 xl:col-start-1">
+        <InvestmentProgress
+          dates={dates}
+          accounts={accounts}
+          rangeStart={resolvedRange.start}
+          rangeEnd={resolvedRange.end}
+        />
+      </div>
 
       {liveHoldings.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0 xl:col-start-1">
           {totalInvestmentValue - totalHoldingsValue > 1 && (
             <p className="text-xs text-ink-400">
               Line items below cover{' '}

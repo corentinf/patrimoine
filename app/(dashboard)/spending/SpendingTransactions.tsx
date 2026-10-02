@@ -417,7 +417,7 @@ export default function SpendingTransactions({
     <>
       <div>
         <div
-          className="sticky z-10 bg-sand-50 space-y-3 pb-3"
+          className="sticky z-10 bg-sand-50 space-y-3 pt-3 pb-3"
           style={{ top: 'calc(var(--header-h, 96px) + var(--tabs-h, 41px))' }}
         >
         {/* Row 1: Sort controls */}

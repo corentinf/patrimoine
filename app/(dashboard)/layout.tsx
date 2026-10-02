@@ -61,7 +61,7 @@ export default async function DashboardLayout({
                 />
                 <MobileTopBar />
 
-                <div className="flex-1 max-w-screen-xl mx-auto px-4 md:px-6 lg:px-10 py-4 md:py-6 pb-24 md:pb-6 w-full">
+                <div className="flex-1 max-w-[2000px] mx-auto px-4 md:px-6 lg:px-10 2xl:px-14 py-4 md:py-6 pb-24 md:pb-6 w-full">
                   <main>
                     {children}
                   </main>

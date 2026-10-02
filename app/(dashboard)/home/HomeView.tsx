@@ -444,301 +444,313 @@ export default function HomeView({
         />
       )}
 
-      {/* Summary strip — net worth for the selected period; assets/liabilities are always current */}
-      <div className="card p-0 grid grid-cols-1 sm:grid-cols-[1.6fr_1fr_1fr] divide-y sm:divide-y-0 sm:divide-x divide-sand-100">
-        <div className="px-6 py-5">
-          <p className="stat-label">Net worth <span className="normal-case tracking-normal text-ink-300 font-normal">· {rangeLabel}</span></p>
-          <p className="stat-value mt-1" data-sensitive>{formatCurrency(endValue)}</p>
-          {hasChange ? (
-            <p className={`text-xs font-mono mt-1 ${amountColor(change)}`} data-sensitive>
-              {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%) over period
-            </p>
-          ) : trackingStartDate ? (
-            <p className="text-xs text-ink-300 mt-1">Tracking since {trackingStartDate}</p>
-          ) : null}
-        </div>
-        <div className="px-6 py-5">
-          <p className="stat-label">Assets</p>
-          <p className="stat-value text-2xl mt-1" data-sensitive>{formatCurrency(totalAssets)}</p>
-          <p className="text-xs text-ink-300 mt-1">{assetsCount} account{assetsCount !== 1 ? 's' : ''}</p>
-        </div>
-        <div className="px-6 py-5">
-          <p className="stat-label">Liabilities</p>
-          <p className="stat-value text-2xl mt-1 text-accent-red" data-sensitive>
-            {totalLiabilities > 0 ? formatCurrency(totalLiabilities) : '—'}
-          </p>
-          <p className="text-xs text-ink-300 mt-1">
-            {liabilitiesCount > 0 ? `${liabilitiesCount} account${liabilitiesCount !== 1 ? 's' : ''}` : 'None'}
-          </p>
-        </div>
-      </div>
+      {/* Dashboard grid: main column (chart + key figures, milestones, projection) with the
+          accounts list as a right-hand rail that stays in view while scrolling on wide screens. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(340px,24vw,460px)] gap-6 items-start">
+        <div className="space-y-6 min-w-0">
+          {/* Chart */}
+                    <NetWorthChart
+                      data={chartData}
+                      trackingStartDate={trackingStartDate}
+                      currentNetWorth={currentNetWorth}
+                      accounts={accountMeta}
+                    />
 
-      {/* Chart */}
-      <NetWorthChart
-        data={chartData}
-        trackingStartDate={trackingStartDate}
-        currentNetWorth={currentNetWorth}
-        accounts={accountMeta}
-      />
+            {/* Milestones — always current, not scoped to the selected period */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-3">
+                <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Milestones</h3>
+                {retirementBalance > 0 && (
+                  <InfoTooltip
+                    text="Track milestones for your Total net worth, Available (liquid) money, or Retirement-locked money (401k/IRA/HSA). Total bars also split 💵 available vs 🔒 retirement, projected forward to each milestone's ETA."
+                  />
+                )}
+              </div>
+              <div className="card px-5 py-4 space-y-4">
+                {/* Metric tabs */}
+                {retirementBalance > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {(Object.keys(metricConfig) as Array<keyof typeof metricConfig>).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => selectMetric(key)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          metric === key
+                            ? 'bg-ink-800 text-white'
+                            : 'bg-sand-50 border border-sand-200 text-ink-500 hover:border-sand-300'
+                        }`}
+                      >
+                        {metricConfig[key].icon} {metricConfig[key].label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-      {/* Milestones — always current, not scoped to the selected period */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-3">
-          <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Milestones</h3>
-          {retirementBalance > 0 && (
-            <InfoTooltip
-              text="Track milestones for your Total net worth, Available (liquid) money, or Retirement-locked money (401k/IRA/HSA). Total bars also split 💵 available vs 🔒 retirement, projected forward to each milestone's ETA."
-            />
-          )}
-        </div>
-        <div className="card px-5 py-4 space-y-4">
-          {/* Metric tabs */}
-          {retirementBalance > 0 && (
-            <div className="flex items-center gap-1 flex-wrap">
-              {(Object.keys(metricConfig) as Array<keyof typeof metricConfig>).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => selectMetric(key)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    metric === key
-                      ? 'bg-ink-800 text-white'
-                      : 'bg-sand-50 border border-sand-200 text-ink-500 hover:border-sand-300'
-                  }`}
+                {/* Selector: current value + upcoming milestones for the active metric */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIdx(0)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      selectedIdx === 0
+                        ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
+                        : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                    }`}
+                  >
+                    Current
+                  </button>
+                  {active.milestones.map((m, i) => (
+                    <button
+                      key={m.target}
+                      type="button"
+                      onClick={() => setSelectedIdx(i + 1)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        selectedIdx === i + 1
+                          ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
+                          : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                      }`}
+                    >
+                      {compactTarget(m.target)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Selected bar — on the Available/Retirement tabs the whole row + bar is the hover target */}
+                <div
+                  className={isTotalMetric ? undefined : 'relative group cursor-default outline-none'}
+                  tabIndex={isTotalMetric ? undefined : 0}
                 >
-                  {metricConfig[key].icon} {metricConfig[key].label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Selector: current value + upcoming milestones for the active metric */}
-          <div className="flex items-center gap-1 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setSelectedIdx(0)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                selectedIdx === 0
-                  ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
-                  : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-              }`}
-            >
-              Current
-            </button>
-            {active.milestones.map((m, i) => (
-              <button
-                key={m.target}
-                type="button"
-                onClick={() => setSelectedIdx(i + 1)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  selectedIdx === i + 1
-                    ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
-                    : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-                }`}
-              >
-                {compactTarget(m.target)}
-              </button>
-            ))}
-          </div>
-
-          {/* Selected bar — on the Available/Retirement tabs the whole row + bar is the hover target */}
-          <div
-            className={isTotalMetric ? undefined : 'relative group cursor-default outline-none'}
-            tabIndex={isTotalMetric ? undefined : 0}
-          >
-            <div className="flex items-center justify-between mb-1.5">
-              <span className={`text-sm font-medium ${selectedMilestone?.passed ? 'text-ink-400 line-through' : 'text-ink-700'}`}>
-                {selectedMilestone ? formatCurrency(selectedMilestone.target) : 'Today'}
-              </span>
-              {selectedMilestone ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-ink-300 font-mono">{selectedMilestone.pct.toFixed(1)}%</span>
-                  {selectedMilestone.passed ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-accent-green font-medium">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Reached
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-sm font-medium ${selectedMilestone?.passed ? 'text-ink-400 line-through' : 'text-ink-700'}`}>
+                      {selectedMilestone ? formatCurrency(selectedMilestone.target) : 'Today'}
                     </span>
-                  ) : selectedMilestone.eta ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-ink-400">
-                      ~{selectedMilestone.eta}
-                      <InfoTooltip
-                        align="right"
-                        text="Projected from this track's own current growth rate — not scoped to whatever period you've selected up top."
+                    {selectedMilestone ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-ink-300 font-mono">{selectedMilestone.pct.toFixed(1)}%</span>
+                        {selectedMilestone.passed ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-accent-green font-medium">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Reached
+                          </span>
+                        ) : selectedMilestone.eta ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-ink-400">
+                            ~{selectedMilestone.eta}
+                            <InfoTooltip
+                              align="right"
+                              text="Projected from this track's own current growth rate — not scoped to whatever period you've selected up top."
+                            />
+                          </span>
+                        ) : (
+                          <span className="text-xs text-ink-300">—</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm font-mono text-ink-700" data-sensitive>{formatCurrency(active.value)}</span>
+                    )}
+                  </div>
+                  <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
+                    {isTotalMetric ? (
+                      <>
+                        <div className="h-full bg-[#5DBB8F] transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
+                        <div className="h-full bg-accent-purple border-l-2 border-white transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
+                      </>
+                    ) : (
+                      <div
+                        className={`h-full transition-all ${metric === 'available' ? 'bg-[#5DBB8F]' : 'bg-accent-purple'}`}
+                        style={{ width: `${selectedFillPct}%` }}
                       />
-                    </span>
-                  ) : (
-                    <span className="text-xs text-ink-300">—</span>
+                    )}
+                  </div>
+                  {!isTotalMetric && renderBreakdownPopover(
+                    breakdown[metric],
+                    active.value,
+                    'right',
+                    !!selectedMilestone,
+                  )}
+                  {isTotalMetric && retirementBalance > 0 && (
+                    <div className="grid grid-cols-2 gap-x-8 mt-3 text-ink-400">
+                      <div className="relative group cursor-default outline-none" tabIndex={0}>
+                        <div className="flex items-baseline gap-2" data-sensitive>
+                          <span className="text-lg font-mono text-ink-700">
+                            {selectedMilestone ? '~' : ''}{formatCurrency(selectedAvailable)}
+                          </span>
+                          <span className="text-xs">💵 available</span>
+                        </div>
+                        {renderBreakdownPopover(breakdown.available, availableNetWorth, 'left', !!selectedMilestone)}
+                      </div>
+                      <div className="relative group cursor-default outline-none" tabIndex={0}>
+                        <div className="flex items-baseline justify-end gap-2" data-sensitive>
+                          <span className="text-lg font-mono text-ink-700">
+                            {selectedMilestone ? '~' : ''}{formatCurrency(selectedRetirement)}
+                          </span>
+                          <span className="text-xs">🔒 retirement</span>
+                        </div>
+                        {renderBreakdownPopover(breakdown.retirement, retirementBalance, 'right', !!selectedMilestone)}
+                      </div>
+                    </div>
                   )}
                 </div>
-              ) : (
-                <span className="text-sm font-mono text-ink-700" data-sensitive>{formatCurrency(active.value)}</span>
-              )}
+              </div>
             </div>
-            <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
-              {isTotalMetric ? (
-                <>
-                  <div className="h-full bg-accent-green transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
-                  <div className="h-full bg-accent-purple transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
-                </>
-              ) : (
-                <div
-                  className={`h-full transition-all ${metric === 'available' ? 'bg-accent-green' : 'bg-accent-purple'}`}
-                  style={{ width: `${selectedFillPct}%` }}
-                />
-              )}
-            </div>
-            {!isTotalMetric && renderBreakdownPopover(
-              breakdown[metric],
-              active.value,
-              'right',
-              !!selectedMilestone,
-            )}
-            {isTotalMetric && retirementBalance > 0 && (
-              <div className="grid grid-cols-2 gap-x-8 mt-3 text-ink-400">
-                <div className="relative group cursor-default outline-none" tabIndex={0}>
-                  <div className="flex items-baseline gap-2" data-sensitive>
-                    <span className="text-lg font-mono text-ink-700">
-                      {selectedMilestone ? '~' : ''}{formatCurrency(selectedAvailable)}
-                    </span>
-                    <span className="text-xs">💵 available</span>
-                  </div>
-                  {renderBreakdownPopover(breakdown.available, availableNetWorth, 'left', !!selectedMilestone)}
+
+            {/* Projection — AI-generated, cached, only regenerated on explicit click */}
+            <ProjectionCard
+              projection={projection}
+              selectedScenario={selectedScenario}
+              onSelectScenario={setSelectedScenario}
+              onRegenerate={regenerateProjection}
+              loading={projectionLoading}
+              error={projectionError}
+            />
+        </div>
+
+        <aside className="min-w-0 xl:sticky xl:top-[calc(var(--header-h,96px)_+_1.5rem)] xl:max-h-[calc(100vh_-_var(--header-h,96px)_-_3rem)] xl:overflow-y-auto">
+          {/* One card: key figures on top (net worth follows the selected period; assets and
+              liabilities are always current), accounts underneath. */}
+          <div className="card p-0 overflow-hidden">
+            <div className="px-5 py-4">
+              <p className="stat-label">Net worth <span className="normal-case tracking-normal text-ink-300 font-normal">· {rangeLabel}</span></p>
+              <div className="flex flex-wrap items-baseline gap-x-3 mt-1">
+                <p className="stat-value" data-sensitive>{formatCurrency(endValue)}</p>
+                {hasChange ? (
+                  <p className={`text-xs font-mono ${amountColor(change)}`} data-sensitive>
+                    {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
+                  </p>
+                ) : trackingStartDate ? (
+                  <p className="text-xs text-ink-300">Tracking since {trackingStartDate}</p>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-sand-100">
+                <div>
+                  <p className="stat-label">Assets</p>
+                  <p className="stat-value text-xl mt-1" data-sensitive>{formatCurrency(totalAssets)}</p>
+                  <p className="text-xs text-ink-300 mt-0.5">{assetsCount} account{assetsCount !== 1 ? 's' : ''}</p>
                 </div>
-                <div className="relative group cursor-default outline-none" tabIndex={0}>
-                  <div className="flex items-baseline justify-end gap-2" data-sensitive>
-                    <span className="text-lg font-mono text-ink-700">
-                      {selectedMilestone ? '~' : ''}{formatCurrency(selectedRetirement)}
-                    </span>
-                    <span className="text-xs">🔒 retirement</span>
-                  </div>
-                  {renderBreakdownPopover(breakdown.retirement, retirementBalance, 'right', !!selectedMilestone)}
+                <div>
+                  <p className="stat-label">Liabilities</p>
+                  <p className="stat-value text-xl mt-1 text-accent-red" data-sensitive>
+                    {totalLiabilities > 0 ? formatCurrency(totalLiabilities) : '—'}
+                  </p>
+                  <p className="text-xs text-ink-300 mt-0.5">
+                    {liabilitiesCount > 0 ? `${liabilitiesCount} account${liabilitiesCount !== 1 ? 's' : ''}` : 'None'}
+                  </p>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Accounts — always current, not scoped to the selected period */}
-      {groupedAccounts.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Accounts</h3>
-            <button
-              onClick={() => setModalAccount(null)}
-              className="text-xs text-ink-400 hover:text-ink-700 transition-colors"
-            >
-              + Add account
-            </button>
-          </div>
-          <div className="space-y-4">
-            {groupedAccounts.map(({ type, accounts: group }) => {
-              const cfg = accountTypeConfig[type] ?? { label: type, icon: '💰' };
-              const subtotal = group.reduce(
-                (s, a) => s + (type === 'credit' ? Math.abs(Number(a.balance)) : Number(a.balance)),
-                0,
-              );
-              return (
-                <div key={type} className="card p-0 divide-y divide-sand-100 overflow-hidden">
-                  <div className="px-5 py-2.5 flex items-center justify-between bg-sand-50/60">
-                    <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>{cfg.icon}</span>
-                      {cfg.label}
-                    </span>
-                    <span
-                      className={`text-xs font-mono ${type === 'credit' ? 'text-accent-red' : 'text-ink-500'}`}
-                      data-sensitive
-                    >
-                      {formatCurrency(subtotal)}
-                    </span>
-                  </div>
-                  {group.map((a) => {
-                    const subtitleParts: string[] = [];
-                    if (a.name && a.name !== a.institution) subtitleParts.push(a.name);
-                    if (a.mask) subtitleParts.push(`•••• ${a.mask}`);
-                    const subtitle = subtitleParts.join(' · ');
-                    const linkUrl = getAccountLinkUrl(a.institution || a.name, a.institution_domain, a.custom_url);
-
-                    const openAccount = () => {
-                      if (linkUrl) window.open(linkUrl, '_blank', 'noopener,noreferrer');
-                      else setModalAccount(a);
-                    };
-
+            </div>
+            {/* Accounts — always current, not scoped to the selected period */}
+            {groupedAccounts.length > 0 && (
+              <div className="border-t border-sand-100">
+                <div className="flex items-center justify-between px-5 py-3">
+                  <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Accounts</h3>
+                  <button
+                    onClick={() => setModalAccount(null)}
+                    className="text-xs text-ink-400 hover:text-ink-700 transition-colors"
+                  >
+                    + Add account
+                  </button>
+                </div>
+                <div>
+                  {groupedAccounts.map(({ type, accounts: group }) => {
+                    const cfg = accountTypeConfig[type] ?? { label: type, icon: '💰' };
+                    const subtotal = group.reduce(
+                      (s, a) => s + (type === 'credit' ? Math.abs(Number(a.balance)) : Number(a.balance)),
+                      0,
+                    );
                     return (
-                      <div
-                        key={a.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={openAccount}
-                        onKeyDown={(e) => {
-                          if (e.key !== 'Enter' && e.key !== ' ') return;
-                          e.preventDefault();
-                          openAccount();
-                        }}
-                        title={linkUrl ? `Open ${a.institution || a.name}` : undefined}
-                        className="group w-full px-5 py-3 flex items-center justify-between gap-4 hover:bg-sand-50 transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <InstitutionLogo
-                            institution={a.institution || a.name}
-                            institutionDomain={a.institution_domain}
-                            size={32}
-                          />
-                          <div
-                            className="min-w-0"
-                            title={a.balance_date ? `${accountSource(a.id)} · Updated ${timeAgo(a.balance_date)}` : undefined}
-                          >
-                            <p className="text-sm text-ink-700 truncate">{a.institution || a.name}</p>
-                            {subtitle && <p className="text-xs text-ink-300 truncate">{subtitle}</p>}
-                            {a.balance_date && accountSource(a.id) !== 'Manual'
-                              && Date.now() - new Date(a.balance_date).getTime() > 36 * 3_600_000 && (
-                              <p className="text-[11px] text-accent-gold truncate">
-                                ⚠ Stale — {accountSource(a.id)} · updated {timeAgo(a.balance_date)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        {/* relative + md:absolute on the button so the edit affordance overlays
-                            the value on hover instead of pushing it left of the row's true
-                            right edge — the value's own right alignment stays fixed either way. */}
-                        <div className="relative flex items-center gap-1.5 md:gap-0 shrink-0">
+                      <div key={type} className="divide-y divide-sand-100 border-t border-sand-100">
+                        <div className="px-5 py-2.5 flex items-center justify-between bg-sand-50/60">
+                          <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>{cfg.icon}</span>
+                            {cfg.label}
+                          </span>
                           <span
-                            className={`text-sm font-mono text-right whitespace-nowrap transition-[mask-image] duration-150 md:[mask-image:none] md:[-webkit-mask-image:none] md:group-hover:[mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] md:group-hover:[-webkit-mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
+                            className={`text-xs font-mono ${type === 'credit' ? 'text-accent-red' : 'text-ink-500'}`}
                             data-sensitive
                           >
-                            {formatCurrency(Number(a.balance))}
+                            {formatCurrency(subtotal)}
                           </span>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setModalAccount(a); }}
-                            title="Edit account"
-                            className="w-6 h-6 flex items-center justify-center text-ink-300 hover:text-ink-700 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity rounded-md hover:bg-sand-100 md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
                         </div>
+                        {group.map((a) => {
+                          const subtitleParts: string[] = [];
+                          if (a.name && a.name !== a.institution) subtitleParts.push(a.name);
+                          if (a.mask) subtitleParts.push(`•••• ${a.mask}`);
+                          const subtitle = subtitleParts.join(' · ');
+                          const linkUrl = getAccountLinkUrl(a.institution || a.name, a.institution_domain, a.custom_url);
+
+                          const openAccount = () => {
+                            if (linkUrl) window.open(linkUrl, '_blank', 'noopener,noreferrer');
+                            else setModalAccount(a);
+                          };
+
+                          return (
+                            <div
+                              key={a.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={openAccount}
+                              onKeyDown={(e) => {
+                                if (e.key !== 'Enter' && e.key !== ' ') return;
+                                e.preventDefault();
+                                openAccount();
+                              }}
+                              title={linkUrl ? `Open ${a.institution || a.name}` : undefined}
+                              className="group w-full px-5 py-3 flex items-center justify-between gap-4 hover:bg-sand-50 transition-colors cursor-pointer"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <InstitutionLogo
+                                  institution={a.institution || a.name}
+                                  institutionDomain={a.institution_domain}
+                                  size={32}
+                                />
+                                <div
+                                  className="min-w-0"
+                                  title={a.balance_date ? `${accountSource(a.id)} · Updated ${timeAgo(a.balance_date)}` : undefined}
+                                >
+                                  <p className="text-sm text-ink-700 truncate">{a.institution || a.name}</p>
+                                  {subtitle && <p className="text-xs text-ink-300 truncate">{subtitle}</p>}
+                                  {a.balance_date && accountSource(a.id) !== 'Manual'
+                                    && Date.now() - new Date(a.balance_date).getTime() > 36 * 3_600_000 && (
+                                    <p className="text-[11px] text-accent-gold truncate">
+                                      ⚠ Stale — {accountSource(a.id)} · updated {timeAgo(a.balance_date)}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              {/* relative + md:absolute on the button so the edit affordance overlays
+                                  the value on hover instead of pushing it left of the row's true
+                                  right edge — the value's own right alignment stays fixed either way. */}
+                              <div className="relative flex items-center gap-1.5 md:gap-0 shrink-0">
+                                <span
+                                  className={`text-sm font-mono text-right whitespace-nowrap transition-[mask-image] duration-150 md:[mask-image:none] md:[-webkit-mask-image:none] md:group-hover:[mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] md:group-hover:[-webkit-mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
+                                  data-sensitive
+                                >
+                                  {formatCurrency(Number(a.balance))}
+                                </span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setModalAccount(a); }}
+                                  title="Edit account"
+                                  className="w-6 h-6 flex items-center justify-center text-ink-300 hover:text-ink-700 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity rounded-md hover:bg-sand-100 md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
-        </div>
-      )}
-
-      {/* Projection — AI-generated, cached, only regenerated on explicit click */}
-      <ProjectionCard
-        projection={projection}
-        selectedScenario={selectedScenario}
-        onSelectScenario={setSelectedScenario}
-        onRegenerate={regenerateProjection}
-        loading={projectionLoading}
-        error={projectionError}
-      />
+        </aside>
+      </div>
     </div>
   );
 }

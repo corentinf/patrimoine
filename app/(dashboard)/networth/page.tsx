@@ -176,7 +176,9 @@ export default async function NetWorthPage() {
   }
 
   return (
-    <div className="space-y-5">
+    // Grid: InvestmentClient's children are the grid cells (header across, chart + holdings in
+    // the main column); AI insights sit in the right rail from xl.
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(340px,24vw,460px)] gap-6 items-start">
       <InvestmentClient
         dates={investment.dates}
         accounts={investment.accounts}
@@ -186,7 +188,9 @@ export default async function NetWorthPage() {
         priceDates={priceSeries.dates}
         priceSeries={priceSeries.series}
       />
-      <HoldingsInsights />
+      <div className="min-w-0 xl:col-start-2 xl:row-start-2 xl:row-span-2">
+        <HoldingsInsights />
+      </div>
     </div>
   );
 }

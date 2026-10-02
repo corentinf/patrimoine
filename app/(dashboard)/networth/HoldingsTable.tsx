@@ -453,7 +453,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
     <div className="space-y-4">
 
       {/* KPI grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6 gap-3">
         <Kpi
           label="Market Value"
           tooltip="Current total market value of all your investment positions at today's prices."
@@ -531,7 +531,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
 
       {/* Group KPIs — shown only when a filter is active */}
       {selectedGroup && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6 gap-3">
           <Kpi
             label="Market Value"
             tooltip={`Current total market value of ${selectedGroup} positions.`}

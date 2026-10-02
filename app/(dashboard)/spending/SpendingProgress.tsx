@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from 'react';
 import {
-  BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
+  BarChart, Bar, Cell, LabelList, Rectangle, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { formatCurrency } from '@/app/lib/utils';
@@ -138,6 +138,13 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   // pinned — or to nothing — once the mouse moves off.
   const [pinnedKey, setPinnedKey] = useState<string | null>(null);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  // Bar that was just pinned by a click — drives a brief ring pulse (see .bar-pulse in globals.css).
+  const [pulseKey, setPulseKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pulseKey) return;
+    const t = setTimeout(() => setPulseKey(null), 450);
+    return () => clearTimeout(t);
+  }, [pulseKey]);
   const selectedKey = hoveredKey ?? pinnedKey;
   // Auto-detected outlier capping (see yAxisCap below) can be overridden by
   // the user via the "Full scale" toggle — e.g. when two similar-sized
@@ -305,7 +312,9 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
         </div>
       )}
 
-      <div className="flex-1 min-h-[220px] flex flex-col">
+      {/* Explicit height: the chart is 100%-tall, so it needs a definite parent height now that
+          callers place it in an items-start grid (it used to be stretched by an items-stretch row). */}
+      <div className="h-[260px] flex flex-col">
       <div className="flex-1 min-h-0">
       {hasData ? (
         <ResponsiveContainer width="100%" height="100%">
@@ -326,6 +335,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                   onPeriodSelect(null, { preview: false });
                 } else {
                   setPinnedKey(key);
+                  setPulseKey(key);
                   onPeriodSelect(bucketRange(key, gran), { preview: false });
                 }
               }}
@@ -368,7 +378,29 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                 tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
               />
               <Tooltip content={<CustomTooltip valueLabel={valueLabel} />} cursor={{ fill: '#F0EBE1', opacity: 0.5 }} />
-              <Bar dataKey={yAxisCap ? 'displayValue' : 'value'} name="Spending" radius={[3, 3, 0, 0]}>
+              <Bar
+                dataKey={yAxisCap ? 'displayValue' : 'value'}
+                name="Spending"
+                radius={[3, 3, 0, 0]}
+                shape={(props: any) => (
+                  <g>
+                    <Rectangle {...props} />
+                    {pulseKey && props.payload?.key === pulseKey && (
+                      <rect
+                        className="bar-pulse"
+                        x={props.x}
+                        y={props.y}
+                        width={props.width}
+                        height={props.height}
+                        rx={3}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth={2}
+                      />
+                    )}
+                  </g>
+                )}
+              >
                 {barChartData.map((entry: any, i: number) => {
                   const isSelected = !!selectedKey && entry.key === selectedKey;
                   const hasSelection = !!selectedKey;
