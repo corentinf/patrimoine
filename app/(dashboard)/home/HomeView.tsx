@@ -435,7 +435,7 @@ export default function HomeView({
   const selectedFillPct = selectedMilestone ? selectedMilestone.pct : 100;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {modalAccount !== undefined && (
         <AccountModal
           account={modalAccount}
@@ -444,20 +444,33 @@ export default function HomeView({
         />
       )}
 
-      {/* Hero */}
-      <div className="card px-5 py-4">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="font-display text-lg text-ink-800">Net worth</h2>
-          <span className="stat-label">{rangeLabel}</span>
-          <span className="stat-value text-xl" data-sensitive>{formatCurrency(endValue)}</span>
+      {/* Summary strip — net worth for the selected period; assets/liabilities are always current */}
+      <div className="card p-0 grid grid-cols-1 sm:grid-cols-[1.6fr_1fr_1fr] divide-y sm:divide-y-0 sm:divide-x divide-sand-100">
+        <div className="px-6 py-5">
+          <p className="stat-label">Net worth <span className="normal-case tracking-normal text-ink-300 font-normal">· {rangeLabel}</span></p>
+          <p className="stat-value mt-1" data-sensitive>{formatCurrency(endValue)}</p>
+          {hasChange ? (
+            <p className={`text-xs font-mono mt-1 ${amountColor(change)}`} data-sensitive>
+              {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%) over period
+            </p>
+          ) : trackingStartDate ? (
+            <p className="text-xs text-ink-300 mt-1">Tracking since {trackingStartDate}</p>
+          ) : null}
         </div>
-        {hasChange ? (
-          <p className={`text-xs font-mono mt-1 ${amountColor(change)}`} data-sensitive>
-            {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%) over period
+        <div className="px-6 py-5">
+          <p className="stat-label">Assets</p>
+          <p className="stat-value text-2xl mt-1" data-sensitive>{formatCurrency(totalAssets)}</p>
+          <p className="text-xs text-ink-300 mt-1">{assetsCount} account{assetsCount !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="px-6 py-5">
+          <p className="stat-label">Liabilities</p>
+          <p className="stat-value text-2xl mt-1 text-accent-red" data-sensitive>
+            {totalLiabilities > 0 ? formatCurrency(totalLiabilities) : '—'}
           </p>
-        ) : trackingStartDate ? (
-          <p className="text-xs text-ink-300 mt-1">Tracking since {trackingStartDate}</p>
-        ) : null}
+          <p className="text-xs text-ink-300 mt-1">
+            {liabilitiesCount > 0 ? `${liabilitiesCount} account${liabilitiesCount !== 1 ? 's' : ''}` : 'None'}
+          </p>
+        </div>
       </div>
 
       {/* Chart */}
@@ -608,38 +621,6 @@ export default function HomeView({
         </div>
       </div>
 
-      {/* Projection — AI-generated, cached, only regenerated on explicit click */}
-      <ProjectionCard
-        projection={projection}
-        selectedScenario={selectedScenario}
-        onSelectScenario={setSelectedScenario}
-        onRegenerate={regenerateProjection}
-        loading={projectionLoading}
-        error={projectionError}
-      />
-
-      {/* Account summary — always current, not scoped to the selected period */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div className="card px-5 py-4">
-          <p className="stat-label">Assets</p>
-          <p className="stat-value text-xl mt-1" data-sensitive>{formatCurrency(totalAssets)}</p>
-          <p className="text-xs text-ink-300 mt-0.5">{assetsCount} account{assetsCount !== 1 ? 's' : ''}</p>
-        </div>
-        <div className="card px-5 py-4">
-          <p className="stat-label">Liabilities</p>
-          <p className="stat-value text-xl mt-1 text-accent-red" data-sensitive>
-            {totalLiabilities > 0 ? formatCurrency(totalLiabilities) : '—'}
-          </p>
-          <p className="text-xs text-ink-300 mt-0.5">
-            {liabilitiesCount > 0 ? `${liabilitiesCount} account${liabilitiesCount !== 1 ? 's' : ''}` : 'None'}
-          </p>
-        </div>
-        <div className="card px-5 py-4 col-span-2 sm:col-span-1">
-          <p className="stat-label">Net worth</p>
-          <p className="stat-value text-xl mt-1" data-sensitive>{formatCurrency(currentNetWorth)}</p>
-        </div>
-      </div>
-
       {/* Accounts — always current, not scoped to the selected period */}
       {groupedAccounts.length > 0 && (
         <div>
@@ -705,12 +686,16 @@ export default function HomeView({
                             institutionDomain={a.institution_domain}
                             size={32}
                           />
-                          <div className="min-w-0">
+                          <div
+                            className="min-w-0"
+                            title={a.balance_date ? `${accountSource(a.id)} · Updated ${timeAgo(a.balance_date)}` : undefined}
+                          >
                             <p className="text-sm text-ink-700 truncate">{a.institution || a.name}</p>
                             {subtitle && <p className="text-xs text-ink-300 truncate">{subtitle}</p>}
-                            {a.balance_date && (
-                              <p className="text-[11px] text-ink-300 truncate">
-                                {accountSource(a.id)} · Updated {timeAgo(a.balance_date)}
+                            {a.balance_date && accountSource(a.id) !== 'Manual'
+                              && Date.now() - new Date(a.balance_date).getTime() > 36 * 3_600_000 && (
+                              <p className="text-[11px] text-accent-gold truncate">
+                                ⚠ Stale — {accountSource(a.id)} · updated {timeAgo(a.balance_date)}
                               </p>
                             )}
                           </div>
@@ -745,6 +730,15 @@ export default function HomeView({
         </div>
       )}
 
+      {/* Projection — AI-generated, cached, only regenerated on explicit click */}
+      <ProjectionCard
+        projection={projection}
+        selectedScenario={selectedScenario}
+        onSelectScenario={setSelectedScenario}
+        onRegenerate={regenerateProjection}
+        loading={projectionLoading}
+        error={projectionError}
+      />
     </div>
   );
 }
