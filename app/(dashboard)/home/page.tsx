@@ -1,6 +1,8 @@
 import { createServiceClient } from '@/app/lib/supabase';
 import HomeView from './HomeView';
 import { isLockedRetirementAccount, isIraAccount } from '@/app/lib/accounts';
+import { getDailyCloses, type Close } from '@/app/lib/prices';
+import { buildInsights, type HoldingMove, type InsightTx } from '@/app/lib/insights';
 
 export const revalidate = 300;
 
@@ -26,11 +28,105 @@ async function getAccounts() {
   return data ?? [];
 }
 
+// The user lives in San Francisco; "today" for the headline is their calendar day,
+// not the server's (Vercel runs in UTC).
+const TZ = 'America/Los_Angeles';
+const todayInTz = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
+const todayLabelInTz = () =>
+  new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric' }).format(new Date());
+
+// Last ~5 weeks of transactions: enough for "this week vs the previous three" comparisons.
+async function getRecentTransactions(): Promise<InsightTx[]> {
+  try {
+    const supabase = createServiceClient();
+    const since = new Date(Date.now() - 36 * 86_400_000).toISOString();
+    const { data } = await supabase
+      .from('transactions')
+      .select(`
+        id, amount, description, payee, posted_at, is_transfer, is_reimbursable,
+        category:categories(name, icon, is_income),
+        account:accounts(institution, name, is_hidden)
+      `)
+      .gte('posted_at', since)
+      .order('posted_at', { ascending: false })
+      .limit(3000);
+    return ((data ?? []) as any[]).filter((tx) => tx.account?.is_hidden !== true) as InsightTx[];
+  } catch {
+    return []; // the headline is a nice-to-have; never let it break the page
+  }
+}
+
+// One-session and five-session moves for the largest positions (Yahoo daily closes,
+// cached 5 min by fetch). Capped at 4s so a slow quote API can't stall the page.
+async function getHoldingMoves(): Promise<HoldingMove[]> {
+  try {
+    const supabase = createServiceClient();
+    const { data } = await supabase
+      .from('holdings')
+      .select('symbol, description, shares, market_value')
+      .order('market_value', { ascending: false })
+      .limit(40);
+
+    const bySymbol = new Map<string, { name: string | null; shares: number; value: number }>();
+    for (const h of data ?? []) {
+      const sym = String(h.symbol ?? '').trim();
+      if (!sym) continue;
+      const row = bySymbol.get(sym) ?? { name: h.description ?? null, shares: 0, value: 0 };
+      row.shares += Number(h.shares ?? 0);
+      row.value += Number(h.market_value ?? 0);
+      bySymbol.set(sym, row);
+    }
+    const top = Array.from(bySymbol.entries()).sort((a, b) => b[1].value - a[1].value).slice(0, 15);
+    if (top.length === 0) return [];
+
+    const closes = await Promise.race([
+      getDailyCloses(top.map(([sym]) => sym)),
+      new Promise<Record<string, Close[]>>((resolve) => setTimeout(() => resolve({}), 4000)),
+    ]);
+
+    const moves: HoldingMove[] = [];
+    for (const [sym, pos] of top) {
+      const series = closes[sym];
+      if (!series || series.length < 3) continue;
+      const last = series[series.length - 1];
+      const prev = series[series.length - 2];
+      if (!prev.close || !last.close) continue;
+      const pct1d = last.close / prev.close - 1;
+      const usd1d = pos.shares > 0 ? pos.shares * (last.close - prev.close) : (pos.value * pct1d) / (1 + pct1d);
+      const five = series.length >= 6 ? series[series.length - 6] : null;
+      const pct5d = five?.close ? last.close / five.close - 1 : null;
+      const usd5d = five?.close
+        ? (pos.shares > 0 ? pos.shares * (last.close - five.close) : null)
+        : null;
+      moves.push({ symbol: sym, name: pos.name, pct1d, usd1d, pct5d, usd5d, lastDate: last.date });
+    }
+    return moves;
+  } catch {
+    return [];
+  }
+}
+
 export default async function HomePage() {
-  const [history, accounts] = await Promise.all([
+  const [history, accounts, recentTransactions, holdingMoves] = await Promise.all([
     getNetWorthHistory(),
     getAccounts(),
+    getRecentTransactions(),
+    getHoldingMoves(),
   ]);
+
+  const insights = buildInsights({
+    todayIso: todayInTz(),
+    transactions: recentTransactions,
+    movers: holdingMoves,
+    netWorthHistory: history.map((h) => ({ snapshot_date: h.snapshot_date, net_worth: h.net_worth })),
+    accounts: accounts.map((a) => ({
+      id: a.id,
+      institution: a.institution,
+      name: a.name,
+      account_type: a.account_type,
+      balance_date: a.balance_date,
+    })),
+  });
 
   const latest = history[history.length - 1];
 
@@ -122,6 +218,8 @@ export default async function HomePage() {
       monthlyGrowthRate={monthlyGrowthRate}
       assetsGrowthRate={assetsGrowthRate}
       liabilitiesGrowthRate={liabilitiesGrowthRate}
+      insights={insights}
+      todayLabel={todayLabelInTz()}
     />
   );
 }

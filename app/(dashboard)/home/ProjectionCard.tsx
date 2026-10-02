@@ -38,21 +38,21 @@ export default function ProjectionCard({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Projection</h3>
-        <button
-          type="button"
-          onClick={onRegenerate}
-          disabled={loading}
-          title={projection ? 'Regenerate projection' : 'Generate projection'}
-          className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-sand-100 text-ink-400 hover:text-ink-600 transition-colors disabled:opacity-40"
-        >
-          <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        </button>
-      </div>
       <div className="card px-5 py-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="stat-label">Projection</h3>
+            <button
+              type="button"
+              onClick={onRegenerate}
+              disabled={loading}
+              title={projection ? 'Regenerate projection' : 'Generate projection'}
+              className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-sand-100 text-ink-400 hover:text-ink-600 transition-colors disabled:opacity-40"
+            >
+              <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          </div>
         {!projection ? (
           <div className="text-center py-6 space-y-3">
             <p className="text-sm text-ink-400 max-w-sm mx-auto">

@@ -2,6 +2,7 @@ import Header from '../components/Header';
 import MobileTopBar from '../components/MobileTopBar';
 import Sidebar from '../components/Sidebar';
 import Chat from '../components/Chat';
+import Footer from '../components/Footer';
 import { KeyboardShortcutsProvider } from '../components/KeyboardShortcuts';
 import { PrivacyProvider } from '../lib/privacy';
 import { SyncStatusProvider } from '../lib/syncStatus';
@@ -65,6 +66,7 @@ export default async function DashboardLayout({
                   <main>
                     {children}
                   </main>
+                  <Footer />
                 </div>
 
                 <Chat />

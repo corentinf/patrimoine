@@ -12,6 +12,8 @@ import { buildMilestones, type Milestone, type ProjectionRow, type ScenarioKey }
 import NetWorthChart from '../networth/NetWorthChart';
 import ProjectionCard from './ProjectionCard';
 import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../components/AccountsPanel';
+import HeadlineBanner from './HeadlineBanner';
+import type { Insight } from '@/app/lib/insights';
 
 const ACCOUNT_TYPE_ORDER = ['checking', 'savings', 'investment', 'credit'];
 
@@ -91,6 +93,49 @@ interface HomeViewProps {
   monthlyGrowthRate: number | null;
   assetsGrowthRate: number | null;
   liabilitiesGrowthRate: number | null;
+  insights: Insight[];
+  todayLabel: string;
+}
+
+// Tiny net-worth trend for the gradient card: smoothed line over a soft fill, stretched to the
+// card's width. Stroke is non-scaling so it stays crisp when the viewBox is stretched.
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 3) return null;
+  const W = 300, H = 56, PAD = 6;
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => [
+    (i / (values.length - 1)) * W,
+    H - PAD - ((v - min) / span) * (H - PAD * 2),
+  ]);
+  // Quadratic smoothing through segment midpoints.
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i][0] + pts[i + 1][0]) / 2;
+    const my = (pts[i][1] + pts[i + 1][1]) / 2;
+    d += ` Q ${pts[i][0]} ${pts[i][1]} ${mx} ${my}`;
+  }
+  const last = pts[pts.length - 1];
+  d += ` T ${last[0]} ${last[1]}`;
+  const fill = `${d} L ${W} ${H} L 0 ${H} Z`;
+  return (
+    <div className="relative h-14 w-full" aria-hidden>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
+        <defs>
+          <linearGradient id="nw-spark-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.32" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={fill} fill="url(#nw-spark-fill)" />
+        <path d={d} fill="none" stroke="#fff" strokeOpacity="0.95" strokeWidth="1.75" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <span
+        className="absolute h-2 w-2 -translate-y-1/2 translate-x-1/2 rounded-full bg-white shadow-[0_0_0_3px_rgb(255_255_255/0.28)]"
+        style={{ right: 0, top: `${(last[1] / H) * 100}%` }}
+      />
+    </div>
+  );
 }
 
 export default function HomeView({
@@ -107,6 +152,8 @@ export default function HomeView({
   monthlyGrowthRate,
   assetsGrowthRate,
   liabilitiesGrowthRate,
+  insights,
+  todayLabel,
 }: HomeViewProps) {
   const { resolvedRange, rangeLabel } = useGlobalFilter();
   // Not otherwise used here — but subscribing is what makes this component
@@ -400,6 +447,10 @@ export default function HomeView({
   }, [history, resolvedRange, todayIso, currentNetWorth, totalAssets, totalLiabilities, accountMeta, effectiveNetWorthDelta, effectiveAssetsDelta, effectiveLiabilitiesDelta]);
 
   const change = endValue - startValue;
+  const sparkValues = useMemo(
+    () => (chartData as Array<{ netWorth?: number }>).map((p) => p.netWorth).filter((n): n is number => typeof n === 'number'),
+    [chartData],
+  );
   const pct = startValue !== 0 ? (change / startValue) * 100 : 0;
 
   // Split any bar into 💵 available vs 🔒 retirement-locked segments, scaled
@@ -444,6 +495,9 @@ export default function HomeView({
         />
       )}
 
+      {/* What happened lately: salary, big spends, market moves… */}
+      <HeadlineBanner insights={insights} dateLabel={todayLabel} />
+
       {/* Dashboard grid: main column (chart + key figures, milestones, projection) with the
           accounts list as a right-hand rail that stays in view while scrolling on wide screens. */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(340px,24vw,460px)] gap-6 items-start">
@@ -458,15 +512,15 @@ export default function HomeView({
 
             {/* Milestones — always current, not scoped to the selected period */}
             <div>
-              <div className="flex items-center gap-1.5 mb-3">
-                <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Milestones</h3>
-                {retirementBalance > 0 && (
-                  <InfoTooltip
-                    text="Track milestones for your Total net worth, Available (liquid) money, or Retirement-locked money (401k/IRA/HSA). Total bars also split 💵 available vs 🔒 retirement, projected forward to each milestone's ETA."
-                  />
-                )}
-              </div>
               <div className="card px-5 py-4 space-y-4">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="stat-label">Milestones</h3>
+                    {retirementBalance > 0 && (
+                      <InfoTooltip
+                        text="Track milestones for your Total net worth, Available (liquid) money, or Retirement-locked money (401k/IRA/HSA). Total bars also split 💵 available vs 🔒 retirement, projected forward to each milestone's ETA."
+                      />
+                    )}
+                  </div>
                 {/* Metric tabs */}
                 {retirementBalance > 0 && (
                   <div className="flex items-center gap-1 flex-wrap">
@@ -475,10 +529,14 @@ export default function HomeView({
                         key={key}
                         type="button"
                         onClick={() => selectMetric(key)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        className={`px-3.5 py-1.5 text-xs font-medium transition-all !rounded-full ${
                           metric === key
-                            ? 'bg-ink-800 text-white'
-                            : 'bg-sand-50 border border-sand-200 text-ink-500 hover:border-sand-300'
+                            ? key === 'available'
+                              ? 'gradient-card g-aurora'
+                              : key === 'retirement'
+                              ? 'gradient-card g-violet'
+                              : 'bg-ink-800 text-white'
+                            : 'pill'
                         }`}
                       >
                         {metricConfig[key].icon} {metricConfig[key].label}
@@ -494,8 +552,8 @@ export default function HomeView({
                     onClick={() => setSelectedIdx(0)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                       selectedIdx === 0
-                        ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
-                        : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                        ? 'pill-active'
+                        : 'pill'
                     }`}
                   >
                     Current
@@ -507,8 +565,8 @@ export default function HomeView({
                       onClick={() => setSelectedIdx(i + 1)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                         selectedIdx === i + 1
-                          ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
-                          : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+                          ? 'pill-active'
+                          : 'pill'
                       }`}
                     >
                       {compactTarget(m.target)}
@@ -554,12 +612,12 @@ export default function HomeView({
                   <div className="h-1.5 bg-sand-100 rounded-full overflow-hidden flex">
                     {isTotalMetric ? (
                       <>
-                        <div className="h-full bg-[#5DBB8F] transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
+                        <div className="h-full bg-accent-money transition-all" style={{ width: `${selectedSplit.availablePct}%` }} />
                         <div className="h-full bg-accent-purple border-l-2 border-white transition-all" style={{ width: `${selectedSplit.retirementPct}%` }} />
                       </>
                     ) : (
                       <div
-                        className={`h-full transition-all ${metric === 'available' ? 'bg-[#5DBB8F]' : 'bg-accent-purple'}`}
+                        className={`h-full transition-all ${metric === 'available' ? 'bg-accent-money' : 'bg-accent-purple'}`}
                         style={{ width: `${selectedFillPct}%` }}
                       />
                     )}
@@ -607,49 +665,100 @@ export default function HomeView({
             />
         </div>
 
-        <aside className="min-w-0 xl:sticky xl:top-[calc(var(--header-h,96px)_+_1.5rem)] xl:max-h-[calc(100vh_-_var(--header-h,96px)_-_3rem)] xl:overflow-y-auto">
-          {/* One card: key figures on top (net worth follows the selected period; assets and
-              liabilities are always current), accounts underneath. */}
-          <div className="card p-0 overflow-hidden">
-            <div className="px-5 py-4">
-              <p className="stat-label">Net worth <span className="normal-case tracking-normal text-ink-300 font-normal">· {rangeLabel}</span></p>
-              <div className="flex flex-wrap items-baseline gap-x-3 mt-1">
-                <p className="stat-value" data-sensitive>{formatCurrency(endValue)}</p>
-                {hasChange ? (
-                  <p className={`text-xs font-mono ${amountColor(change)}`} data-sensitive>
-                    {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
+        <aside className="min-w-0">
+          {/* Two separate cards: net worth (follows the selected period; assets and liabilities
+              are always current), then the accounts list. */}
+          <div className="space-y-5">
+            <div className="gradient-card g-aurora">
+              <div className="sheen" />
+              <div className="relative px-5 pt-5">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">
+                    Net worth <span className="normal-case tracking-normal font-normal text-white/65">· {rangeLabel}</span>
                   </p>
-                ) : trackingStartDate ? (
-                  <p className="text-xs text-ink-300">Tracking since {trackingStartDate}</p>
-                ) : null}
-              </div>
-              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-sand-100">
-                <div>
-                  <p className="stat-label">Assets</p>
-                  <p className="stat-value text-xl mt-1" data-sensitive>{formatCurrency(totalAssets)}</p>
-                  <p className="text-xs text-ink-300 mt-0.5">{assetsCount} account{assetsCount !== 1 ? 's' : ''}</p>
+                  {hasChange && (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[rgb(255_255_255/0.22)] border border-[rgb(255_255_255/0.3)] px-2.5 py-0.5 text-[11px] font-mono text-white"
+                      data-sensitive
+                    >
+                      {change >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(change))} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <p className="stat-label">Liabilities</p>
-                  <p className="stat-value text-xl mt-1 text-accent-red" data-sensitive>
-                    {totalLiabilities > 0 ? formatCurrency(totalLiabilities) : '—'}
-                  </p>
-                  <p className="text-xs text-ink-300 mt-0.5">
-                    {liabilitiesCount > 0 ? `${liabilitiesCount} account${liabilitiesCount !== 1 ? 's' : ''}` : 'None'}
-                  </p>
+                <p className="stat-value mt-2 text-[2.6rem] leading-none" data-sensitive>{formatCurrency(endValue)}</p>
+                {!hasChange && trackingStartDate && (
+                  <p className="mt-1.5 text-xs text-white/75">Tracking since {trackingStartDate}</p>
+                )}
+              </div>
+              <div className="relative mt-3">
+                <Sparkline values={sparkValues} />
+              </div>
+              <div className="relative space-y-4 px-4 pb-4 pt-1">
+                {retirementBalance > 0 && (() => {
+                  // Available + Retirement always add up to net worth (see page.tsx).
+                  const split = splitPct(currentNetWorth, availableNetWorth, retirementBalance);
+                  return (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between px-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/70">
+                        <span>Where it sits</span>
+                        <span className="font-normal normal-case tracking-normal">today</span>
+                      </div>
+                      <div className="flex h-1.5 gap-0.5 overflow-hidden rounded-full bg-[rgb(255_255_255/0.18)]">
+                        <div className="h-full rounded-full bg-white" style={{ width: `${split.availablePct}%` }} />
+                        <div className="h-full rounded-full bg-[rgb(255_255_255/0.45)]" style={{ width: `${split.retirementPct}%` }} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-[rgb(255_255_255/0.28)] bg-[rgb(255_255_255/0.16)] px-3.5 py-3 backdrop-blur-sm">
+                          <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/80">
+                            <span aria-hidden className="h-2 w-2 rounded-full bg-white" />
+                            Available
+                          </p>
+                          <p className="stat-value mt-1.5 text-xl" data-sensitive>{formatCurrency(availableNetWorth)}</p>
+                          <p className="mt-0.5 text-[11px] text-white/70">Spendable · {Math.round(split.availablePct)}%</p>
+                        </div>
+                        <div className="rounded-xl border border-[rgb(255_255_255/0.28)] bg-[rgb(255_255_255/0.16)] px-3.5 py-3 backdrop-blur-sm">
+                          <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/80">
+                            <span aria-hidden className="h-2 w-2 rounded-full bg-[rgb(255_255_255/0.45)]" />
+                            Retirement
+                          </p>
+                          <p className="stat-value mt-1.5 text-xl" data-sensitive>{formatCurrency(retirementBalance)}</p>
+                          <p className="mt-0.5 text-[11px] text-white/70">Locked · {Math.round(split.retirementPct)}%</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* The two ingredients of net worth */}
+                <div className="grid grid-cols-2 gap-3 border-t border-[rgb(255_255_255/0.25)] px-0.5 pt-3.5">
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/75">Assets</p>
+                    <p className="stat-value mt-1 text-lg" data-sensitive>{formatCurrency(totalAssets)}</p>
+                    <p className="mt-0.5 text-[11px] text-white/70">{assetsCount} account{assetsCount !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/75">Liabilities</p>
+                    <p className="stat-value mt-1 text-lg" data-sensitive>
+                      {totalLiabilities > 0 ? `−${formatCurrency(totalLiabilities)}` : '—'}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-white/70">
+                      {liabilitiesCount > 0 ? `${liabilitiesCount} account${liabilitiesCount !== 1 ? 's' : ''}` : 'None'}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
             {/* Accounts — always current, not scoped to the selected period */}
             {groupedAccounts.length > 0 && (
-              <div className="border-t border-sand-100">
-                <div className="flex items-center justify-between px-5 py-3">
-                  <h3 className="text-sm font-semibold text-ink-500 uppercase tracking-wider">Accounts</h3>
+              <div className="card p-0 overflow-hidden pb-2">
+                <div className="flex items-center justify-between px-5 pt-5 pb-1">
+                  <h3 className="stat-label">Accounts</h3>
                   <button
                     onClick={() => setModalAccount(null)}
-                    className="text-xs text-ink-400 hover:text-ink-700 transition-colors"
+                    className="pill gap-1 px-3 py-1 text-xs"
+                    title="Add account"
                   >
-                    + Add account
+                    <span aria-hidden className="text-sm leading-none">+</span> Add
                   </button>
                 </div>
                 <div>
@@ -660,14 +769,15 @@ export default function HomeView({
                       0,
                     );
                     return (
-                      <div key={type} className="divide-y divide-sand-100 border-t border-sand-100">
-                        <div className="px-5 py-2.5 flex items-center justify-between bg-sand-50/60">
-                          <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider flex items-center gap-1.5">
-                            <span>{cfg.icon}</span>
+                      <div key={type} className="mt-2 divide-y divide-sand-100/70">
+                        <div className="px-5 pt-3 pb-2 flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.12em] flex items-center gap-2">
+                            <span className="grid h-5 w-5 place-items-center rounded-md bg-sand-100 text-[11px] normal-case tracking-normal">{cfg.icon}</span>
                             {cfg.label}
+                            <span className="font-normal normal-case tracking-normal text-ink-300">· {group.length}</span>
                           </span>
                           <span
-                            className={`text-xs font-mono ${type === 'credit' ? 'text-accent-red' : 'text-ink-500'}`}
+                            className={`text-xs font-mono font-medium ${type === 'credit' ? 'text-accent-red' : 'text-ink-500'}`}
                             data-sensitive
                           >
                             {formatCurrency(subtotal)}
@@ -697,7 +807,7 @@ export default function HomeView({
                                 openAccount();
                               }}
                               title={linkUrl ? `Open ${a.institution || a.name}` : undefined}
-                              className="group w-full px-5 py-3 flex items-center justify-between gap-4 hover:bg-sand-50 transition-colors cursor-pointer"
+                              className="group w-full px-5 py-2.5 flex items-center justify-between gap-4 hover:bg-sand-100/60 transition-colors cursor-pointer"
                             >
                               <div className="flex items-center gap-3 min-w-0">
                                 <InstitutionLogo
@@ -709,8 +819,8 @@ export default function HomeView({
                                   className="min-w-0"
                                   title={a.balance_date ? `${accountSource(a.id)} · Updated ${timeAgo(a.balance_date)}` : undefined}
                                 >
-                                  <p className="text-sm text-ink-700 truncate">{a.institution || a.name}</p>
-                                  {subtitle && <p className="text-xs text-ink-300 truncate">{subtitle}</p>}
+                                  <p className="text-[13.5px] font-medium text-ink-800 truncate">{a.institution || a.name}</p>
+                                  {subtitle && <p className="text-[11.5px] text-ink-300 truncate">{subtitle}</p>}
                                   {a.balance_date && accountSource(a.id) !== 'Manual'
                                     && Date.now() - new Date(a.balance_date).getTime() > 36 * 3_600_000 && (
                                     <p className="text-[11px] text-accent-gold truncate">
@@ -724,7 +834,7 @@ export default function HomeView({
                                   right edge — the value's own right alignment stays fixed either way. */}
                               <div className="relative flex items-center gap-1.5 md:gap-0 shrink-0">
                                 <span
-                                  className={`text-sm font-mono text-right whitespace-nowrap transition-[mask-image] duration-150 md:[mask-image:none] md:[-webkit-mask-image:none] md:group-hover:[mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] md:group-hover:[-webkit-mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
+                                  className={`text-[13.5px] font-medium font-mono text-right whitespace-nowrap transition-[mask-image] duration-150 md:[mask-image:none] md:[-webkit-mask-image:none] md:group-hover:[mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] md:group-hover:[-webkit-mask-image:linear-gradient(to_right,black,black_calc(100%_-_30px),transparent_calc(100%_-_8px))] ${type === 'credit' ? 'text-accent-red' : 'text-ink-700'}`}
                                   data-sensitive
                                 >
                                   {formatCurrency(Number(a.balance))}
