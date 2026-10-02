@@ -164,7 +164,7 @@ function Sparkline({ points, gain, width = 64, height = 20 }: { points: number[]
   const path = points
     .map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * stepX).toFixed(1)},${(height - ((v - min) / span) * height).toFixed(1)}`)
     .join(' ');
-  const color = gain == null ? '#B8B3AB' : gain >= 0 ? '#3D7A5F' : '#B85450';
+  const color = gain == null ? 'rgb(var(--ink-200))' : gain >= 0 ? 'rgb(var(--accent-green))' : '#B85450';
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible flex-shrink-0">
       <path d={path} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />

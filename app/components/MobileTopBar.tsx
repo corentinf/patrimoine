@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { usePageFilterSlotContent } from '@/app/lib/pageFilterSlot';
 import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
 import { SyncDropdown, FilterBar } from './Header';
+import { ThemeToggle } from '@/app/lib/theme';
 import MobileFilterSheet from './MobileFilterSheet';
 
 const PAGE_LABELS: Record<string, string> = {
@@ -28,7 +29,7 @@ export default function MobileTopBar() {
     <>
       <header
         ref={headerRef}
-        className="md:hidden sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200"
+        className="md:hidden sticky top-0 z-20 glass border-b"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="h-14 px-4 flex items-center gap-3">
@@ -36,10 +37,11 @@ export default function MobileTopBar() {
             {pageLabel}
           </h1>
           <SyncDropdown />
+          <ThemeToggle />
           {!!pageFilterContent && (
             <button
               onClick={() => setSheetOpen(true)}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-600 px-3 py-1.5 rounded-lg hover:bg-sand-50 transition-colors"
+              className="pill gap-1.5 text-sm px-3.5 py-1.5"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 8h12M9 12h6M11 16h2" />

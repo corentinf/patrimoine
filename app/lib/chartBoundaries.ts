@@ -31,8 +31,8 @@ export const BOUNDARY_STYLE: Record<PeriodBoundary['kind'], {
   stroke: string; strokeWidth: number; dash: string;
   fill: string; fontSize: number; fontWeight: number;
 }> = {
-  week:  { stroke: '#B8B3AB', strokeWidth: 1,   dash: '2 3', fill: '#6B645A', fontSize: 9,  fontWeight: 500 },
-  month: { stroke: '#6B645A', strokeWidth: 1.5, dash: '4 2', fill: '#2B2724', fontSize: 11, fontWeight: 700 },
+  week:  { stroke: 'rgb(var(--ink-200))', strokeWidth: 1,   dash: '2 3', fill: 'rgb(var(--ink-400))', fontSize: 9,  fontWeight: 500 },
+  month: { stroke: 'rgb(var(--ink-400))', strokeWidth: 1.5, dash: '4 2', fill: 'rgb(var(--ink-700))', fontSize: 11, fontWeight: 700 },
 };
 
 const MIN_SPAN_DAYS = 10;

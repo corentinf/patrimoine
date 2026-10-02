@@ -23,7 +23,7 @@ const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
 
 // Cycled per selected account so each gets a stable, distinguishable color in
 // the Stacked view and Total's % overlay. Deliberately excludes the app's
-// green/red accents (#3D7A5F/#B85450) — those are reserved for the $ total
+// green/red accents (the brand green and #B85450) — those are reserved for the $ total
 // line's up/down color, and an account happening to land on the same hue
 // made it disappear into the total on the chart.
 const ACCOUNT_COLORS = ['#4A6FA5', '#C4983B', '#8E6BAE', '#5B8A8A', '#8A7A64', '#6B5D4A', '#A89882'];
@@ -139,7 +139,7 @@ function CustomTooltip({ active, payload, label, up, hoveredAccountId, nearAxis 
 
 function BlurredYTick({ x, y, payload, blurred }: any) {
   return (
-    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end"
+    <text x={x} y={y} dy={4} fill="rgb(var(--ink-300))" fontSize={11} textAnchor="end"
       style={blurred ? { filter: 'blur(5px)', userSelect: 'none' } : {}}>
       {`$${(payload.value / 1000).toFixed(0)}k`}
     </text>
@@ -148,7 +148,7 @@ function BlurredYTick({ x, y, payload, blurred }: any) {
 
 function PercentYTick({ x, y, payload }: any) {
   return (
-    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end">
+    <text x={x} y={y} dy={4} fill="rgb(var(--ink-300))" fontSize={11} textAnchor="end">
       {`${payload.value >= 0 ? '+' : ''}${payload.value}%`}
     </text>
   );
@@ -670,7 +670,7 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               onMouseMove={handleChartMouseMove}
               onMouseLeave={handleChartMouseLeave}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--sand-200))" vertical={false} />
               {stackedBoundaries.map((b) => {
                 const s = BOUNDARY_STYLE[b.kind];
                 return (
@@ -686,8 +686,8 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               })}
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 11, fill: '#8F897E' }}
-                axisLine={{ stroke: '#E2D9CA' }}
+                tick={{ fontSize: 11, fill: 'rgb(var(--ink-300))' }}
+                axisLine={{ stroke: 'rgb(var(--sand-300))' }}
                 tickLine={false}
                 interval="preserveStartEnd"
                 minTickGap={24}
@@ -742,11 +742,11 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
           >
             <defs>
               <linearGradient id="investFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={up ? '#3D7A5F' : '#B85450'} stopOpacity={0.18} />
-                <stop offset="100%" stopColor={up ? '#3D7A5F' : '#B85450'} stopOpacity={0} />
+                <stop offset="0%" stopColor={up ? 'rgb(var(--accent-green))' : '#B85450'} stopOpacity={0.18} />
+                <stop offset="100%" stopColor={up ? 'rgb(var(--accent-green))' : '#B85450'} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--sand-200))" vertical={false} />
             {chartBoundaries.map((b) => {
               const s = BOUNDARY_STYLE[b.kind];
               return (
@@ -763,8 +763,8 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
             })}
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: '#8F897E' }}
-              axisLine={{ stroke: '#E2D9CA' }}
+              tick={{ fontSize: 11, fill: 'rgb(var(--ink-300))' }}
+              axisLine={{ stroke: 'rgb(var(--sand-300))' }}
               tickLine={false}
               interval="preserveStartEnd"
               minTickGap={24}
@@ -795,29 +795,29 @@ export default function InvestmentProgress({ dates, accounts, rangeStart, rangeE
               <ReferenceLine
                 yAxisId="left"
                 y={costBasis}
-                stroke="#8F897E"
+                stroke="rgb(var(--ink-300))"
                 strokeDasharray="4 4"
                 strokeWidth={1}
-                label={{ value: 'cost basis', position: 'insideTopRight', fontSize: 10, fill: '#8F897E' }}
+                label={{ value: 'cost basis', position: 'insideTopRight', fontSize: 10, fill: 'rgb(var(--ink-300))' }}
               />
             )}
-            {showComparePct && <ReferenceLine yAxisId="right" y={0} stroke="#C9BDA8" strokeWidth={1} />}
+            {showComparePct && <ReferenceLine yAxisId="right" y={0} stroke="rgb(var(--sand-400))" strokeWidth={1} />}
             <Area
               yAxisId="left"
               type="monotone"
               dataKey="value"
               name="Investments"
-              stroke={up ? '#3D7A5F' : '#B85450'}
+              stroke={up ? 'rgb(var(--accent-green))' : '#B85450'}
               strokeOpacity={hoveredAccountId !== null && hoveredAccountId !== TOTAL_HOVER_ID ? 0.3 : 1}
               strokeWidth={hoveredAccountId === TOTAL_HOVER_ID ? 5 : 4}
               fill="url(#investFill)"
               fillOpacity={hoveredAccountId !== null && hoveredAccountId !== TOTAL_HOVER_ID ? 0.3 : 1}
               dot={false}
-              activeDot={{ r: 5, fill: up ? '#3D7A5F' : '#B85450' }}
+              activeDot={{ r: 5, fill: up ? 'rgb(var(--accent-green))' : '#B85450' }}
               onMouseEnter={() => setHoveredAccountId(TOTAL_HOVER_ID)}
               onMouseLeave={() => setHoveredAccountId(null)}
               label={hoveredAccountId === TOTAL_HOVER_ID ? (props: any) => (
-                <CurveEndLabel {...props} lastIndex={chartData.length - 1} text="Investments" color={up ? '#3D7A5F' : '#B85450'} anchor="end" />
+                <CurveEndLabel {...props} lastIndex={chartData.length - 1} text="Investments" color={up ? 'rgb(var(--accent-green))' : '#B85450'} anchor="end" />
               ) : undefined}
             />
             {/* Dashed and thinner than the total's solid line so the two never

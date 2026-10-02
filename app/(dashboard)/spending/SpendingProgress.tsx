@@ -34,7 +34,7 @@ const iso = isoDate;
 
 function BlurredYTick({ x, y, payload, blurred }: any) {
   return (
-    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end"
+    <text x={x} y={y} dy={4} fill="rgb(var(--ink-300))" fontSize={11} textAnchor="end"
       style={blurred ? { filter: 'blur(5px)', userSelect: 'none' } : {}}>
       {`$${(payload.value / 1000).toFixed(payload.value >= 1000 ? 0 : 1)}k`}
     </text>
@@ -356,7 +356,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                 onPeriodSelect(pinnedKey ? bucketRange(pinnedKey, gran) : null, { preview: true });
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--sand-200))" vertical={false} />
               {boundaries.map((b) => {
                 const s = BOUNDARY_STYLE[b.kind];
                 return (
@@ -370,14 +370,14 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                   />
                 );
               })}
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8F897E' }} axisLine={{ stroke: '#E2D9CA' }} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'rgb(var(--ink-300))' }} axisLine={{ stroke: 'rgb(var(--sand-300))' }} tickLine={false} interval="preserveStartEnd" minTickGap={20} />
               <YAxis
                 axisLine={false}
                 tickLine={false}
                 domain={yAxisCap ? [0, yAxisCap] : ['auto', 'auto']}
                 tick={(props) => <BlurredYTick {...props} blurred={blurred} />}
               />
-              <Tooltip content={<CustomTooltip valueLabel={valueLabel} />} cursor={{ fill: '#F0EBE1', opacity: 0.5 }} />
+              <Tooltip content={<CustomTooltip valueLabel={valueLabel} />} cursor={{ fill: 'rgb(var(--sand-200))', opacity: 0.5 }} />
               <Bar
                 dataKey={yAxisCap ? 'displayValue' : 'value'}
                 name="Spending"
@@ -410,7 +410,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                       key={i}
                       fill={color}
                       fillOpacity={hasSelection ? (isSelected ? 1 : 0.3) : 1}
-                      stroke={isToday ? '#292524' : 'none'}
+                      stroke={isToday ? 'rgb(var(--ink-800))' : 'none'}
                       strokeWidth={isToday ? 1.5 : 0}
                     />
                   );
@@ -429,7 +429,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                           textAnchor="middle"
                           fontSize={10}
                           fontWeight={600}
-                          fill="#8F897E"
+                          fill="rgb(var(--ink-300))"
                         >
                           {formatCurrency(entry.value)}
                         </text>

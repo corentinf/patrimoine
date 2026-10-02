@@ -273,8 +273,8 @@ function AccountDropdown({
         onClick={() => setOpen((v) => !v)}
         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
           selectedAccount
-            ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
-            : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+            ? 'pill-active'
+            : 'pill'
         }`}
       >
         {label}
@@ -1044,7 +1044,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           <button
             onClick={() => { setFilterCategories([]); setFilterTags([]); setExpandedCategory(null); }}
             className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-              filterCategories.length === 0 && filterTags.length === 0 ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15' : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
+              filterCategories.length === 0 && filterTags.length === 0 ? 'pill-active' : 'pill'
             }`}
           >
             All
@@ -1258,7 +1258,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2.5 text-sm font-medium capitalize whitespace-nowrap transition-colors border-b-2 -mb-px ${
               activeTab === tab
-                ? 'border-ink-800 text-ink-800'
+                ? 'border-accent-green text-ink-800'
                 : 'border-transparent text-ink-400 hover:text-ink-600'
             }`}
           >

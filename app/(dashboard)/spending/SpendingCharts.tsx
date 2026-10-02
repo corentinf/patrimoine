@@ -37,7 +37,7 @@ interface SpendingChartsProps {
 
 function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
   return (
-    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end"
+    <text x={x} y={y} dy={4} fill="rgb(var(--ink-300))" fontSize={11} textAnchor="end"
       style={blurred ? { filter: 'blur(5px)', userSelect: 'none' } : {}}>
       {formatter(payload.value)}
     </text>
@@ -106,11 +106,11 @@ export default function SpendingCharts({
                 if (monthKey && onBarClick) onBarClick(monthKey);
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--sand-200))" vertical={false} />
               <XAxis
                 dataKey="month"
-                tick={{ fontSize: 11, fill: '#8F897E' }}
-                axisLine={{ stroke: '#E2D9CA' }}
+                tick={{ fontSize: 11, fill: 'rgb(var(--ink-300))' }}
+                axisLine={{ stroke: 'rgb(var(--sand-300))' }}
                 tickLine={false}
               />
               <YAxis
@@ -118,7 +118,7 @@ export default function SpendingCharts({
                 tickLine={false}
                 tick={(props) => <BlurredYTick {...props} formatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} blurred={blurred} />}
               />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: '#FAF7F2' }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgb(var(--sand-100))' }} />
               <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={40}>
                 {monthlyData.map((entry, i) => {
                   const isSelected = !!selectedMonth && entry.monthKey === selectedMonth;

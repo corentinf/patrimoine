@@ -138,8 +138,8 @@ function AccountPill({
           className="inline-block w-2 h-2 rounded-full flex-shrink-0"
           style={
             isCredit
-              ? { background: 'transparent', border: `1.5px solid ${active ? color : '#C9BDA8'}` }
-              : { background: active ? color : '#C9BDA8' }
+              ? { background: 'transparent', border: `1.5px solid ${active ? color : 'rgb(var(--sand-400))'}` }
+              : { background: active ? color : 'rgb(var(--sand-400))' }
           }
         />
         <span className="whitespace-nowrap transition-[mask-image] duration-150" style={maskStyle}>
@@ -174,7 +174,7 @@ function CustomTooltip({ active, payload, label, valueFormatter = formatCurrency
         // text directly on this dark tooltip, Assets/Liabilities fall short
         // of WCAG AA contrast (~3.4:1 / 3.6:1 against bg-ink-800, need 4.5:1).
         // Swap in a lighter tint of the same hue instead.
-        const colorClass = p.color === '#3D7A5F' ? 'text-green-300'
+        const colorClass = p.color === 'rgb(var(--accent-green))' ? 'text-green-300'
           : p.color === '#B85450' ? 'text-red-300'
           : 'text-white';
         return (
@@ -190,7 +190,7 @@ function CustomTooltip({ active, payload, label, valueFormatter = formatCurrency
 
 function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
   return (
-    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end"
+    <text x={x} y={y} dy={4} fill="rgb(var(--ink-300))" fontSize={11} textAnchor="end"
       style={blurred ? { filter: 'blur(5px)', userSelect: 'none' } : {}}>
       {formatter(payload.value)}
     </text>
@@ -199,7 +199,7 @@ function BlurredYTick({ x, y, payload, formatter, blurred }: any) {
 
 function PercentYTick({ x, y, payload }: any) {
   return (
-    <text x={x} y={y} dy={4} fill="#8F897E" fontSize={11} textAnchor="end">
+    <text x={x} y={y} dy={4} fill="rgb(var(--ink-300))" fontSize={11} textAnchor="end">
       {`${payload.value >= 0 ? '+' : ''}${payload.value}%`}
     </text>
   );
@@ -439,7 +439,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
       ) : (
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={displayRows} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE1" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--sand-200))" vertical={false} />
           {boundaries.map((b) => {
             const s = BOUNDARY_STYLE[b.kind];
             return (
@@ -456,8 +456,8 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
           })}
           <XAxis
             dataKey="month"
-            tick={{ fontSize: 11, fill: '#8F897E' }}
-            axisLine={{ stroke: '#E2D9CA' }}
+            tick={{ fontSize: 11, fill: 'rgb(var(--ink-300))' }}
+            axisLine={{ stroke: 'rgb(var(--sand-300))' }}
             tickLine={false}
             interval="preserveStartEnd"
           />
@@ -488,7 +488,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
               tick={(props) => <BlurredYTick {...props} formatter={(v: number) => `$${(v / 1000).toFixed(1)}k`} blurred={blurred} />}
             />
           )}
-          {effectiveCompare && <ReferenceLine yAxisId="left" y={0} stroke="#C9BDA8" strokeWidth={1} />}
+          {effectiveCompare && <ReferenceLine yAxisId="left" y={0} stroke="rgb(var(--sand-400))" strokeWidth={1} />}
           <Tooltip content={<CustomTooltip valueFormatter={effectiveCompare ? pctFormatter : formatCurrency} />} />
           {mode === 'accounts' ? (
             Array.from(selectedAccountIds).map((id) => {
@@ -522,10 +522,10 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
                 type="monotone"
                 dataKey="netWorth"
                 name="Net worth"
-                stroke="#4A443C"
+                stroke="rgb(var(--ink-500))"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: '#4A443C' }}
+                activeDot={{ r: 4, fill: 'rgb(var(--ink-500))' }}
               />
               {showProjectionLine && (
                 <Line
@@ -533,12 +533,12 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
                   type="monotone"
                   dataKey="projected"
                   name="Net worth (projected)"
-                  stroke="#4A443C"
+                  stroke="rgb(var(--ink-500))"
                   strokeWidth={1.5}
                   strokeDasharray="3 3"
                   strokeOpacity={0.55}
                   dot={false}
-                  activeDot={{ r: 3, fill: '#4A443C' }}
+                  activeDot={{ r: 3, fill: 'rgb(var(--ink-500))' }}
                   isAnimationActive={false}
                 />
               )}
@@ -547,11 +547,11 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
                 type="monotone"
                 dataKey="assets"
                 name="Assets"
-                stroke="#3D7A5F"
+                stroke="rgb(var(--accent-green))"
                 strokeWidth={1.5}
                 strokeDasharray="5 4"
                 dot={false}
-                activeDot={{ r: 3, fill: '#3D7A5F' }}
+                activeDot={{ r: 3, fill: 'rgb(var(--accent-green))' }}
               />
               {showProjectionLine && (
                 <Line
@@ -559,12 +559,12 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
                   type="monotone"
                   dataKey="projectedAssets"
                   name="Assets (projected)"
-                  stroke="#3D7A5F"
+                  stroke="rgb(var(--accent-green))"
                   strokeWidth={1.5}
                   strokeDasharray="2 3"
                   strokeOpacity={0.55}
                   dot={false}
-                  activeDot={{ r: 3, fill: '#3D7A5F' }}
+                  activeDot={{ r: 3, fill: 'rgb(var(--accent-green))' }}
                   isAnimationActive={false}
                 />
               )}
@@ -602,17 +602,17 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
       {mode === 'overview' && (
         <div className="flex gap-6 justify-center mt-3 text-xs text-ink-400">
           <div className="flex items-center gap-1.5">
-            <span className="w-5 inline-block" style={{ borderTop: '2px solid #4A443C' }} />
+            <span className="w-5 inline-block" style={{ borderTop: '2px solid rgb(var(--ink-500))' }} />
             Net worth
           </div>
           {hasProjection && (
             <div className="flex items-center gap-1.5">
-              <span className="w-5 inline-block" style={{ borderTop: '2px dashed #4A443C', opacity: 0.55 }} />
+              <span className="w-5 inline-block" style={{ borderTop: '2px dashed rgb(var(--ink-500))', opacity: 0.55 }} />
               Projected
             </div>
           )}
           <div className="flex items-center gap-1.5">
-            <span className="w-5 inline-block" style={{ borderTop: '2px dashed #3D7A5F' }} />
+            <span className="w-5 inline-block" style={{ borderTop: '2px dashed rgb(var(--accent-green))' }} />
             Assets
           </div>
           <div className="flex items-center gap-1.5">

@@ -8,6 +8,7 @@ import { usePrivacy } from '@/app/lib/privacy';
 import { isFakeModeActive } from '@/app/lib/demoMode';
 import { fakeifyAmount } from '@/app/lib/utils';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
+import { ThemeToggle } from '@/app/lib/theme';
 import { usePageFilterSlotContent } from '@/app/lib/pageFilterSlot';
 import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
@@ -58,7 +59,7 @@ export function SyncDropdown() {
       <button
         onClick={() => { if (phase === 'idle') { setOpen(true); runSync(); } else setOpen((v) => !v); }}
         disabled={phase === 'syncing'}
-        className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-800 px-3 py-1.5 rounded-lg hover:bg-sand-50 transition-colors disabled:opacity-40"
+        className="pill gap-1.5 text-sm px-3.5 py-1.5 disabled:opacity-40"
       >
         <span className={phase === 'syncing' ? 'animate-spin inline-block' : ''}>↻</span>
         {buttonLabel}
@@ -69,7 +70,7 @@ export function SyncDropdown() {
       )}
 
       {open && phase !== 'idle' && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-sand-200 rounded-xl shadow-lg p-3 space-y-2 z-50">
+        <div className="absolute right-0 top-full mt-2 w-64 glass border rounded-2xl shadow-lg p-3 space-y-2 z-50">
           {phase === 'syncing' && (
             <>
               <div className="flex items-center gap-2">
@@ -310,7 +311,7 @@ export function FilterBar() {
         <button
           onClick={() => stepPeriod(-1)}
           disabled={!canStepBackward}
-          className="px-2.5 py-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
+          className="px-2.5 py-1 rounded-full text-ink-400 hover:text-ink-700 hover:bg-sand-200/60 transition-colors disabled:opacity-30 disabled:cursor-default"
           aria-label="Previous period"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -320,7 +321,7 @@ export function FilterBar() {
         {editingRange ? (
           // Edit the dates in place — each pick applies immediately; Done/Escape closes.
           <div
-            className="flex items-center gap-1 bg-sand-100 rounded-md px-2 py-0.5"
+            className="pill pill-active gap-1 px-3 py-0.5"
             onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setEditingRange(false); }}
           >
             <input
@@ -355,7 +356,7 @@ export function FilterBar() {
           <button
             onClick={() => setEditingRange(true)}
             title="Click to choose dates"
-            className="text-xs font-semibold min-w-[120px] text-center text-ink-800 bg-sand-100 hover:bg-sand-200 transition-colors rounded-md px-4 py-1"
+            className="pill text-xs font-semibold min-w-[120px] text-ink-800 px-4 py-1"
           >
             {rangeLabel}
           </button>
@@ -363,7 +364,7 @@ export function FilterBar() {
         <button
           onClick={() => stepPeriod(1)}
           disabled={!canStepForward}
-          className="px-2.5 py-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors disabled:opacity-30 disabled:cursor-default"
+          className="px-2.5 py-1 rounded-full text-ink-400 hover:text-ink-700 hover:bg-sand-200/60 transition-colors disabled:opacity-30 disabled:cursor-default"
           aria-label="Next period"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -373,7 +374,7 @@ export function FilterBar() {
         <button
           onClick={() => { setEditingRange(false); resetFilter(); }}
           title="Reset to current month"
-          className="ml-1.5 px-3 py-1 rounded-md text-xs text-ink-400 hover:text-ink-700 hover:bg-sand-100 transition-colors"
+          className="ml-1.5 px-3 py-1 rounded-full text-xs text-ink-400 hover:text-ink-700 hover:bg-sand-200/60 transition-colors"
         >
           Reset
         </button>
@@ -384,11 +385,7 @@ export function FilterBar() {
           <button
             key={p.key}
             onClick={() => { setEditingRange(false); applyPreset(p.key); }}
-            className={`px-5 py-1 rounded-lg text-xs font-medium transition-colors ${
-              activePreset === p.key
-                ? 'bg-ink-800/10 text-ink-800 border border-ink-800/15'
-                : 'bg-white border border-sand-200 text-ink-500 hover:border-sand-300'
-            }`}
+            className={`pill px-5 py-1 text-xs ${activePreset === p.key ? 'pill-active' : ''}`}
           >
             {p.label}
           </button>
@@ -480,10 +477,11 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
   };
 
   return (
-    <header ref={headerRef} className="hidden md:block sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-sand-200">
+    <header ref={headerRef} className="hidden md:block sticky top-0 z-20 glass border-b">
       <div className="max-w-[2000px] mx-auto px-6 lg:px-10 2xl:px-14">
         <div className="h-14 flex items-center gap-6">
-          <h1 className="font-display text-lg text-ink-800 tracking-tight flex-shrink-0">
+          <h1 className="flex items-center gap-2 font-display text-lg font-semibold text-ink-800 tracking-tight flex-shrink-0">
+            <span aria-hidden className="gradient-card g-aurora inline-block w-5 h-5 !rounded-full" />
             Patrimoine
           </h1>
           <nav className="flex items-center gap-1">
@@ -494,8 +492,8 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-baseline gap-1.5 ${
-                    isActive ? 'bg-sand-100 text-ink-800' : 'text-ink-400 hover:text-ink-600 hover:bg-sand-50'
+                  className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all flex items-baseline gap-1.5 ${
+                    isActive ? 'pill-active' : 'text-ink-400 hover:text-ink-700 hover:bg-sand-200/60'
                   }`}
                 >
                   {item.label}
@@ -508,8 +506,9 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
               );
             })}
           </nav>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-2">
             <SyncDropdown />
+            <ThemeToggle />
             <ProfileMenu accounts={accounts} />
           </div>
         </div>
