@@ -518,13 +518,24 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     if (deepLink.tx) setFocusTx(deepLink.tx);
     if (deepLink.q) setSearch(deepLink.q);
     if (deepLink.cat) {
-      const meta = catMeta.get(deepLink.cat);
-      if (meta) setCategory({ key: deepLink.cat, label: meta.name, color: meta.color ?? '#D1D5DB', icon: meta.icon ?? '❓' });
+      const meta = deepLink.cat === '__uncategorized__'
+        ? { name: 'Uncategorized', color: '#D1D5DB', icon: '❓' }
+        : catMeta.get(deepLink.cat);
+      // Held back until the range below has applied: changing the range clears the category.
+      if (meta) setPendingCat({ cat: { key: deepLink.cat, label: meta.name, color: meta.color ?? '#D1D5DB', icon: meta.icon ?? '❓' }, from: deepLink.from, to: deepLink.to });
     }
     setActiveTab('transactions');
     consumeDeepLink();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLink]);
+  const [pendingCat, setPendingCat] = useState<{ cat: { key: string; label: string; color: string; icon: string }; from?: string; to?: string } | null>(null);
+  useEffect(() => {
+    if (!pendingCat) return;
+    if (pendingCat.from && pendingCat.to && (resolvedRange.start !== pendingCat.from || resolvedRange.end !== pendingCat.to)) return;
+    const t = window.setTimeout(() => { setCategory(pendingCat.cat); setPendingCat(null); }, 0);
+    return () => window.clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCat, resolvedRange.start, resolvedRange.end]);
   useFlashTarget('data-tx-id', focusTx, () => setFocusTx(null));
 
   // Child IDs by parent — used so clicking a parent key also includes sub-cat transactions

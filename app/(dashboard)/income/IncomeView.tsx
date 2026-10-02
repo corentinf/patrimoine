@@ -86,9 +86,22 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
     }
     if (deepLink.day) setFocusDay(deepLink.day);
     if (deepLink.tx) setFocusTx(deepLink.tx);
+    if (deepLink.cat) {
+      const c = categories.find((x) => x.id === deepLink.cat);
+      // Held back until the range has applied: changing the range clears the category.
+      if (c) setPendingCat({ cat: { key: c.id, label: c.name, color: c.color ?? '#D1D5DB', icon: c.icon ?? '❓' }, from: deepLink.from, to: deepLink.to });
+    }
     consumeDeepLink();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLink]);
+  const [pendingCat, setPendingCat] = useState<{ cat: { key: string; label: string; color: string; icon: string }; from?: string; to?: string } | null>(null);
+  useEffect(() => {
+    if (!pendingCat) return;
+    if (pendingCat.from && pendingCat.to && (resolvedRange.start !== pendingCat.from || resolvedRange.end !== pendingCat.to)) return;
+    const t = window.setTimeout(() => { setCategory(pendingCat.cat); setPendingCat(null); }, 0);
+    return () => window.clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCat, resolvedRange.start, resolvedRange.end]);
   useFlashTarget('data-tx-id', focusTx, () => setFocusTx(null));
   const { ref: txListRef, minHeight: txListMinHeight } = useStableMinHeight<HTMLDivElement>();
   const [search, setSearch] = useState('');

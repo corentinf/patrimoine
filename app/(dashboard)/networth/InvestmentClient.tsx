@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { formatCurrency } from '@/app/lib/utils';
 import { isLockedRetirementAccount } from '@/app/lib/accounts';
 import SummaryCard from '@/app/components/SummaryCard';
+import { useDeepLink } from '@/app/lib/deepLink';
 import StickyRail from '@/app/components/StickyRail';
 import { isoDate, buildCombinedSeries, seriesChange } from '@/app/lib/investmentRange';
 import { usePrivacy } from '@/app/lib/privacy';
@@ -38,7 +39,15 @@ export default function InvestmentClient({
   // re-render (and every formatCurrency() call below re-check demo mode)
   // when the toggle in Header/Profile changes it.
   usePrivacy();
-  const { activePreset, resolvedRange, rangeLabel } = useGlobalFilter();
+  const { activePreset, resolvedRange, rangeLabel, setRange: setFilterRange } = useGlobalFilter();
+
+  // Opened from the Home money-flow (Investments): show the same period. (HoldingsTable reads the
+  // same link for ?symbol=; each hook parses the URL on its own, so they don't interfere.)
+  const { link: deepLink } = useDeepLink();
+  useEffect(() => {
+    if (deepLink?.from && deepLink?.to) setFilterRange(deepLink.from, deepLink.to);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink]);
   const range = activePreset ?? 'custom';
   const customFrom = activePreset ? undefined : resolvedRange.start;
   const customTo = activePreset ? undefined : resolvedRange.end;

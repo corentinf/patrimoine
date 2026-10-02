@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ResponsiveContainer, Sankey } from 'recharts';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
 import { formatCurrency } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
+import { deepLinkHref } from '@/app/lib/deepLinkUrl';
 
 // "Where your money went": income sources → an Income hub → spending categories, investments and
 // what was left over. Follows the global date range (current month by default). The numbers come
@@ -19,7 +21,7 @@ interface FlowItem { id: string; name: string; icon: string | null; color: strin
 interface FlowData { income: FlowItem[]; spending: FlowItem[]; investments: number }
 
 type Kind = 'source' | 'draw' | 'hub' | 'spend' | 'invest' | 'save';
-interface FlowNode { name: string; kind: Kind; color: string; icon?: string | null }
+interface FlowNode { name: string; kind: Kind; color: string; icon?: string | null; /** category id, for jumping to that category */ catId?: string }
 interface FlowLink { source: number; target: number; value: number }
 
 const SHARE_MIN = 0.02; // categories / sources under 2% are grouped as "Other"
@@ -54,7 +56,7 @@ function buildGraph(data: FlowData) {
   let otherIncome = 0;
   for (const i of data.income) {
     if (/^other$/i.test(clean(i.name)) || (incomeTotal > 0 && i.amount / incomeTotal < SHARE_MIN)) otherIncome += i.amount;
-    else sources.push({ node: { name: clean(i.name), kind: 'source', color: GREEN, icon: i.icon }, value: i.amount });
+    else sources.push({ node: { name: clean(i.name), kind: 'source', color: GREEN, icon: i.icon, catId: i.id }, value: i.amount });
   }
   if (otherIncome > 0) sources.push({ node: { name: 'Other income', kind: 'source', color: GREEN }, value: otherIncome });
   if (draw > 0) sources.push({ node: { name: 'From savings', kind: 'draw', color: RED }, value: draw });
@@ -66,7 +68,7 @@ function buildGraph(data: FlowData) {
   let otherSpend = 0;
   for (const c of data.spending) {
     if (c.amount / base < SHARE_MIN) otherSpend += c.amount;
-    else links.push({ source: hub, target: add({ name: c.name, kind: 'spend', color: c.color ?? NEUTRAL, icon: c.icon }), value: c.amount });
+    else links.push({ source: hub, target: add({ name: c.name, kind: 'spend', color: c.color ?? NEUTRAL, icon: c.icon, catId: c.id }), value: c.amount });
   }
   if (otherSpend > 0) links.push({ source: hub, target: add({ name: 'Other', kind: 'spend', color: NEUTRAL }), value: otherSpend });
   if (invested > 0) links.push({ source: hub, target: add({ name: 'Investments', kind: 'invest', color: BLUE }), value: invested });
@@ -77,10 +79,11 @@ function buildGraph(data: FlowData) {
 }
 
 type Hover = { kind: 'node' | 'link'; index: number } | null;
-interface Tip { x: number; y: number; title: string; lines: string[] }
+interface Tip { x: number; y: number; title: string; lines: string[]; hint?: string }
 
 export default function MoneyFlowCard() {
   usePrivacy(); // re-render when privacy / demo mode flips (amounts are formatted at render)
+  const router = useRouter();
   const { resolvedRange, rangeLabel } = useGlobalFilter();
   const { start, end } = resolvedRange;
 
@@ -112,6 +115,26 @@ export default function MoneyFlowCard() {
   const [tip, setTip] = useState<Tip | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
+  const destination = (n: FlowNode): { href: string; label: string } | null => {
+    switch (n.kind) {
+      case 'spend':
+        return { href: deepLinkHref('/spending', { from: start, to: end, ...(n.catId ? { cat: n.catId } : {}) }), label: n.catId ? `Open ${n.name} in Spending` : 'Open Spending for this period' };
+      case 'source':
+        return { href: deepLinkHref('/income', { from: start, to: end, ...(n.catId ? { cat: n.catId } : {}) }), label: n.catId ? `Open ${n.name} in Income` : 'Open Income for this period' };
+      case 'hub':
+        return { href: deepLinkHref('/income', { from: start, to: end }), label: 'Open Income for this period' };
+      case 'invest':
+        return { href: deepLinkHref('/networth', { from: start, to: end }), label: 'Open Investment for this period' };
+      default:
+        return null;
+    }
+  };
+  // A flow leads where its far end does: into the hub = the income source, out of it = the target.
+  const linkDestination = (l: FlowLink) => {
+    if (!graph) return null;
+    return destination(graph.nodes[l.target].kind === 'hub' ? graph.nodes[l.source] : graph.nodes[l.target]);
+  };
+
   const pctOfIncome = (v: number) => (graph && graph.base > 0 ? Math.round((v / graph.base) * 100) : 0);
 
   const showTip = (e: React.MouseEvent, h: NonNullable<Hover>) => {
@@ -119,10 +142,12 @@ export default function MoneyFlowCard() {
     const rect = boxRef.current.getBoundingClientRect();
     let title = '';
     let lines: string[] = [];
+    let hint: string | undefined;
     if (h.kind === 'link') {
       const l = graph.links[h.index];
       title = `${graph.nodes[l.source].name} → ${graph.nodes[l.target].name}`;
       lines = [formatCurrency(l.value), `${pctOfIncome(l.value)}% of income`];
+      hint = linkDestination(l)?.label;
     } else {
       const inSum = graph.links.filter((l) => l.target === h.index).reduce((s, l) => s + l.value, 0);
       const outSum = graph.links.filter((l) => l.source === h.index).reduce((s, l) => s + l.value, 0);
@@ -132,9 +157,10 @@ export default function MoneyFlowCard() {
         ...(outSum > 0 ? [`Out: ${formatCurrency(outSum)}`] : []),
         `${pctOfIncome(Math.max(inSum, outSum))}% of income`,
       ];
+      hint = destination(graph.nodes[h.index])?.label;
     }
     setHover(h);
-    setTip({ x: e.clientX - rect.left, y: e.clientY - rect.top, title, lines });
+    setTip({ x: e.clientX - rect.left, y: e.clientY - rect.top, title, lines, hint });
   };
   const hideTip = () => { setHover(null); setTip(null); };
 
@@ -159,7 +185,8 @@ export default function MoneyFlowCard() {
         stroke={color}
         strokeWidth={Math.max(p.linkWidth, 1.5)}
         strokeOpacity={hover ? (active ? 0.6 : 0.07) : 0.34}
-        style={{ transition: 'stroke-opacity 120ms', cursor: 'default' }}
+        style={{ transition: 'stroke-opacity 120ms', cursor: linkDestination(l) ? 'pointer' : 'default' }}
+        onClick={() => { const d = linkDestination(l); if (d) router.push(d.href); }}
         onMouseEnter={(e) => showTip(e, { kind: 'link', index: p.index })}
         onMouseMove={(e) => showTip(e, { kind: 'link', index: p.index })}
         onMouseLeave={hideTip}
@@ -186,7 +213,11 @@ export default function MoneyFlowCard() {
       onMouseLeave: hideTip,
     };
     return (
-      <g style={{ opacity: dim ? 0.35 : 1, transition: 'opacity 120ms' }} {...handlers}>
+      <g
+        style={{ opacity: dim ? 0.35 : 1, transition: 'opacity 120ms', cursor: destination(node) ? 'pointer' : 'default' }}
+        onClick={() => { const d = destination(node); if (d) router.push(d.href); }}
+        {...handlers}
+      >
         <rect x={p.x} y={p.y} width={p.width} height={Math.max(p.height, 2)} rx={3} fill={node.color} />
         {/* wider invisible hit area so thin nodes are easy to hover */}
         <rect x={p.x - 6} y={p.y} width={p.width + 12} height={Math.max(p.height, 8)} fill="transparent" />
@@ -267,6 +298,7 @@ export default function MoneyFlowCard() {
                 {tip.lines.map((l, i) => (
                   <p key={i} className={i === 0 ? 'mt-0.5 font-mono' : 'text-white/70'}>{l}</p>
                 ))}
+                {tip.hint && <p className="mt-1 border-t border-white/20 pt-1 text-[11px] text-white/90">{tip.hint} →</p>}
               </div>
             )}
           </>
