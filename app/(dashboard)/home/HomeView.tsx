@@ -13,6 +13,7 @@ import NetWorthChart from '../networth/NetWorthChart';
 import ProjectionCard from './ProjectionCard';
 import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../components/AccountsPanel';
 import HeadlineBanner from './HeadlineBanner';
+import { useDeepLink } from '@/app/lib/deepLink';
 import type { Insight } from '@/app/lib/insights';
 
 const ACCOUNT_TYPE_ORDER = ['checking', 'savings', 'investment', 'credit'];
@@ -155,13 +156,22 @@ export default function HomeView({
   insights,
   todayLabel,
 }: HomeViewProps) {
-  const { resolvedRange, rangeLabel } = useGlobalFilter();
+  const { resolvedRange, rangeLabel, setRange: setFilterRange } = useGlobalFilter();
   // Not otherwise used here — but subscribing is what makes this component
   // re-render (and every formatCurrency() call below re-check demo mode)
   // when the toggle in Header/Profile changes it.
   usePrivacy();
   const todayIso = isoDate(new Date());
   const router = useRouter();
+
+  // Opened via a shared/bookmarked link such as /home?from=…&to=… (headline "net worth this week").
+  const { link: deepLink, consume: consumeDeepLink } = useDeepLink();
+  useEffect(() => {
+    if (!deepLink) return;
+    if (deepLink.from && deepLink.to) setFilterRange(deepLink.from, deepLink.to);
+    consumeDeepLink();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink]);
   const [modalAccount, setModalAccount] = useState<SidebarAccount | null | undefined>(undefined);
   const [metric, setMetric] = useState<'total' | 'available' | 'retirement'>('total');
   // 0 = current value ("Today"), 1..n = activeMilestones[idx - 1].

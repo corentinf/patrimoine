@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { formatCurrency } from '@/app/lib/utils';
+import { useDeepLink, useFlashTarget } from '@/app/lib/deepLink';
 import {
   PRESETS, resolveStart, idxAtOrBefore, type RangeKey,
 } from '@/app/lib/investmentRange';
@@ -277,6 +278,20 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [range, setRange] = useState<RangeKey>('all');
+
+  // Deep link from the Home headline (a holding moved a lot): scroll to that row and flash it.
+  const { link: deepLink, consume: consumeDeepLink } = useDeepLink();
+  const [focusSymbol, setFocusSymbol] = useState<string | null>(null);
+  useEffect(() => {
+    if (!deepLink) return;
+    if (deepLink.symbol) {
+      setSelectedGroup(null); // make sure the row isn't filtered out
+      setFocusSymbol(deepLink.symbol);
+    }
+    consumeDeepLink();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink]);
+  useFlashTarget('data-symbol', focusSymbol, () => setFocusSymbol(null));
 
   useEffect(() => {
     if (externalRange !== undefined) setRange(externalRange);
@@ -648,7 +663,7 @@ export default function HoldingsTable({ holdings, totalHoldingsValue, priceDates
         </div>
 
         {sorted.map((h) => (
-          <div key={h.id} className="border-b border-sand-50 last:border-0 hover:bg-sand-50 transition-colors group/row">
+          <div key={h.id} data-symbol={h.symbol ?? undefined} className="border-b border-sand-50 last:border-0 hover:bg-sand-50 transition-colors group/row">
             {/* Desktop row */}
             <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-3 items-center">
               <div className="col-span-3">

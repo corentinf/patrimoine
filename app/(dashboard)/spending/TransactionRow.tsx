@@ -212,7 +212,7 @@ export default function TransactionRow({
   }
 
   return (
-    <div ref={rowRef} className="relative border-b border-sand-100 last:border-0">
+    <div ref={rowRef} data-tx-id={tx.id} className="relative border-b border-sand-100 last:border-0">
       {/* Backdrop — closes any open picker when clicking outside */}
       {anyPickerOpen && (
         <div

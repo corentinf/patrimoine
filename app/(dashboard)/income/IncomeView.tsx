@@ -9,6 +9,7 @@ import TransactionDetail from '../spending/TransactionDetail';
 import type { Category } from '../spending/CategoryManager';
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
+import { useDeepLink, useFlashTarget, monthAround } from '@/app/lib/deepLink';
 import { usePrivacy } from '@/app/lib/privacy';
 
 interface RawTransaction {
@@ -63,9 +64,30 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
   usePrivacy();
   const {
     dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory,
-    stepPeriod, canStepBackward, canStepForward,
+    stepPeriod, canStepBackward, canStepForward, setRange: setFilterRange,
   } = useGlobalFilter();
   const selectedCategoryId = category?.key ?? null;
+
+  // Deep link from the Home headline (e.g. "you received your salary"): show the right period,
+  // pin that day on the chart, then scroll to and flash the deposit.
+  const { link: deepLink, consume: consumeDeepLink } = useDeepLink();
+  const [focusDay, setFocusDay] = useState<string | null>(null);
+  const [focusTx, setFocusTx] = useState<string | null>(null);
+  useEffect(() => {
+    if (!deepLink) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (deepLink.from && deepLink.to) {
+      setFilterRange(deepLink.from, deepLink.to);
+    } else if (deepLink.day && (deepLink.day < resolvedRange.start || deepLink.day > resolvedRange.end)) {
+      const m = monthAround(deepLink.day, today);
+      setFilterRange(m.from, m.to);
+    }
+    if (deepLink.day) setFocusDay(deepLink.day);
+    if (deepLink.tx) setFocusTx(deepLink.tx);
+    consumeDeepLink();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink]);
+  useFlashTarget('data-tx-id', focusTx, () => setFocusTx(null));
   const { ref: txListRef, minHeight: txListMinHeight } = useStableMinHeight<HTMLDivElement>();
   const [search, setSearch] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -268,6 +290,8 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
       <div className="min-w-0 xl:col-start-1">
         <SpendingProgress
           data={narrowedDailyIncome ?? dailyIncome}
+          focusDay={focusDay}
+          onFocusDone={() => setFocusDay(null)}
           rangeStart={resolvedRange.start}
           rangeEnd={resolvedRange.end}
           label="Income over time"

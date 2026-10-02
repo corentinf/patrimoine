@@ -28,6 +28,9 @@ interface SpendingProgressProps {
   onStepPeriod?: (delta: number) => void;
   canStepBackward?: boolean;
   canStepForward?: boolean;
+  /** A day (YYYY-MM-DD) to pin when it's inside the visible range — used by deep links from Home. */
+  focusDay?: string | null;
+  onFocusDone?: () => void;
 }
 
 const iso = isoDate;
@@ -128,7 +131,7 @@ function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: stri
   return { start: key, end: iso(d) };
 }
 
-export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent', rangeStart, rangeEnd, onStepPeriod, canStepBackward = true, canStepForward = true }: SpendingProgressProps) {
+export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent', rangeStart, rangeEnd, onStepPeriod, canStepBackward = true, canStepForward = true, focusDay = null, onFocusDone }: SpendingProgressProps) {
   const { blurred } = usePrivacy();
   const controlled = rangeStart !== undefined && rangeEnd !== undefined;
   const [range, setRange] = useState<RangeKey>('30d');
@@ -171,6 +174,18 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
     onPeriodSelect?.(null, { preview: false });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end, gran]);
+
+  // Deep link: once the visible range contains the requested day, pin its bar (declared after
+  // the effect above so it wins when both fire in the same pass after a range change).
+  useEffect(() => {
+    if (!focusDay || focusDay < start || focusDay > end) return;
+    const key = bucketKey(focusDay, gran);
+    setPinnedKey(key);
+    setPulseKey(key);
+    onPeriodSelect?.(bucketRange(key, gran), { preview: false });
+    onFocusDone?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusDay, start, end, gran]);
 
   const inRange = useMemo(
     () => data.filter((d) => d.date >= start && d.date <= end),

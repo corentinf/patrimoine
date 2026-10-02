@@ -5,6 +5,8 @@
 // Pure functions only — all data is passed in, so it can be unit-tested and runs
 // on the server without touching Supabase or the network.
 
+import { deepLinkHref, type DeepLink } from './deepLinkUrl';
+
 export type InsightTone = 'positive' | 'alert' | 'neutral';
 export type InsightKind =
   | 'salary'
@@ -33,8 +35,9 @@ export interface Insight {
   parts: InsightPart[];
   /** Short supporting line under the headline. */
   detail?: string;
-  /** Where clicking the insight should go. */
+  /** Where clicking the insight should go (path + query), and the same target as data. */
   href?: string;
+  link?: { path: string } & DeepLink;
   /** Higher = more newsworthy. Used to pick the lead headline. */
   priority: number;
   /** Coarse recency bucket shown as a label ("Today", "Yesterday", "This week"). */
@@ -49,7 +52,7 @@ export interface InsightTx {
   posted_at: string; // ISO timestamp; the date part is the bank's posting date
   is_transfer?: boolean | null;
   is_reimbursable?: boolean | null;
-  category?: { name: string; icon?: string | null; is_income?: boolean | null } | null;
+  category?: { id?: string; name: string; icon?: string | null; is_income?: boolean | null } | null;
   account?: { institution: string | null; name: string | null } | null;
 }
 
@@ -96,6 +99,10 @@ function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((b - a) / DAY_MS);
 }
 
+function shiftDay(iso: string, days: number): string {
+  return new Date(Date.parse(`${dayOf(iso)}T12:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
 function whenLabel(ageDays: number): Insight['when'] {
   if (ageDays <= 0) return 'today';
   if (ageDays === 1) return 'yesterday';
@@ -106,6 +113,10 @@ function dayWord(ageDays: number): string {
   if (ageDays <= 0) return 'today';
   if (ageDays === 1) return 'yesterday';
   return `${ageDays} days ago`;
+}
+
+function withLink(path: string, link: DeepLink): { href: string; link: { path: string } & DeepLink } {
+  return { href: deepLinkHref(path, link), link: { path, ...link } };
 }
 
 const $ = (n: number): InsightPart => ({ t: '', amount: Math.abs(n) });
@@ -159,7 +170,7 @@ function detectSalary(input: InsightInput): Insight[] {
       icon: '🎉',
       parts: [t('You received your salary — '), $(Number(tx.amount)), t('!')],
       detail: `Deposited to ${accountName(tx)} ${dayWord(age)}`,
-      href: '/income',
+      ...withLink('/income', { day: dayOf(tx.posted_at), tx: tx.id }),
       priority: age <= 1 ? 100 : 72,
       when: whenLabel(age),
     });
@@ -178,7 +189,7 @@ function detectSalary(input: InsightInput): Insight[] {
         icon: '💰',
         parts: [t('Money in: '), $(Number(income.tx.amount)), t(` from ${merchant(income.tx)}`)],
         detail: `${income.tx.category?.name ?? 'Income'} · ${dayWord(income.age)}`,
-        href: '/income',
+        ...withLink('/income', { day: dayOf(income.tx.posted_at), tx: income.tx.id }),
         priority: 66,
         when: whenLabel(income.age),
       });
@@ -209,7 +220,7 @@ function detectBigSpend(input: InsightInput): Insight[] {
     icon: '💸',
     parts: [t('Big spend '), t(dayWord(hit.age) === 'today' ? 'today: ' : `${dayWord(hit.age)}: `), $(hit.amt), t(` at ${merchant(hit.tx)}`)],
     detail: `${hit.tx.category?.name ?? 'Uncategorized'} · ${accountName(hit.tx)}`,
-    href: '/spending',
+    ...withLink('/spending', { day: dayOf(hit.tx.posted_at), tx: hit.tx.id }),
     priority: hit.age === 0 ? 90 : 78,
     when: whenLabel(hit.age),
   }];
@@ -217,7 +228,7 @@ function detectBigSpend(input: InsightInput): Insight[] {
 
 function detectCategorySpike(input: InsightInput): Insight[] {
   const WEEK = 7;
-  const byCat = new Map<string, { thisWeek: number; before: number; icon: string }>();
+  const byCat = new Map<string, { thisWeek: number; before: number; icon: string; id?: string }>();
   for (const tx of input.transactions) {
     const amt = Number(tx.amount);
     if (amt >= 0 || tx.is_transfer || tx.is_reimbursable) continue;
@@ -225,18 +236,18 @@ function detectCategorySpike(input: InsightInput): Insight[] {
     if (!name || EXPECTED_BIG.test(name)) continue;
     const age = daysBetween(tx.posted_at, input.todayIso);
     if (age < 0 || age > 27) continue;
-    const row = byCat.get(name) ?? { thisWeek: 0, before: 0, icon: tx.category?.icon || '🧾' };
+    const row = byCat.get(name) ?? { thisWeek: 0, before: 0, icon: tx.category?.icon || '🧾', id: tx.category?.id };
     if (age < WEEK) row.thisWeek += Math.abs(amt);
     else row.before += Math.abs(amt);
     byCat.set(name, row);
   }
-  let best: { name: string; thisWeek: number; ratio: number; icon: string } | null = null;
+  let best: { name: string; thisWeek: number; ratio: number; icon: string; id?: string } | null = null;
   for (const [name, row] of Array.from(byCat.entries())) {
     const weeklyBaseline = row.before / 3; // previous three weeks
     if (weeklyBaseline < 25 || row.thisWeek < 150) continue;
     const ratio = row.thisWeek / weeklyBaseline;
     if (ratio < 1.6) continue;
-    if (!best || row.thisWeek > best.thisWeek) best = { name, thisWeek: row.thisWeek, ratio, icon: row.icon };
+    if (!best || row.thisWeek > best.thisWeek) best = { name, thisWeek: row.thisWeek, ratio, icon: row.icon, id: row.id };
   }
   if (!best) return [];
   const up = Math.round((best.ratio - 1) * 100);
@@ -247,7 +258,7 @@ function detectCategorySpike(input: InsightInput): Insight[] {
     icon: best.icon,
     parts: [t(`${best.name} is up ${up}% this week — `), $(best.thisWeek)],
     detail: 'Compared with your average of the previous three weeks',
-    href: '/spending',
+    ...withLink('/spending', { from: shiftDay(input.todayIso, -6), to: dayOf(input.todayIso), cat: best.id }),
     priority: 55,
     when: 'this week',
   }];
@@ -274,7 +285,7 @@ function detectMovers(input: InsightInput): Insight[] {
       t(' on your position'),
     ],
     detail: m.name ? m.name : undefined,
-    href: '/networth',
+    ...withLink('/networth', { symbol: m.symbol }),
     priority: top.pct >= 0.05 ? 85 : 64,
     when: m.lastDate === input.todayIso ? 'today' : 'yesterday',
   }];
@@ -304,7 +315,7 @@ function detectNetWorth(input: InsightInput): Insight[] {
     icon: up ? '🌱' : '🌧️',
     parts: [t(`Net worth is ${up ? 'up' : 'down'} `), $(delta), t(` this week (${up ? '+' : '−'}${Math.abs(pct).toFixed(1)}%)`)],
     detail: 'Compared with a week ago',
-    href: '/home',
+    ...withLink('/home', { from: dayOf(base.snapshot_date), to: dayOf(input.todayIso) }),
     priority: 50,
     when: 'this week',
   }];

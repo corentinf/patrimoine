@@ -6,6 +6,7 @@ import { getPersonalAmount, isShared, type SplitSource } from '@/app/lib/split';
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
+import { useDeepLink, useFlashTarget, monthAround } from '@/app/lib/deepLink';
 import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
 import { usePrivacy } from '@/app/lib/privacy';
 import SpendingCharts from './SpendingCharts';
@@ -475,7 +476,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const now = new Date();
   const {
     dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory,
-    stepPeriod, canStepBackward, canStepForward,
+    stepPeriod, canStepBackward, canStepForward, setRange: setFilterRange,
   } = useGlobalFilter();
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -496,6 +497,32 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const catMeta = useMemo(() => {
     return new Map(allCategories.map((c) => [c.id, { name: c.name, color: c.color, icon: c.icon }]));
   }, [allCategories]);
+
+  // Deep link from the Home headline: show the right period, pin the day on the chart (it also
+  // filters the list to that day), pick the category, then scroll to and flash the transaction.
+  const { link: deepLink, consume: consumeDeepLink } = useDeepLink();
+  const [focusDay, setFocusDay] = useState<string | null>(null);
+  const [focusTx, setFocusTx] = useState<string | null>(null);
+  useEffect(() => {
+    if (!deepLink) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (deepLink.from && deepLink.to) {
+      setFilterRange(deepLink.from, deepLink.to);
+    } else if (deepLink.day && (deepLink.day < resolvedRange.start || deepLink.day > resolvedRange.end)) {
+      const m = monthAround(deepLink.day, today);
+      setFilterRange(m.from, m.to);
+    }
+    if (deepLink.day) setFocusDay(deepLink.day);
+    if (deepLink.tx) setFocusTx(deepLink.tx);
+    if (deepLink.cat) {
+      const meta = catMeta.get(deepLink.cat);
+      if (meta) setCategory({ key: deepLink.cat, label: meta.name, color: meta.color ?? '#D1D5DB', icon: meta.icon ?? '❓' });
+    }
+    setActiveTab('transactions');
+    consumeDeepLink();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink]);
+  useFlashTarget('data-tx-id', focusTx, () => setFocusTx(null));
 
   // Child IDs by parent — used so clicking a parent key also includes sub-cat transactions
   const childIdsByParent = useMemo(() => {
@@ -1199,6 +1226,8 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         <div className="min-w-0 xl:col-start-1">
         <SpendingProgress
           data={narrowedDailySpending ?? dailySpending}
+          focusDay={focusDay}
+          onFocusDone={() => setFocusDay(null)}
           rangeStart={resolvedRange.start}
           rangeEnd={resolvedRange.end}
           onStepPeriod={stepPeriod}

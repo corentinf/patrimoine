@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { formatCurrency } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
+import { useGlobalFilter } from '@/app/lib/globalFilter';
 import type { Insight, InsightPart } from '@/app/lib/insights';
 
 // "What happened lately" banner: the most newsworthy event as a big headline on a
@@ -48,6 +49,18 @@ export default function HeadlineBanner({
 }) {
   // Subscribing re-renders this when privacy / demo mode flips (formatCurrency reads it).
   usePrivacy();
+  const { setRange } = useGlobalFilter();
+
+  // Links that point back at Home ("net worth this week") can't rely on a page mount to apply
+  // their params, so apply the range directly and skip the navigation.
+  const onLinkClick = (e: React.MouseEvent, insight: Insight) => {
+    const l = insight.link;
+    if (l?.path === '/home' && l.from && l.to) {
+      e.preventDefault();
+      setRange(l.from, l.to);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   const [lead, ...rest] = insights;
   if (!lead) return null;
@@ -72,7 +85,7 @@ export default function HeadlineBanner({
       <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0 max-w-3xl">
           {lead.href ? (
-            <Link href={lead.href} className="block rounded-xl -m-2 p-2 transition-colors hover:bg-sand-200/50">
+            <Link href={lead.href} onClick={(e) => onLinkClick(e, lead)} className="block rounded-xl -m-2 p-2 transition-colors hover:bg-sand-200/50">
               {headline}
             </Link>
           ) : (
@@ -94,7 +107,7 @@ export default function HeadlineBanner({
               const cls = 'pill !justify-start gap-2.5 px-4 py-2 !whitespace-normal';
               return (
                 <li key={i.id} className="sm:flex-1 lg:flex-none">
-                  {i.href ? <Link href={i.href} className={cls}>{body}</Link> : <div className={cls}>{body}</div>}
+                  {i.href ? <Link href={i.href} onClick={(e) => onLinkClick(e, i)} className={cls}>{body}</Link> : <div className={cls}>{body}</div>}
                 </li>
               );
             })}

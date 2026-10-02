@@ -44,7 +44,7 @@ async function getRecentTransactions(): Promise<InsightTx[]> {
       .from('transactions')
       .select(`
         id, amount, description, payee, posted_at, is_transfer, is_reimbursable,
-        category:categories(name, icon, is_income),
+        category:categories(id, name, icon, is_income),
         account:accounts(institution, name, is_hidden)
       `)
       .gte('posted_at', since)
