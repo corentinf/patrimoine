@@ -109,9 +109,9 @@ export default function HoldingsInsights() {
   }
 
   return (
-    <div className="card p-0 overflow-hidden">
+    <div className="card p-0 overflow-hidden flex flex-col min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-sand-100">
+      <div className="flex-none flex items-center justify-between px-5 py-3.5 border-b border-sand-100">
         <div className="flex items-center gap-2">
           <span className="text-ink-600 text-sm">✦</span>
           <h4 className="text-sm font-semibold text-ink-700">Portfolio Insights</h4>
@@ -129,19 +129,22 @@ export default function HoldingsInsights() {
         </button>
       </div>
 
+      {/* Everything between the header and the input scrolls inside the card when the rail is
+          limited to the window height (Investment page), so the card never outgrows the window. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {/* Insights grid */}
       <div className="p-5">
         {error ? (
           <p className="text-sm text-ink-400 text-center py-4">{error}</p>
         ) : loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <InsightSkeleton />
             <InsightSkeleton />
             <InsightSkeleton />
             <InsightSkeleton />
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {insights.map((insight, i) => {
               const cfg = SEVERITY_CONFIG[insight.severity] ?? SEVERITY_CONFIG.info;
               return (
@@ -177,7 +180,7 @@ export default function HoldingsInsights() {
 
         {/* Chat messages */}
         {chatOpen && messages.length > 0 && (
-          <div className="px-5 py-4 space-y-3 max-h-80 overflow-y-auto bg-sand-50/50">
+          <div className="px-5 py-4 space-y-3 bg-sand-50/50">
             {messages.map((m) => (
               <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
@@ -206,6 +209,10 @@ export default function HoldingsInsights() {
           </div>
         )}
 
+        </div>{/* /suggestions + messages */}
+      </div>{/* /scroll area */}
+
+      <div className="flex-none border-t border-sand-100">
         {/* Input */}
         <ChatInput
           ref={inputRef}

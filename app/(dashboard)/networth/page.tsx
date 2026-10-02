@@ -187,10 +187,9 @@ export default async function NetWorthPage() {
         totalInvestmentValue={totalInvestmentValue}
         priceDates={priceSeries.dates}
         priceSeries={priceSeries.series}
-      />
-      <div className="min-w-0 xl:col-start-2 xl:row-start-2 xl:row-span-2">
+      >
         <HoldingsInsights />
-      </div>
+      </InvestmentClient>
     </div>
   );
 }

@@ -1,8 +1,11 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useGlobalFilter } from '@/app/lib/globalFilter';
-import { formatCurrency, amountColor } from '@/app/lib/utils';
+import { formatCurrency } from '@/app/lib/utils';
+import { isLockedRetirementAccount } from '@/app/lib/accounts';
+import SummaryCard from '@/app/components/SummaryCard';
+import StickyRail from '@/app/components/StickyRail';
 import { isoDate, buildCombinedSeries, seriesChange } from '@/app/lib/investmentRange';
 import { usePrivacy } from '@/app/lib/privacy';
 import InvestmentProgress from './InvestmentProgress';
@@ -17,6 +20,8 @@ interface InvestmentClientProps {
   totalInvestmentValue: number;
   priceDates: string[];
   priceSeries: Record<string, (number | null)[]>;
+  /** Rendered under the key-figures card in the right rail (the AI portfolio insights). */
+  children?: ReactNode;
 }
 
 export default function InvestmentClient({
@@ -27,36 +32,76 @@ export default function InvestmentClient({
   totalInvestmentValue,
   priceDates,
   priceSeries,
+  children,
 }: InvestmentClientProps) {
   // Not otherwise used here — but subscribing is what makes this component
   // re-render (and every formatCurrency() call below re-check demo mode)
   // when the toggle in Header/Profile changes it.
   usePrivacy();
-  const { activePreset, resolvedRange } = useGlobalFilter();
+  const { activePreset, resolvedRange, rangeLabel } = useGlobalFilter();
   const range = activePreset ?? 'custom';
   const customFrom = activePreset ? undefined : resolvedRange.start;
   const customTo = activePreset ? undefined : resolvedRange.end;
 
-  const { change, pct } = useMemo(() => {
+  const { change, pct, endValue, sparkline } = useMemo(() => {
     const todayIso = isoDate(new Date());
     const series = buildCombinedSeries(dates, accounts, todayIso, totalInvestmentValue);
-    return seriesChange(series, resolvedRange.start, resolvedRange.end, totalInvestmentValue);
+    const c = seriesChange(series, resolvedRange.start, resolvedRange.end, totalInvestmentValue);
+    return {
+      ...c,
+      sparkline: series
+        .filter((p) => p.date >= resolvedRange.start && p.date <= resolvedRange.end)
+        .map((p) => p.value),
+    };
   }, [dates, accounts, totalInvestmentValue, resolvedRange.start, resolvedRange.end]);
+
+  // Where the money sits: locked retirement plans (401k/HSA) vs everything you can sell.
+  const retirementValue = accounts
+    .filter((a) => isLockedRetirementAccount(a))
+    .reduce((sum, a) => sum + a.currentValue, 0);
+  const brokerageValue = totalInvestmentValue - retirementValue;
+  const sharePct = (n: number) => (totalInvestmentValue > 0 ? (n / totalInvestmentValue) * 100 : 0);
+
+  // Gain vs what was paid, for the holdings that report a cost basis.
+  const costBasis = liveHoldings.reduce((sum, h) => sum + Number(h.cost_basis ?? 0), 0);
+  const gain = costBasis > 0 ? totalHoldingsValue - costBasis : null;
+  const gainPct = gain !== null && costBasis > 0 ? (gain / costBasis) * 100 : null;
 
   return (
     <>
-      <div className="card px-5 py-4 xl:col-span-2">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="font-display text-lg text-ink-800">Investment holdings</h2>
-          <span className="stat-label">Total value</span>
-          <span className="stat-value text-xl" data-sensitive>{formatCurrency(totalInvestmentValue)}</span>
+      {/* Right rail from xl: key figures with the insights directly underneath, one column so the
+          spacing between them is the normal 20px (separate grid rows would inherit the chart's
+          height). Below xl the wrapper dissolves (`contents`) and `order` interleaves the pieces:
+          figures, chart, holdings, insights. */}
+      <StickyRail fit className="contents min-w-0 xl:block xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:space-y-5">
+        <div className="order-1 min-w-0 xl:flex-none">
+        <SummaryCard
+          tone="indigo"
+          eyebrow="Portfolio value"
+          period={rangeLabel}
+          value={endValue}
+          delta={{ amount: change, pct }}
+          sparkline={sparkline}
+          split={retirementValue > 0 && brokerageValue > 0 ? {
+            title: 'Where it sits',
+            caption: 'today',
+            a: { label: 'Brokerage', value: brokerageValue, sub: `Sellable · ${Math.round(sharePct(brokerageValue))}%`, pct: sharePct(brokerageValue) },
+            b: { label: 'Retirement', value: retirementValue, sub: `401(k), HSA · ${Math.round(sharePct(retirementValue))}%`, pct: sharePct(retirementValue) },
+          } : null}
+          stats={[
+            {
+              label: 'Total gain',
+              value: gain !== null ? `${gain >= 0 ? '+' : '−'}${formatCurrency(Math.abs(gain))}` : '—',
+              sub: gainPct !== null ? `${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}% vs cost` : 'No cost basis',
+            },
+            { label: 'Positions', value: String(liveHoldings.length), sub: 'individual holdings' },
+          ]}
+        />
         </div>
-        <p className={`text-xs font-mono mt-1 ${amountColor(change)}`} data-sensitive>
-          {change >= 0 ? '+' : ''}{formatCurrency(change)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%) over period
-        </p>
-      </div>
+        {children && <div className="order-4 min-w-0 xl:flex xl:min-h-0 xl:flex-col">{children}</div>}
+      </StickyRail>
 
-      <div className="min-w-0 xl:col-start-1">
+      <div className="order-2 min-w-0 xl:order-none xl:col-start-1 xl:row-start-1">
         <InvestmentProgress
           dates={dates}
           accounts={accounts}
@@ -66,7 +111,7 @@ export default function InvestmentClient({
       </div>
 
       {liveHoldings.length > 0 && (
-        <div className="space-y-2 min-w-0 xl:col-start-1">
+        <div className="order-3 space-y-2 min-w-0 xl:order-none xl:col-start-1 xl:row-start-2">
           {totalInvestmentValue - totalHoldingsValue > 1 && (
             <p className="text-xs text-ink-400">
               Line items below cover{' '}

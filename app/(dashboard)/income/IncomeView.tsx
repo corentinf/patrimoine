@@ -10,6 +10,8 @@ import type { Category } from '../spending/CategoryManager';
 import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
 import { useDeepLink, useFlashTarget, monthAround } from '@/app/lib/deepLink';
+import SummaryCard from '@/app/components/SummaryCard';
+import StickyRail from '@/app/components/StickyRail';
 import { usePrivacy } from '@/app/lib/privacy';
 
 interface RawTransaction {
@@ -64,7 +66,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
   usePrivacy();
   const {
     dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory,
-    stepPeriod, canStepBackward, canStepForward, setRange: setFilterRange,
+    stepPeriod, canStepBackward, canStepForward, setRange: setFilterRange, rangeLabel,
   } = useGlobalFilter();
   const selectedCategoryId = category?.key ?? null;
 
@@ -238,26 +240,6 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
     // Below xl: one column in DOM order (hero, pills, chart, donut, list). From xl: the
     // donut moves to a sticky right rail spanning the four main-column rows.
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(340px,24vw,460px)] gap-6 items-start">
-      {/* Hero: title + total income */}
-      <div className="card px-5 py-4 xl:col-start-1">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="font-display text-lg text-ink-800">Income</h2>
-          <span className="stat-label">Total income</span>
-          <span className="stat-value text-xl text-accent-green" data-sensitive>{formatCurrency(totalIncome)}</span>
-        </div>
-        {/* Always mounted (even with no prior-period data) so this line's height
-            is reserved — otherwise hovering a bar/category can toggle it away
-            and the whole page jumps vertically. */}
-        <p className={`text-xs font-mono mt-1 ${prevTotal > 0 ? amountColor(totalIncome - prevTotal) : 'invisible'}`} data-sensitive>
-          {prevTotal > 0 ? (
-            <>
-              {totalIncome >= prevTotal ? '+' : ''}{formatCurrency(totalIncome - prevTotal)}
-              {momDelta !== null && ` (${momDelta >= 0 ? '+' : ''}${momDelta.toFixed(1)}%)`} vs prior period
-            </>
-          ) : '—'}
-        </p>
-      </div>
-
       {/* Category quick filter — always mounted (even with zero categories
           for the current bar/segment) so this row's height is reserved and
           hovering different bars doesn't push the chart/content below up and down. */}
@@ -314,7 +296,44 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
       </div>
 
       {/* By category — right rail from xl, stays in view while the list scrolls */}
-      <div className="w-full min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-4 xl:sticky xl:top-[calc(var(--header-h,96px)_+_1.5rem)]">
+      <StickyRail className="w-full min-w-0 space-y-5 xl:col-start-2 xl:row-start-1 xl:row-span-3">
+        {(() => {
+          const series = narrowedDailyIncome ?? dailyIncome;
+          let running = 0;
+          const cumulative = series
+            .filter((d) => d.date >= resolvedRange.start && d.date <= resolvedRange.end)
+            .map((d) => (running += d.amount));
+          const top = categoryRows.slice(0, 2);
+          const share = (n: number) => (totalIncome > 0 ? (n / totalIncome) * 100 : 0);
+          const largest = filtered.reduce<RawTransaction | null>(
+            (best, tx) => (!best || Math.abs(Number(tx.amount)) > Math.abs(Number(best.amount)) ? tx : best),
+            null,
+          );
+          return (
+            <SummaryCard
+              tone="teal"
+              eyebrow="Total income"
+              period={rangeLabel}
+              value={totalIncome}
+              delta={prevTotal > 0 ? { amount: totalIncome - prevTotal, pct: momDelta } : null}
+              sparkline={cumulative}
+              split={top.length === 2 ? {
+                title: 'Where it comes from',
+                caption: 'top sources',
+                a: { label: `${top[0].icon} ${top[0].name}`, value: top[0].total, sub: `${Math.round(share(top[0].total))}% of income`, pct: share(top[0].total) },
+                b: { label: `${top[1].icon} ${top[1].name}`, value: top[1].total, sub: `${Math.round(share(top[1].total))}% of income`, pct: share(top[1].total) },
+              } : null}
+              stats={[
+                {
+                  label: 'Largest deposit',
+                  value: largest ? Math.abs(Number(largest.amount)) : '—',
+                  sub: largest ? getEffectivePayee(largest) : 'No income yet',
+                },
+                { label: 'Deposits', value: String(filtered.length), sub: 'this period' },
+              ]}
+            />
+          );
+        })()}
         <div className="w-full">
           <SpendingCharts
             categories={categoryRows.map((c) => ({ id: c.id, name: c.name, color: c.color, icon: c.icon, total: c.total, count: c.count }))}
@@ -331,7 +350,7 @@ export default function IncomeView({ transactions, categories, dailyIncome = [] 
             }}
           />
         </div>
-      </div>
+      </StickyRail>
 
       {/* Transaction list */}
       <div className="min-w-0 xl:col-start-1">

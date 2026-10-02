@@ -7,6 +7,8 @@ import { useGlobalFilter, type DateFilter } from '@/app/lib/globalFilter';
 import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
 import { useDeepLink, useFlashTarget, monthAround } from '@/app/lib/deepLink';
+import SummaryCard from '@/app/components/SummaryCard';
+import StickyRail from '@/app/components/StickyRail';
 import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
 import { usePrivacy } from '@/app/lib/privacy';
 import SpendingCharts from './SpendingCharts';
@@ -476,7 +478,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
   const now = new Date();
   const {
     dateFilter, resolvedRange, segment, category, setSegment, clearSegment, setCategory, clearCategory,
-    stepPeriod, canStepBackward, canStepForward, setRange: setFilterRange,
+    stepPeriod, canStepBackward, canStepForward, setRange: setFilterRange, rangeLabel,
   } = useGlobalFilter();
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -514,6 +516,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     }
     if (deepLink.day) setFocusDay(deepLink.day);
     if (deepLink.tx) setFocusTx(deepLink.tx);
+    if (deepLink.q) setSearch(deepLink.q);
     if (deepLink.cat) {
       const meta = catMeta.get(deepLink.cat);
       if (meta) setCategory({ key: deepLink.cat, label: meta.name, color: meta.color ?? '#D1D5DB', icon: meta.icon ?? '❓' });
@@ -1145,54 +1148,6 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
 
   return (
     <div className="space-y-6">
-      {/* Hero: total spending and savings rate side by side (compact) */}
-      <div className="card px-5 py-3.5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_auto] gap-x-8 gap-y-3 items-start">
-        <div>
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <span className="stat-label">Total spending</span>
-            <span className="stat-value text-xl text-accent-red" data-sensitive>{formatCurrency(totalSpending)}</span>
-          </div>
-          {/* Always mounted (even with no prior-period data) so this line's height
-              is reserved — otherwise hovering a bar/category can toggle it away
-              and the whole page jumps vertically. */}
-          <p className={`text-xs font-mono mt-1 ${prevTotalSpending > 0 ? amountColor(-spendingChange) : 'invisible'}`}>
-            {prevTotalSpending > 0 ? (
-              <>
-                {spendingChange >= 0 ? '+' : ''}{formatCurrency(spendingChange)}
-                {spendingPct !== null && ` (${spendingPct >= 0 ? '+' : ''}${spendingPct.toFixed(1)}%)`} vs prior period
-              </>
-            ) : '—'}
-          </p>
-          {pacedTotal !== null && (
-            <p className="text-xs text-ink-400 mt-1">
-              on pace for ~<span className="font-mono text-ink-600">{formatCurrency(pacedTotal.paced)}</span>
-              {pacedTotal.largeTotal > 0 && (
-                <span className="text-ink-300">
-                  {' '}(excl. <span className="font-mono">{formatCurrency(pacedTotal.largeTotal)}</span> in large purchases)
-                </span>
-              )}
-            </p>
-          )}
-        </div>
-        <div className="sm:border-l sm:border-sand-100 sm:pl-8">
-          <SavingsRateModule
-            currentSpending={totalSpending}
-            prevSpending={prevTotalSpending}
-            monthlyIncome={monthlyIncome}
-            periodDays={periodDays}
-          />
-        </div>
-        {awaitingReimbursement > 0 && (
-          <span
-            className="sm:col-span-2 xl:col-span-1 justify-self-start xl:justify-self-end inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-100"
-            title="Jenny's unpaid half of shared-card charges"
-          >
-            ½ Awaiting reimbursement
-            <span className="font-mono" data-sensitive>{formatCurrency(awaitingReimbursement)}</span>
-          </span>
-        )}
-      </div>
-
       {/* Match a recent incoming personal payment to pending Amex splits */}
       {matchCandidate && (
         <div className="card px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 bg-amber-50/60 border-amber-100">
@@ -1247,7 +1202,50 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           }}
         />
         </div>
-        <div className="w-full min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:sticky xl:top-[calc(var(--header-h,96px)_+_1.5rem)]">
+        <StickyRail className="w-full min-w-0 space-y-5 xl:col-start-2 xl:row-start-1 xl:row-span-2">
+        {/* Key figures for the period; the savings rate lives inside (it is editable). */}
+        {(() => {
+          const series = narrowedDailySpending ?? dailySpending;
+          let running = 0;
+          const cumulative = series
+            .filter((d) => d.date >= resolvedRange.start && d.date <= resolvedRange.end)
+            .map((d) => (running += d.amount));
+          const top = sortedCategories.slice(0, 2);
+          const share = (n: number) => (totalSpending > 0 ? (n / totalSpending) * 100 : 0);
+          const txCount = sortedCategories.reduce((n, c) => n + c.count, 0);
+          return (
+            <SummaryCard
+              tone="sunset"
+              eyebrow="Total spending"
+              period={rangeLabel}
+              value={totalSpending}
+              note={pacedTotal ? `On pace for ~${formatCurrency(pacedTotal.paced)}${pacedTotal.largeTotal > 0 ? ` (excl. ${formatCurrency(pacedTotal.largeTotal)} in large purchases)` : ''}` : undefined}
+              delta={prevTotalSpending > 0 ? { amount: spendingChange, pct: spendingPct } : null}
+              sparkline={cumulative}
+              split={top.length === 2 ? {
+                title: 'Where it goes',
+                caption: 'top categories',
+                a: { label: `${top[0].icon ?? ''} ${top[0].name}`.trim(), value: top[0].total, sub: `${Math.round(share(top[0].total))}% of spending`, pct: share(top[0].total) },
+                b: { label: `${top[1].icon ?? ''} ${top[1].name}`.trim(), value: top[1].total, sub: `${Math.round(share(top[1].total))}% of spending`, pct: share(top[1].total) },
+              } : null}
+              stats={[
+                { label: 'Daily average', value: totalSpending / Math.max(1, periodDays), sub: 'per day' },
+                awaitingReimbursement > 0
+                  ? { label: 'Awaiting reimbursement', value: awaitingReimbursement, sub: 'shared charges' }
+                  : { label: 'Transactions', value: String(txCount), sub: 'this period' },
+              ]}
+              footer={
+                <SavingsRateModule
+                  currentSpending={totalSpending}
+                  prevSpending={prevTotalSpending}
+                  monthlyIncome={monthlyIncome}
+                  periodDays={periodDays}
+                  tone="onGradient"
+                />
+              }
+            />
+          );
+        })()}
           <SpendingCharts
             categories={pieCategories}
             monthlyData={[]}
@@ -1272,7 +1270,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
               setActiveTab('transactions');
             }}
           />
-        </div>
+        </StickyRail>
 
       <div className="min-w-0 xl:col-start-1 space-y-5">
       {/* Section tabs */}

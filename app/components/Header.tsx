@@ -19,11 +19,12 @@ import SimpleFINLinkButton from './SimpleFINLink';
 import { AccountsPanel, AccountModal, type SidebarAccount } from './AccountsPanel';
 import { useSyncStatus, formatLastSynced, type SyncStep } from '@/app/lib/syncStatus';
 
+// `tone` matches the page's key-figures card colour (see SummaryCard / globals.css).
 const navItems = [
-  { href: '/home', label: 'Home' },
-  { href: '/spending', label: 'Spending' },
-  { href: '/income', label: 'Income' },
-  { href: '/networth', label: 'Investment' },
+  { href: '/home', label: 'Home', tone: 'tone-green' },
+  { href: '/spending', label: 'Spending', tone: 'tone-sunset' },
+  { href: '/income', label: 'Income', tone: 'tone-teal' },
+  { href: '/networth', label: 'Investment', tone: 'tone-indigo' },
 ];
 
 const SYNC_STEPS: { key: SyncStep; label: string }[] = [
@@ -448,7 +449,9 @@ function shortNum(rawN: number): string {
   const n = isFakeModeActive() ? fakeifyAmount(rawN) : rawN;
   const abs = Math.abs(n);
   if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
+  // Under $10k keep one decimal ($4.9k, not "$5k"); a bare "k" would hide a lot at this size.
+  if (abs >= 10_000) return `$${Math.round(n / 1_000)}k`;
+  if (abs >= 1_000) return `$${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
   return `$${Math.round(n)}`;
 }
 
@@ -469,6 +472,13 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
   const headerRef = useRef<HTMLElement>(null);
   useMeasureCssVar(headerRef, '--header-h');
 
+  // What each number is — shown on hover so the tab figures aren't a guessing game.
+  const tabHints: Record<string, string> = {
+    '/home': 'Net worth',
+    '/spending': 'Spent so far this month',
+    '/income': 'Income so far this month',
+    '/networth': 'Total investments',
+  };
   const tabStats: Record<string, string> = {
     '/home': shortNum(netWorth),
     '/spending': shortNum(spending),
@@ -492,8 +502,9 @@ export default function Header({ accounts = [], netWorth = 0, spending = 0, inco
                 <Link
                   key={item.href}
                   href={item.href}
+                  title={tabHints[item.href]}
                   className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all flex items-baseline gap-1.5 ${
-                    isActive ? 'pill-active' : 'text-ink-400 hover:text-ink-700 hover:bg-sand-200/60'
+                    isActive ? `pill-active pill-tone ${item.tone}` : 'text-ink-400 hover:text-ink-700 hover:bg-sand-200/60'
                   }`}
                 >
                   {item.label}

@@ -8,6 +8,8 @@ interface Props {
   prevSpending: number;
   monthlyIncome: number;
   periodDays: number;
+  /** 'onGradient' = white text for use on the green SummaryCard. */
+  tone?: 'default' | 'onGradient';
 }
 
 function savingsRate(spending: number, income: number): number | null {
@@ -15,7 +17,8 @@ function savingsRate(spending: number, income: number): number | null {
   return ((income - spending) / income) * 100;
 }
 
-export default function SavingsRateModule({ currentSpending, prevSpending, monthlyIncome, periodDays }: Props) {
+export default function SavingsRateModule({ currentSpending, prevSpending, monthlyIncome, periodDays, tone = 'default' }: Props) {
+  const onGradient = tone === 'onGradient';
   const [income, setIncome] = useState(monthlyIncome);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(monthlyIncome || ''));
@@ -46,8 +49,8 @@ export default function SavingsRateModule({ currentSpending, prevSpending, month
     }
   };
 
-  const rateColor =
-    currentRate === null ? 'text-ink-300'
+  const rateColor = onGradient ? 'text-white'
+    : currentRate === null ? 'text-ink-300'
     : currentRate >= 20 ? 'text-accent-green'
     : currentRate >= 0 ? 'text-ink-700'
     : 'text-accent-red';
@@ -55,13 +58,13 @@ export default function SavingsRateModule({ currentSpending, prevSpending, month
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="stat-label">Savings rate</span>
+        <span className={onGradient ? 'text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/80' : 'stat-label'}>Savings rate</span>
         <span className={`stat-value text-xl ${rateColor}`}>
           {currentRate === null ? '—' : `${currentRate.toFixed(1)}%`}
         </span>
         {delta !== null && (
           <span className={`flex items-center gap-0.5 text-xs font-medium ${
-            delta > 0 ? 'text-accent-green' : delta < 0 ? 'text-accent-red' : 'text-ink-300'
+            onGradient ? 'text-white/90' : delta > 0 ? 'text-accent-green' : delta < 0 ? 'text-accent-red' : 'text-ink-300'
           }`}>
             {delta > 0 ? (
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,7 +95,7 @@ export default function SavingsRateModule({ currentSpending, prevSpending, month
               className="pl-6 pr-3 py-1 text-xs border border-sand-200 rounded-lg focus:outline-none focus:border-ink-400 text-ink-700 w-28"
             />
           </div>
-          <span className="text-xs text-ink-400">/mo</span>
+          <span className={`text-xs ${onGradient ? 'text-white/75' : 'text-ink-400'}`}>/mo</span>
           <button
             onClick={handleSave}
             disabled={saving}
@@ -100,12 +103,12 @@ export default function SavingsRateModule({ currentSpending, prevSpending, month
           >
             {saving ? '…' : 'Save'}
           </button>
-          <button onClick={() => setEditing(false)} className="text-xs text-ink-300 hover:text-ink-500">
+          <button onClick={() => setEditing(false)} className={`text-xs ${onGradient ? 'text-white/75 hover:text-white' : 'text-ink-300 hover:text-ink-500'}`}>
             Cancel
           </button>
         </div>
       ) : (
-        <p className="text-xs text-ink-400 mt-1">
+        <p className={`text-xs mt-1 ${onGradient ? 'text-white/75' : 'text-ink-400'}`}>
           {income > 0 ? (
             <>
               <span data-sensitive>{formatCurrency(income)}</span>/mo income ·{' '}
@@ -118,7 +121,7 @@ export default function SavingsRateModule({ currentSpending, prevSpending, month
           )}
           <button
             onClick={() => { setDraft(income > 0 ? String(income) : ''); setEditing(true); }}
-            className="text-ink-500 hover:text-ink-700 underline underline-offset-2 transition-colors"
+            className={`underline underline-offset-2 transition-colors ${onGradient ? 'text-white hover:text-white/80' : 'text-ink-500 hover:text-ink-700'}`}
           >
             {income > 0 ? 'Edit' : 'Set income'}
           </button>

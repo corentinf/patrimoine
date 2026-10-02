@@ -14,9 +14,11 @@ export interface DeepLink {
   tx?: string;
   /** Holding symbol to scroll to and flash. */
   symbol?: string;
+  /** Text to put in the Spending search box (e.g. a merchant name). */
+  q?: string;
 }
 
-const KEYS: (keyof DeepLink)[] = ['day', 'from', 'to', 'cat', 'tx', 'symbol'];
+const KEYS: (keyof DeepLink)[] = ['day', 'from', 'to', 'cat', 'tx', 'symbol', 'q'];
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export function deepLinkHref(path: string, link: DeepLink): string {
@@ -37,7 +39,7 @@ export function readDeepLink(search: string): DeepLink | null {
     if (!v) continue;
     // Dates must be real ISO days; ids/symbols are only ever used as lookup keys.
     if ((k === 'day' || k === 'from' || k === 'to') && !ISO_DAY.test(v)) continue;
-    link[k] = v;
+    link[k] = k === 'q' ? v.slice(0, 80) : v;
   }
   return Object.keys(link).length ? link : null;
 }

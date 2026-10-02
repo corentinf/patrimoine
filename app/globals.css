@@ -164,6 +164,21 @@
     border: 1px solid rgb(var(--accent-green) / 0.28);
   }
 
+  /* A pill whose tint follows its page's colour (nav tabs): Home green, Spending coral,
+     Income teal, Investment indigo — the same families as the key-figures card gradients. */
+  .tone-green  { --tone: 40 134 84; }
+  .tone-sunset { --tone: 229 88 125; }
+  .tone-teal   { --tone: 31 160 160; }
+  .tone-indigo { --tone: 90 99 228; }
+  .dark .tone-green  { --tone: 133 187 101; }
+  .dark .tone-sunset { --tone: 240 120 150; }
+  .dark .tone-teal   { --tone: 70 200 195; }
+  .dark .tone-indigo { --tone: 140 150 250; }
+  .pill-tone {
+    background-color: rgb(var(--tone) / 0.14);
+    border-color: rgb(var(--tone) / 0.38);
+  }
+
   /* Gradient cards. Colour comes from a --g layer stack on ::before; ::after adds the
      fine film grain from the reference. Content stays above both (isolation + z-index). */
   .gradient-card {
@@ -204,6 +219,23 @@
     --g:
       radial-gradient(70% 120% at 100% 0%, rgb(255 255 255 / 0.2) 0%, transparent 60%),
       linear-gradient(120deg, #2fa162 0%, #55b866 48%, #8cc86b 100%);
+  }
+  /* One colour family per page for the key-figures card. Same recipe as the brand green:
+     darkest at the left where the text sits, a soft white bloom top-right. */
+  .g-sunset {   /* Spending */
+    --g:
+      radial-gradient(70% 120% at 100% 0%, rgb(255 255 255 / 0.22) 0%, transparent 60%),
+      linear-gradient(120deg, #e46a4a 0%, #e5587d 50%, #c9529f 100%);
+  }
+  .g-teal {     /* Income */
+    --g:
+      radial-gradient(70% 120% at 100% 0%, rgb(255 255 255 / 0.2) 0%, transparent 60%),
+      linear-gradient(120deg, #17998a 0%, #26a8a8 50%, #3b9fd0 100%);
+  }
+  .g-indigo {   /* Investment */
+    --g:
+      radial-gradient(70% 120% at 100% 0%, rgb(255 255 255 / 0.2) 0%, transparent 60%),
+      linear-gradient(120deg, #4668dc 0%, #5a63e4 50%, #7857e0 100%);
   }
   /* Retirement. */
   .g-violet {
@@ -342,3 +374,8 @@
 @media (prefers-reduced-motion: reduce) {
   .deeplink-flash { animation: none; background-color: rgb(var(--accent-money) / 0.25); }
 }
+
+/* Side panels (transaction detail) ease in from the right. */
+@keyframes panel-in { from { transform: translateX(28px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.panel-in { animation: panel-in 220ms ease-out 1; }
+@media (prefers-reduced-motion: reduce) { .panel-in { animation: none; } }

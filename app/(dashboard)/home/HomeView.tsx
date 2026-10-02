@@ -13,6 +13,8 @@ import NetWorthChart from '../networth/NetWorthChart';
 import ProjectionCard from './ProjectionCard';
 import { AccountModal, InstitutionLogo, type SidebarAccount } from '../../components/AccountsPanel';
 import HeadlineBanner from './HeadlineBanner';
+import MoneyFlowCard from './MoneyFlowCard';
+import SummaryCard from '../../components/SummaryCard';
 import { useDeepLink } from '@/app/lib/deepLink';
 import type { Insight } from '@/app/lib/insights';
 
@@ -96,47 +98,6 @@ interface HomeViewProps {
   liabilitiesGrowthRate: number | null;
   insights: Insight[];
   todayLabel: string;
-}
-
-// Tiny net-worth trend for the gradient card: smoothed line over a soft fill, stretched to the
-// card's width. Stroke is non-scaling so it stays crisp when the viewBox is stretched.
-function Sparkline({ values }: { values: number[] }) {
-  if (values.length < 3) return null;
-  const W = 300, H = 56, PAD = 6;
-  const min = Math.min(...values), max = Math.max(...values);
-  const span = max - min || 1;
-  const pts = values.map((v, i) => [
-    (i / (values.length - 1)) * W,
-    H - PAD - ((v - min) / span) * (H - PAD * 2),
-  ]);
-  // Quadratic smoothing through segment midpoints.
-  let d = `M ${pts[0][0]} ${pts[0][1]}`;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const mx = (pts[i][0] + pts[i + 1][0]) / 2;
-    const my = (pts[i][1] + pts[i + 1][1]) / 2;
-    d += ` Q ${pts[i][0]} ${pts[i][1]} ${mx} ${my}`;
-  }
-  const last = pts[pts.length - 1];
-  d += ` T ${last[0]} ${last[1]}`;
-  const fill = `${d} L ${W} ${H} L 0 ${H} Z`;
-  return (
-    <div className="relative h-14 w-full" aria-hidden>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
-        <defs>
-          <linearGradient id="nw-spark-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#fff" stopOpacity="0.32" />
-            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={fill} fill="url(#nw-spark-fill)" />
-        <path d={d} fill="none" stroke="#fff" strokeOpacity="0.95" strokeWidth="1.75" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      </svg>
-      <span
-        className="absolute h-2 w-2 -translate-y-1/2 translate-x-1/2 rounded-full bg-white shadow-[0_0_0_3px_rgb(255_255_255/0.28)]"
-        style={{ right: 0, top: `${(last[1] / H) * 100}%` }}
-      />
-    </div>
-  );
 }
 
 export default function HomeView({
@@ -520,6 +481,9 @@ export default function HomeView({
                       accounts={accountMeta}
                     />
 
+            {/* Where the month's money went: income → spending categories / investments / savings */}
+            <MoneyFlowCard />
+
             {/* Milestones — always current, not scoped to the selected period */}
             <div>
               <div className="card px-5 py-4 space-y-4">
@@ -679,88 +643,35 @@ export default function HomeView({
           {/* Two separate cards: net worth (follows the selected period; assets and liabilities
               are always current), then the accounts list. */}
           <div className="space-y-5">
-            <div className="gradient-card g-aurora">
-              <div className="sheen" />
-              <div className="relative px-5 pt-5">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">
-                    Net worth <span className="normal-case tracking-normal font-normal text-white/65">· {rangeLabel}</span>
-                  </p>
-                  {hasChange && (
-                    <span
-                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[rgb(255_255_255/0.22)] border border-[rgb(255_255_255/0.3)] px-2.5 py-0.5 text-[11px] font-mono text-white"
-                      data-sensitive
-                    >
-                      {change >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(change))} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
-                    </span>
-                  )}
-                </div>
-                <p className="stat-value mt-2 text-[2.6rem] leading-none" data-sensitive>{formatCurrency(endValue)}</p>
-                {!hasChange && trackingStartDate && (
-                  <p className="mt-1.5 text-xs text-white/75">Tracking since {trackingStartDate}</p>
-                )}
-              </div>
-              <div className="relative mt-3">
-                <Sparkline values={sparkValues} />
-              </div>
-              <div className="relative space-y-4 px-4 pb-4 pt-1">
-                {retirementBalance > 0 && (() => {
-                  // Available + Retirement always add up to net worth (see page.tsx).
-                  const split = splitPct(currentNetWorth, availableNetWorth, retirementBalance);
-                  return (
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between px-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/70">
-                        <span>Where it sits</span>
-                        <span className="font-normal normal-case tracking-normal">today</span>
-                      </div>
-                      <div className="flex h-1.5 gap-0.5 overflow-hidden rounded-full bg-[rgb(255_255_255/0.18)]">
-                        <div className="h-full rounded-full bg-white" style={{ width: `${split.availablePct}%` }} />
-                        <div className="h-full rounded-full bg-[rgb(255_255_255/0.45)]" style={{ width: `${split.retirementPct}%` }} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-[rgb(255_255_255/0.28)] bg-[rgb(255_255_255/0.16)] px-3.5 py-3 backdrop-blur-sm">
-                          <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/80">
-                            <span aria-hidden className="h-2 w-2 rounded-full bg-white" />
-                            Available
-                          </p>
-                          <p className="stat-value mt-1.5 text-xl" data-sensitive>{formatCurrency(availableNetWorth)}</p>
-                          <p className="mt-0.5 text-[11px] text-white/70">Spendable · {Math.round(split.availablePct)}%</p>
-                        </div>
-                        <div className="rounded-xl border border-[rgb(255_255_255/0.28)] bg-[rgb(255_255_255/0.16)] px-3.5 py-3 backdrop-blur-sm">
-                          <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/80">
-                            <span aria-hidden className="h-2 w-2 rounded-full bg-[rgb(255_255_255/0.45)]" />
-                            Retirement
-                          </p>
-                          <p className="stat-value mt-1.5 text-xl" data-sensitive>{formatCurrency(retirementBalance)}</p>
-                          <p className="mt-0.5 text-[11px] text-white/70">Locked · {Math.round(split.retirementPct)}%</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* The two ingredients of net worth */}
-                <div className="grid grid-cols-2 gap-3 border-t border-[rgb(255_255_255/0.25)] px-0.5 pt-3.5">
-                  <div>
-                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/75">Assets</p>
-                    <p className="stat-value mt-1 text-lg" data-sensitive>{formatCurrency(totalAssets)}</p>
-                    <p className="mt-0.5 text-[11px] text-white/70">{assetsCount} account{assetsCount !== 1 ? 's' : ''}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/75">Liabilities</p>
-                    <p className="stat-value mt-1 text-lg" data-sensitive>
-                      {totalLiabilities > 0 ? `−${formatCurrency(totalLiabilities)}` : '—'}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-white/70">
-                      {liabilitiesCount > 0 ? `${liabilitiesCount} account${liabilitiesCount !== 1 ? 's' : ''}` : 'None'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <SummaryCard
+              eyebrow="Net worth"
+              period={rangeLabel}
+              value={endValue}
+              note={!hasChange && trackingStartDate ? `Tracking since ${trackingStartDate}` : undefined}
+              delta={hasChange ? { amount: change, pct } : null}
+              sparkline={sparkValues}
+              split={retirementBalance > 0 ? (() => {
+                // Available + Retirement always add up to net worth (see page.tsx).
+                const sp = splitPct(currentNetWorth, availableNetWorth, retirementBalance);
+                return {
+                  title: 'Where it sits',
+                  caption: 'today',
+                  a: { label: 'Available', value: availableNetWorth, sub: `Spendable · ${Math.round(sp.availablePct)}%`, pct: sp.availablePct },
+                  b: { label: 'Retirement', value: retirementBalance, sub: `Locked · ${Math.round(sp.retirementPct)}%`, pct: sp.retirementPct },
+                };
+              })() : null}
+              stats={[
+                { label: 'Assets', value: totalAssets, sub: `${assetsCount} account${assetsCount !== 1 ? 's' : ''}` },
+                {
+                  label: 'Liabilities',
+                  value: totalLiabilities > 0 ? `−${formatCurrency(totalLiabilities)}` : '—',
+                  sub: liabilitiesCount > 0 ? `${liabilitiesCount} account${liabilitiesCount !== 1 ? 's' : ''}` : 'None',
+                },
+              ]}
+            />
             {/* Accounts — always current, not scoped to the selected period */}
             {groupedAccounts.length > 0 && (
-              <div className="card p-0 overflow-hidden pb-2">
+              <div className="card p-0 overflow-hidden pb-3">
                 <div className="flex items-center justify-between px-5 pt-5 pb-1">
                   <h3 className="stat-label">Accounts</h3>
                   <button
@@ -779,8 +690,8 @@ export default function HomeView({
                       0,
                     );
                     return (
-                      <div key={type} className="mt-2 divide-y divide-sand-100/70">
-                        <div className="px-5 pt-3 pb-2 flex items-center justify-between">
+                      <div key={type} className="mx-3 mt-3 overflow-hidden rounded-xl border border-sand-200/70 divide-y divide-sand-100">
+                        <div className="flex items-center justify-between bg-sand-100/70 px-4 py-2.5">
                           <span className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.12em] flex items-center gap-2">
                             <span className="grid h-5 w-5 place-items-center rounded-md bg-sand-100 text-[11px] normal-case tracking-normal">{cfg.icon}</span>
                             {cfg.label}
@@ -817,7 +728,7 @@ export default function HomeView({
                                 openAccount();
                               }}
                               title={linkUrl ? `Open ${a.institution || a.name}` : undefined}
-                              className="group w-full px-5 py-2.5 flex items-center justify-between gap-4 hover:bg-sand-100/60 transition-colors cursor-pointer"
+                              className="group w-full px-4 py-2.5 flex items-center justify-between gap-4 bg-white/40 hover:bg-sand-100/60 transition-colors cursor-pointer"
                             >
                               <div className="flex items-center gap-3 min-w-0">
                                 <InstitutionLogo
