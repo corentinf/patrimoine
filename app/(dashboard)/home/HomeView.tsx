@@ -472,7 +472,7 @@ export default function HomeView({
       {/* Dashboard grid: main column (chart + key figures, milestones, projection) with the
           accounts list as a right-hand rail that stays in view while scrolling on wide screens. */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(340px,24vw,460px)] gap-6 items-start">
-        <div className="space-y-6 min-w-0">
+        <div className="order-2 space-y-6 min-w-0 xl:order-none">
           {/* Chart */}
                     <NetWorthChart
                       data={chartData}
@@ -639,11 +639,12 @@ export default function HomeView({
             />
         </div>
 
-        <aside className="min-w-0">
+        <aside className="contents min-w-0 xl:block">
           {/* Two separate cards: net worth (follows the selected period; assets and liabilities
               are always current), then the accounts list. */}
-          <div className="space-y-5">
+          <div className="contents xl:block xl:space-y-5">
             <SummaryCard
+              className="order-1 xl:order-none"
               eyebrow="Net worth"
               period={rangeLabel}
               value={endValue}
@@ -671,7 +672,7 @@ export default function HomeView({
             />
             {/* Accounts — always current, not scoped to the selected period */}
             {groupedAccounts.length > 0 && (
-              <div className="card p-0 overflow-hidden pb-3">
+              <div className="card p-0 overflow-hidden pb-3 order-3 xl:order-none">
                 <div className="flex items-center justify-between px-5 pt-5 pb-1">
                   <h3 className="stat-label">Accounts</h3>
                   <button

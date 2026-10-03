@@ -379,3 +379,19 @@
 @keyframes panel-in { from { transform: translateX(28px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .panel-in { animation: panel-in 220ms ease-out 1; }
 @media (prefers-reduced-motion: reduce) { .panel-in { animation: none; } }
+
+/* Phones: iOS Safari zooms the whole page when a focused text field is smaller than 16px, and does
+   not zoom back out. Keep fields at 16px below the md breakpoint (the desktop layout is unchanged). */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch screens: small chips are hard to hit. Give pills a ~34px minimum height where the primary
+   pointer is a finger (no change for mouse users). */
+@media (pointer: coarse) {
+  .pill { min-height: 2.125rem; }
+}

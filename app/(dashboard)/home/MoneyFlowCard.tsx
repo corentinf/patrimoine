@@ -17,12 +17,13 @@ import { deepLinkHref } from '@/app/lib/deepLinkUrl';
 // and the hub fans out to everything it paid for. If you spent or invested more than you earned,
 // the gap appears as a red "From savings" source so the diagram still balances.
 
-interface FlowItem { id: string; name: string; icon: string | null; color: string | null; amount: number }
-interface FlowData { income: FlowItem[]; spending: FlowItem[]; investments: number }
+interface FlowItem { id: string; name: string; icon: string | null; color: string | null; amount: number; /** part of `amount` that is still expected rather than already happened */ predicted?: number }
+interface PredictedData { until: string; income: FlowItem[]; spending: FlowItem[]; investments: number }
+interface FlowData { income: FlowItem[]; spending: FlowItem[]; investments: number; investmentsPredicted?: number; predicted?: PredictedData | null }
 
 type Kind = 'source' | 'draw' | 'hub' | 'spend' | 'invest' | 'save';
 interface FlowNode { name: string; kind: Kind; color: string; icon?: string | null; /** category id, for jumping to that category */ catId?: string }
-interface FlowLink { source: number; target: number; value: number }
+interface FlowLink { source: number; target: number; value: number; /** part of `value` that is predicted */ predicted?: number }
 
 const SHARE_MIN = 0.02; // categories / sources under 2% are grouped as "Other"
 
@@ -34,6 +35,28 @@ const NEUTRAL = '#9CA3AF';
 
 // Session cache: reopening a range (or navigating away and back) is instant.
 const cache = new Map<string, FlowData>();
+
+/** Actual + expected-for-the-rest-of-the-month, keeping track of which part is predicted. */
+function withPredictions(data: FlowData): FlowData {
+  const p = data.predicted;
+  if (!p) return data;
+  const merge = (actual: FlowItem[], extra: FlowItem[]) => {
+    const map = new Map<string, FlowItem>(actual.map((i) => [i.id, { ...i, predicted: 0 }]));
+    for (const e of extra) {
+      const cur = map.get(e.id);
+      if (cur) { cur.amount += e.amount; cur.predicted = (cur.predicted ?? 0) + e.amount; }
+      else map.set(e.id, { ...e, predicted: e.amount });
+    }
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+  };
+  return {
+    ...data,
+    income: merge(data.income, p.income),
+    spending: merge(data.spending, p.spending),
+    investments: data.investments + p.investments,
+    investmentsPredicted: p.investments,
+  };
+}
 
 function buildGraph(data: FlowData) {
   const incomeTotal = data.income.reduce((s, i) => s + i.amount, 0);
@@ -52,30 +75,45 @@ function buildGraph(data: FlowData) {
 
   // Left: income sources (+ a red "From savings" when spending outran income)
   const clean = (name: string) => name.replace(/^income\s*[-–:]\s*/i, '');
-  const sources: { node: FlowNode; value: number }[] = [];
+  const sources: { node: FlowNode; value: number; predicted?: number }[] = [];
   let otherIncome = 0;
+  let otherIncomePred = 0;
   for (const i of data.income) {
-    if (/^other$/i.test(clean(i.name)) || (incomeTotal > 0 && i.amount / incomeTotal < SHARE_MIN)) otherIncome += i.amount;
-    else sources.push({ node: { name: clean(i.name), kind: 'source', color: GREEN, icon: i.icon, catId: i.id }, value: i.amount });
+    if (/^other$/i.test(clean(i.name)) || (incomeTotal > 0 && i.amount / incomeTotal < SHARE_MIN)) { otherIncome += i.amount; otherIncomePred += i.predicted ?? 0; }
+    else sources.push({ node: { name: clean(i.name), kind: 'source', color: GREEN, icon: i.icon, catId: i.id }, value: i.amount, predicted: i.predicted ?? 0 });
   }
-  if (otherIncome > 0) sources.push({ node: { name: 'Other income', kind: 'source', color: GREEN }, value: otherIncome });
+  if (otherIncome > 0) sources.push({ node: { name: 'Other income', kind: 'source', color: GREEN }, value: otherIncome, predicted: otherIncomePred });
   if (draw > 0) sources.push({ node: { name: 'From savings', kind: 'draw', color: RED }, value: draw });
 
   const hub = add({ name: 'Income', kind: 'hub', color: GREEN });
-  for (const s of sources) links.push({ source: add(s.node), target: hub, value: s.value });
+  for (const s of sources) links.push({ source: add(s.node), target: hub, value: s.value, predicted: s.predicted ?? 0 });
 
   // Right: spending categories, investments, savings
   let otherSpend = 0;
+  let otherSpendPred = 0;
   for (const c of data.spending) {
-    if (c.amount / base < SHARE_MIN) otherSpend += c.amount;
-    else links.push({ source: hub, target: add({ name: c.name, kind: 'spend', color: c.color ?? NEUTRAL, icon: c.icon, catId: c.id }), value: c.amount });
+    if (c.amount / base < SHARE_MIN) { otherSpend += c.amount; otherSpendPred += c.predicted ?? 0; }
+    else links.push({ source: hub, target: add({ name: c.name, kind: 'spend', color: c.color ?? NEUTRAL, icon: c.icon, catId: c.id }), value: c.amount, predicted: c.predicted ?? 0 });
   }
-  if (otherSpend > 0) links.push({ source: hub, target: add({ name: 'Other', kind: 'spend', color: NEUTRAL }), value: otherSpend });
-  if (invested > 0) links.push({ source: hub, target: add({ name: 'Investments', kind: 'invest', color: BLUE }), value: invested });
+  if (otherSpend > 0) links.push({ source: hub, target: add({ name: 'Other', kind: 'spend', color: NEUTRAL }), value: otherSpend, predicted: otherSpendPred });
+  if (invested > 0) links.push({ source: hub, target: add({ name: 'Investments', kind: 'invest', color: BLUE }), value: invested, predicted: data.investmentsPredicted ?? 0 });
   if (saved > 0) links.push({ source: hub, target: add({ name: 'Savings', kind: 'save', color: PURPLE }), value: saved });
 
   const rightCount = nodes.filter((n) => n.kind === 'spend' || n.kind === 'invest' || n.kind === 'save').length;
-  return { nodes, links, incomeTotal, spendTotal, invested, saved, draw, base, rightCount };
+  const predictedTotal = links.filter((l) => nodes[l.source].kind === 'hub').reduce((sum, l) => sum + (l.predicted ?? 0), 0);
+  return { nodes, links, incomeTotal, spendTotal, invested, saved, draw, base, rightCount, predictedTotal };
+}
+
+const clip = (name: string, max: number) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
+
+/** "$6.7k" for tight spaces; goes through formatCurrency first so demo/fake mode still applies. */
+function compactMoney(n: number): string {
+  const probe = formatCurrency(n);
+  const v = Number(probe.replace(/[^0-9.-]/g, ''));
+  if (!Number.isFinite(v)) return probe;
+  if (v >= 10000) return `$${Math.round(v / 1000)}k`;
+  if (v >= 1000) return `$${(v / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  return probe;
 }
 
 type Hover = { kind: 'node' | 'link'; index: number } | null;
@@ -98,7 +136,7 @@ export default function MoneyFlowCard() {
     const ctrl = new AbortController();
     setLoading(true);
     setError(null);
-    fetch(`/api/money-flow?start=${start}&end=${end}`, { signal: ctrl.signal })
+    fetch(`/api/money-flow?start=${start}&end=${end}&predict=1`, { signal: ctrl.signal })
       .then(async (r) => {
         const body = await r.json();
         if (!r.ok) throw new Error(body?.error ?? 'Could not load money flow');
@@ -110,10 +148,31 @@ export default function MoneyFlowCard() {
     return () => ctrl.abort();
   }, [start, end]);
 
-  const graph = useMemo(() => (data ? buildGraph(data) : null), [data]);
+  const [showPredictions, setShowPredictions] = useState(true);
+  const hasPredictions = !!data?.predicted;
+  const effective = useMemo(() => (data ? (showPredictions ? withPredictions(data) : { ...data, predicted: null }) : null), [data, showPredictions]);
+  const graph = useMemo(() => (effective ? buildGraph(effective) : null), [effective]);
   const [hover, setHover] = useState<Hover>(null);
   const [tip, setTip] = useState<Tip | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+
+  // On a phone there is no room for 320px of label margins: measure the card and switch to a
+  // compact layout (short labels, abbreviated amounts, narrow margins) below 560px.
+  const [boxW, setBoxW] = useState(0);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setBoxW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const compact = boxW > 0 && boxW < 560;
+
+  // Touch: a tap fires hover then click in the same instant, so without care every tap would
+  // navigate before the tooltip could be read. On touch devices the first tap on a node/flow shows
+  // its tooltip; tapping the same one again opens it.
+  const [armed, setArmed] = useState<Hover>(null);
+  const isCoarse = () => typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches;
 
   const destination = (n: FlowNode): { href: string; label: string } | null => {
     switch (n.kind) {
@@ -147,6 +206,7 @@ export default function MoneyFlowCard() {
       const l = graph.links[h.index];
       title = `${graph.nodes[l.source].name} → ${graph.nodes[l.target].name}`;
       lines = [formatCurrency(l.value), `${pctOfIncome(l.value)}% of income`];
+      if (l.predicted && l.predicted > 0) lines.push(`${formatCurrency(l.value - l.predicted)} so far + ~${formatCurrency(l.predicted)} expected`);
       hint = linkDestination(l)?.label;
     } else {
       const inSum = graph.links.filter((l) => l.target === h.index).reduce((s, l) => s + l.value, 0);
@@ -164,6 +224,14 @@ export default function MoneyFlowCard() {
   };
   const hideTip = () => { setHover(null); setTip(null); };
 
+  const activate = (e: React.MouseEvent, h: NonNullable<Hover>, dest: { href: string } | null) => {
+    if (isCoarse()) {
+      const alreadyArmed = !!armed && armed.kind === h.kind && armed.index === h.index;
+      if (!alreadyArmed || !dest) { showTip(e, h); setArmed(h); return; }
+    }
+    if (dest) router.push(dest.href);
+  };
+
   const isLinked = (nodeIdx: number, l: FlowLink) => l.source === nodeIdx || l.target === nodeIdx;
 
   const renderLink = (p: any) => {
@@ -177,20 +245,37 @@ export default function MoneyFlowCard() {
     const active = !hover
       || (hover.kind === 'link' && hover.index === p.index)
       || (hover.kind === 'node' && isLinked(hover.index, l));
-    const d = `M${p.sourceX},${p.sourceY} C${p.sourceControlX},${p.sourceY} ${p.targetControlX},${p.targetY} ${p.targetX},${p.targetY}`;
+    const W = Math.max(p.linkWidth, 1.5);
+    const ps = l.predicted && l.value > 0 ? Math.min(1, l.predicted / l.value) : 0;
+    const pathAt = (off: number) =>
+      `M${p.sourceX},${p.sourceY + off} C${p.sourceControlX},${p.sourceY + off} ${p.targetControlX},${p.targetY + off} ${p.targetX},${p.targetY + off}`;
+    const opacity = hover ? (active ? 0.6 : 0.07) : 0.34;
+    const events = {
+      style: { transition: 'stroke-opacity 120ms', cursor: linkDestination(l) ? 'pointer' : 'default' } as React.CSSProperties,
+      onClick: (e: React.MouseEvent) => activate(e, { kind: 'link', index: p.index }, linkDestination(l)),
+      'data-flow-hit': true,
+      onMouseEnter: (e: React.MouseEvent) => showTip(e, { kind: 'link', index: p.index }),
+      onMouseMove: (e: React.MouseEvent) => showTip(e, { kind: 'link', index: p.index }),
+      onMouseLeave: hideTip,
+    };
+    if (ps <= 0) {
+      return <path d={pathAt(0)} fill="none" stroke={color} strokeWidth={W} strokeOpacity={opacity} {...events} />;
+    }
+    // Two parallel bands: what has happened (solid, on top) and what is still expected (hatched).
+    const actualW = W * (1 - ps);
+    const predW = W * ps;
+    const patternId = `flow-hatch-${p.index}`;
     return (
-      <path
-        d={d}
-        fill="none"
-        stroke={color}
-        strokeWidth={Math.max(p.linkWidth, 1.5)}
-        strokeOpacity={hover ? (active ? 0.6 : 0.07) : 0.34}
-        style={{ transition: 'stroke-opacity 120ms', cursor: linkDestination(l) ? 'pointer' : 'default' }}
-        onClick={() => { const d = linkDestination(l); if (d) router.push(d.href); }}
-        onMouseEnter={(e) => showTip(e, { kind: 'link', index: p.index })}
-        onMouseMove={(e) => showTip(e, { kind: 'link', index: p.index })}
-        onMouseLeave={hideTip}
-      />
+      <g>
+        <defs>
+          <pattern id={patternId} patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">
+            <rect width="7" height="7" fill={color} fillOpacity={0.1} />
+            <line x1="0" y1="0" x2="0" y2="7" stroke={color} strokeOpacity={0.55} strokeWidth="2.2" />
+          </pattern>
+        </defs>
+        {actualW > 0.4 && <path d={pathAt(-W * ps / 2)} fill="none" stroke={color} strokeWidth={actualW} strokeOpacity={opacity} {...events} />}
+        <path d={pathAt(W * (1 - ps) / 2)} fill="none" stroke={`url(#${patternId})`} strokeWidth={predW} strokeOpacity={hover ? (active ? 1 : 0.2) : 0.9} {...events} />
+      </g>
     );
   };
 
@@ -215,32 +300,33 @@ export default function MoneyFlowCard() {
     return (
       <g
         style={{ opacity: dim ? 0.35 : 1, transition: 'opacity 120ms', cursor: destination(node) ? 'pointer' : 'default' }}
-        onClick={() => { const d = destination(node); if (d) router.push(d.href); }}
+        onClick={(e: React.MouseEvent) => activate(e, { kind: 'node', index: p.index }, destination(node))}
+        data-flow-hit
         {...handlers}
       >
         <rect x={p.x} y={p.y} width={p.width} height={Math.max(p.height, 2)} rx={3} fill={node.color} />
         {/* wider invisible hit area so thin nodes are easy to hover */}
-        <rect x={p.x - 6} y={p.y} width={p.width + 12} height={Math.max(p.height, 8)} fill="transparent" />
+        <rect x={p.x - (compact ? 12 : 6)} y={p.y - (compact ? 4 : 0)} width={p.width + (compact ? 24 : 12)} height={Math.max(p.height, compact ? 16 : 8) + (compact ? 8 : 0)} fill="transparent" />
         {mid ? (
           <g>
-            <text x={p.x + p.width / 2} y={p.y - 24} textAnchor="middle" fontSize={12} fontWeight={600} fill="rgb(var(--ink-700))">
+            <text x={p.x + p.width / 2} y={p.y - 24} textAnchor="middle" fontSize={compact ? 11 : 12} fontWeight={600} fill="rgb(var(--ink-700))">
               Income
             </text>
-            <text data-sensitive x={p.x + p.width / 2} y={p.y - 9} textAnchor="middle" fontSize={11} fill="rgb(var(--ink-300))">
-              {formatCurrency(total)}
+            <text data-sensitive x={p.x + p.width / 2} y={p.y - 9} textAnchor="middle" fontSize={compact ? 10 : 11} fill="rgb(var(--ink-300))">
+              {compact ? compactMoney(total) : formatCurrency(total)}
             </text>
           </g>
         ) : (
           <text
-            x={left ? p.x - 8 : p.x + p.width + 8}
+            x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)}
             y={cy}
             textAnchor={left ? 'end' : 'start'}
-            fontSize={12}
+            fontSize={compact ? 10.5 : 12}
             fill="rgb(var(--ink-700))"
           >
-            <tspan x={left ? p.x - 8 : p.x + p.width + 8} dy="-0.35em" fontWeight={500}>{node.name}</tspan>
-            <tspan data-sensitive x={left ? p.x - 8 : p.x + p.width + 8} dy="1.35em" fontSize={11} fill="rgb(var(--ink-300))">
-              {formatCurrency(total)}
+            <tspan x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)} dy="-0.35em" fontWeight={500}>{compact ? clip(node.name, 11) : node.name}</tspan>
+            <tspan data-sensitive x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)} dy="1.35em" fontSize={compact ? 9.5 : 11} fill="rgb(var(--ink-300))">
+              {compact ? compactMoney(total) : formatCurrency(total)}
             </tspan>
           </text>
         )}
@@ -248,12 +334,24 @@ export default function MoneyFlowCard() {
     );
   };
 
-  const height = graph ? Math.max(320, graph.rightCount * 54 + 56) : 320;
+  const height = graph ? Math.max(320, graph.rightCount * (compact ? 44 : 54) + 56) : 320;
 
   return (
-    <div className="card px-5 py-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="stat-label">Where your money went <span className="normal-case tracking-normal font-normal text-ink-300">· {rangeLabel}</span></h3>
+    <div className="card px-3 py-4 sm:px-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 sm:px-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h3 className="stat-label">Where your money {hasPredictions && showPredictions ? 'is going' : 'went'} <span className="normal-case tracking-normal font-normal text-ink-300">· {rangeLabel}{hasPredictions && showPredictions && data?.predicted ? ` → ${data.predicted.until.slice(5).replace('-', '/')}` : ''}</span></h3>
+          {hasPredictions && (
+            <button
+              type="button"
+              onClick={() => setShowPredictions((v) => !v)}
+              title="Include what's still expected this month: upcoming subscriptions, usual spending, regular income and investing"
+              className={`pill px-2.5 py-0.5 text-[11px] ${showPredictions ? 'pill-active' : ''}`}
+            >
+              Include predictions
+            </button>
+          )}
+        </div>
         {graph && (
           <p className="text-xs text-ink-400" data-sensitive>
             <span className="text-ink-500">{formatCurrency(graph.incomeTotal)}</span> in ·{' '}
@@ -261,11 +359,21 @@ export default function MoneyFlowCard() {
             {graph.invested > 0 && <> · <span className="text-ink-500">{formatCurrency(graph.invested)}</span> invested</>}
             {graph.saved > 0 && <> · <span className="text-ink-500">{formatCurrency(graph.saved)}</span> saved</>}
             {graph.draw > 0 && <> · <span className="text-accent-red">{formatCurrency(graph.draw)}</span> from savings</>}
+            {hasPredictions && showPredictions && graph.predictedTotal > 0 && <span className="text-ink-300"> · hatched = still expected</span>}
           </p>
         )}
       </div>
 
-      <div ref={boxRef} className="relative mt-3" style={{ minHeight: 300 }}>
+      <div
+        ref={boxRef}
+        className="relative mt-3"
+        style={{ minHeight: 300 }}
+        onClick={(e) => {
+          if (!isCoarse() || (e.target as Element).closest?.('[data-flow-hit]')) return;
+          hideTip();
+          setArmed(null);
+        }}
+      >
         {loading && !data ? (
           <div className="h-[300px] animate-pulse rounded-xl bg-sand-100" aria-label="Loading money flow" />
         ) : error ? (
@@ -278,11 +386,11 @@ export default function MoneyFlowCard() {
               <ResponsiveContainer width="100%" height="100%">
                 <Sankey
                   data={{ nodes: graph.nodes, links: graph.links }}
-                  nodeWidth={10}
-                  nodePadding={30}
+                  nodeWidth={compact ? 8 : 10}
+                  nodePadding={compact ? 22 : 30}
                   linkCurvature={0.5}
                   iterations={64}
-                  margin={{ top: 44, right: 190, bottom: 26, left: 130 }}
+                  margin={compact ? { top: 44, right: 88, bottom: 22, left: 62 } : { top: 44, right: 190, bottom: 26, left: 130 }}
                   node={renderNode}
                   link={renderLink}
                 />
@@ -292,7 +400,9 @@ export default function MoneyFlowCard() {
             {tip && (
               <div
                 className="pointer-events-none absolute z-20 min-w-[9rem] rounded-xl bg-ink-800 px-3 py-2 text-xs text-white shadow-lg"
-                style={{ left: Math.min(tip.x + 14, (boxRef.current?.clientWidth ?? 600) - 180), top: Math.max(tip.y - 8, 0), transform: 'translateY(-100%)' }}
+                style={compact
+                  ? { left: Math.max(0, Math.min(tip.x - 90, boxW - 190)), top: Math.max(tip.y - 14, 0), transform: 'translateY(-100%)' }
+                  : { left: Math.min(tip.x + 14, (boxRef.current?.clientWidth ?? 600) - 180), top: Math.max(tip.y - 8, 0), transform: 'translateY(-100%)' }}
               >
                 <p className="font-semibold">{tip.title}</p>
                 {tip.lines.map((l, i) => (

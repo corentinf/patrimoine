@@ -8,6 +8,7 @@ import { useSetPageFilterSlot } from '@/app/lib/pageFilterSlot';
 import { useStableMinHeight } from '@/app/lib/useStableMinHeight';
 import { useDeepLink, useFlashTarget, monthAround } from '@/app/lib/deepLink';
 import SummaryCard from '@/app/components/SummaryCard';
+import { forecastSpending, type SpendTx } from '@/app/lib/forecast';
 import StickyRail from '@/app/components/StickyRail';
 import { useMeasureCssVar } from '@/app/lib/useMeasureCssVar';
 import { usePrivacy } from '@/app/lib/privacy';
@@ -1154,6 +1155,35 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
     </div>,
   );
 
+  // Expected spending for the rest of this month: upcoming subscriptions (same detection and your
+  // confirm/dismiss choices as the Subscriptions tab) plus usual spending per category (your budget,
+  // else the median of the last 3 months), net of what's already spent. Shown as hatched bars.
+  const forecast = useMemo(() => {
+    const todayLA = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
+    const [fy, fm] = todayLA.split('-').map(Number);
+    const monthEnd = `${fy}-${String(fm).padStart(2, '0')}-${String(new Date(fy, fm, 0).getDate()).padStart(2, '0')}`;
+    const spend: SpendTx[] = [];
+    for (const tx of transactions) {
+      if (isExcludedFromSpending(tx)) continue;
+      const cat = tx.category;
+      const parentId = cat ? (subCatToParent.get(cat.id) ?? cat.id) : null;
+      const meta = parentId ? catMeta.get(parentId) : null;
+      spend.push({
+        date: tx.posted_at.slice(0, 10),
+        amount: Math.abs(getPersonalAmount(Number(tx.amount), tx.account, tx)),
+        categoryKey: parentId ?? '__uncategorized__',
+        categoryName: meta?.name ?? cat?.name ?? 'Uncategorized',
+        categoryIcon: meta?.icon ?? cat?.icon ?? null,
+        payee: tx.payee,
+        description: tx.description ?? '',
+      });
+    }
+    const dismissed = new Set(
+      Object.entries(subscriptionOverrides).filter(([, v]) => v === 'dismissed').map(([k]) => k),
+    );
+    return forecastSpending({ spend, today: todayLA, monthEnd, budgets, dismissed });
+  }, [transactions, subCatToParent, catMeta, budgets, subscriptionOverrides]);
+
   const spendingChange = totalSpending - prevTotalSpending;
   const spendingPct = prevTotalSpending > 0 ? (spendingChange / prevTotalSpending) * 100 : null;
 
@@ -1194,6 +1224,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           data={narrowedDailySpending ?? dailySpending}
           focusDay={focusDay}
           onFocusDone={() => setFocusDay(null)}
+          forecast={forecast}
           rangeStart={resolvedRange.start}
           rangeEnd={resolvedRange.end}
           onStepPeriod={stepPeriod}
@@ -1224,13 +1255,17 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
           const top = sortedCategories.slice(0, 2);
           const share = (n: number) => (totalSpending > 0 ? (n / totalSpending) * 100 : 0);
           const txCount = sortedCategories.reduce((n, c) => n + c.count, 0);
+          const forecastApplies = !!forecast && forecast.days.length > 0
+            && resolvedRange.start <= forecast.days[0].date && resolvedRange.end >= forecast.days[forecast.days.length - 1].date;
           return (
             <SummaryCard
               tone="sunset"
               eyebrow="Total spending"
               period={rangeLabel}
               value={totalSpending}
-              note={pacedTotal ? `On pace for ~${formatCurrency(pacedTotal.paced)}${pacedTotal.largeTotal > 0 ? ` (excl. ${formatCurrency(pacedTotal.largeTotal)} in large purchases)` : ''}` : undefined}
+              note={forecastApplies && forecast && forecast.remainingTotal > 0
+                ? `Projected ~${formatCurrency(forecast.projectedMonthTotal)} by month end · ${formatCurrency(forecast.subscriptionsRemaining)} subscriptions + ${formatCurrency(forecast.usualRemaining)} usual spending still to come`
+                : pacedTotal ? `On pace for ~${formatCurrency(pacedTotal.paced)}${pacedTotal.largeTotal > 0 ? ` (excl. ${formatCurrency(pacedTotal.largeTotal)} in large purchases)` : ''}` : undefined}
               delta={prevTotalSpending > 0 ? { amount: spendingChange, pct: spendingPct } : null}
               sparkline={cumulative}
               split={top.length === 2 ? {
@@ -1331,11 +1366,11 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
         <div className="space-y-6">
           {categoryRows.length > 0 && (
             <div className="card p-0">
-              <div className="px-5 py-3.5 border-b border-sand-100 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center">
+              <div className="px-5 py-3.5 border-b border-sand-100 grid grid-cols-[1fr_auto_auto] gap-x-3 sm:grid-cols-[1fr_auto_auto_auto] sm:gap-x-6 items-center">
                 <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider">Category</span>
-                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-20">This period</span>
+                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-16 sm:w-20">This period</span>
                 <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-20 hidden sm:block">Last period</span>
-                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-16">Change</span>
+                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider text-right w-12 sm:w-16">Change</span>
               </div>
               {categoryRows.map((row) => {
                 const isNew = row.delta === null;
@@ -1359,7 +1394,7 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                         else setCategory({ key: row.key, label: row.name, color: row.color, icon: row.icon });
                         setActiveTab('transactions');
                       }}
-                      className="w-full px-5 pt-3 pb-1 grid grid-cols-[1fr_auto_auto_auto] gap-x-6 items-center text-left"
+                      className="w-full px-5 pt-3 pb-1 grid grid-cols-[1fr_auto_auto] gap-x-3 sm:grid-cols-[1fr_auto_auto_auto] sm:gap-x-6 items-center text-left"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.color }} />
@@ -1367,13 +1402,13 @@ export default function SpendingView({ transactions, monthlyRaw, allCategories, 
                           {row.icon} {row.name}
                         </span>
                       </div>
-                      <span className="font-mono text-sm text-ink-700 text-right w-20">
+                      <span className="font-mono text-sm text-ink-700 text-right w-16 sm:w-20">
                         {row.current > 0 ? formatCurrency(row.current) : <span className="text-ink-300">—</span>}
                       </span>
                       <span className="font-mono text-sm text-ink-400 text-right w-20 hidden sm:block">
                         {row.previous > 0 ? formatCurrency(row.previous) : <span className="text-ink-300">—</span>}
                       </span>
-                      <span className={`text-xs font-medium text-right w-16 ${
+                      <span className={`text-xs font-medium text-right w-12 sm:w-16 ${
                         isNew ? 'text-ink-400' : isIncrease ? 'text-accent-red' : isDecrease ? 'text-accent-green' : 'text-ink-300'
                       }`}>
                         {isNew ? 'new' : row.delta === 0 ? '—' : `${isIncrease ? '+' : ''}${row.delta!.toFixed(0)}%`}

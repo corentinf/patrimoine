@@ -67,7 +67,7 @@ export function SyncDropdown() {
       </button>
 
       {phase === 'idle' && lastSyncedAt && (
-        <span className="text-xs text-ink-300">Last synced {formatLastSynced(lastSyncedAt)}</span>
+        <span className="hidden md:inline text-xs text-ink-300">Last synced {formatLastSynced(lastSyncedAt)}</span>
       )}
 
       {open && phase !== 'idle' && (
@@ -322,7 +322,7 @@ export function FilterBar() {
         {editingRange ? (
           // Edit the dates in place — each pick applies immediately; Done/Escape closes.
           <div
-            className="pill pill-active gap-1 px-3 py-0.5"
+            className="pill pill-active flex-wrap gap-1 px-3 py-0.5"
             onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setEditingRange(false); }}
           >
             <input
@@ -381,12 +381,12 @@ export function FilterBar() {
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="scrollbar-none -mx-1 flex w-full flex-nowrap items-center gap-1.5 overflow-x-auto px-1 md:mx-0 md:w-auto md:flex-wrap md:overflow-visible md:px-0">
         {PRESETS.map((p) => (
           <button
             key={p.key}
             onClick={() => { setEditingRange(false); applyPreset(p.key); }}
-            className={`pill px-5 py-1 text-xs ${activePreset === p.key ? 'pill-active' : ''}`}
+            className={`pill shrink-0 px-3.5 py-1 text-xs md:px-5 ${activePreset === p.key ? 'pill-active' : ''}`}
           >
             {p.label}
           </button>

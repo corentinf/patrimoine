@@ -9,6 +9,7 @@ import { formatCurrency } from '@/app/lib/utils';
 import { usePrivacy } from '@/app/lib/privacy';
 import { PRESETS, isoDate, resolveStart, type RangeKey } from '@/app/lib/investmentRange';
 import { periodBoundaries, BOUNDARY_STYLE } from '@/app/lib/chartBoundaries';
+import type { Forecast } from '@/app/lib/forecast';
 
 export interface DailySpend { date: string; amount: number }
 interface SpendingProgressProps {
@@ -31,6 +32,8 @@ interface SpendingProgressProps {
   /** A day (YYYY-MM-DD) to pin when it's inside the visible range — used by deep links from Home. */
   focusDay?: string | null;
   onFocusDone?: () => void;
+  /** Expected spending for the rest of the current month (subscriptions + usual spending). */
+  forecast?: Forecast | null;
 }
 
 const iso = isoDate;
@@ -48,11 +51,25 @@ function CustomTooltip({ active, payload, label, valueLabel }: any) {
   if (!active || !payload?.length) return null;
   // The bar's own dataKey is a display value clamped for outlier-capping —
   // the tooltip always shows the true amount from the underlying data point.
-  const trueValue = payload[0].payload?.value ?? payload[0].value;
+  const point = payload[0].payload ?? {};
+  const trueValue = point.value ?? payload[0].value;
+  const predicted: number = point.predicted ?? 0;
+  const predictedItems: { name: string; amount: number; kind: string }[] = point.predictedItems ?? [];
   return (
     <div className="bg-ink-800 text-white px-3 py-2 rounded-lg text-xs shadow-lg space-y-0.5">
       <p className="font-medium text-sand-300">{label}</p>
-      <p className="font-mono">{formatCurrency(trueValue)} {valueLabel ?? 'spent'}</p>
+      {(trueValue > 0 || predicted === 0) && <p className="font-mono">{formatCurrency(trueValue)} {valueLabel ?? 'spent'}</p>}
+      {predicted > 0 && (
+        <div className={trueValue > 0 ? 'mt-1 border-t border-white/20 pt-1' : ''}>
+          <p className="text-sand-300">Predicted</p>
+          <p className="font-mono">~{formatCurrency(predicted)}</p>
+          {predictedItems.map((it, i) => (
+            <p key={i} className="text-white/70">
+              {it.kind === 'subscription' ? '↻ ' : ''}{it.name} <span className="font-mono">~{formatCurrency(it.amount)}</span>
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -131,7 +148,7 @@ function bucketRange(key: string, gran: 'day' | 'week' | 'month'): { start: stri
   return { start: key, end: iso(d) };
 }
 
-export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent', rangeStart, rangeEnd, onStepPeriod, canStepBackward = true, canStepForward = true, focusDay = null, onFocusDone }: SpendingProgressProps) {
+export default function SpendingProgress({ data, onPeriodSelect, label = 'Spending over time', color = DEFAULT_COLOR, valueLabel = 'spent', rangeStart, rangeEnd, onStepPeriod, canStepBackward = true, canStepForward = true, focusDay = null, onFocusDone, forecast = null }: SpendingProgressProps) {
   const { blurred } = usePrivacy();
   const controlled = rangeStart !== undefined && rangeEnd !== undefined;
   const [range, setRange] = useState<RangeKey>('30d');
@@ -149,6 +166,8 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
     return () => clearTimeout(t);
   }, [pulseKey]);
   const selectedKey = hoveredKey ?? pinnedKey;
+  const [showPredicted, setShowPredicted] = useState(true);
+  // Only meaningful when the visible range actually contains days still to come this month.
   // Auto-detected outlier capping (see yAxisCap below) can be overridden by
   // the user via the "Full scale" toggle — e.g. when two similar-sized
   // outliers make each other look "normal" to the heuristic, or they just
@@ -195,6 +214,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
   const total = inRange.reduce((s, d) => s + d.amount, 0);
   const spanDays = Math.max(1, differenceInCalendarDays(new Date(end), new Date(start)) + 1);
   const avgPerDay = total / spanDays;
+  const forecastInRange = !!forecast && forecast.days.some((d) => d.date >= start && d.date <= end);
 
   const chartData = useMemo(() => {
     const byBucket = new Map<string, number>();
@@ -211,10 +231,36 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
       if (!byBucket.has(k)) byBucket.set(k, 0);
       cur.setDate(cur.getDate() + 1);
     }
+    // Predicted spending (future days only), summed into whatever bucket each day falls in.
+    const predictedBy = new Map<string, { total: number; items: Map<string, { name: string; amount: number; kind: string }> }>();
+    if (forecast && showPredicted) {
+      for (const d of forecast.days) {
+        if (d.date < start || d.date > end) continue;
+        const k = bucketKey(d.date, gran);
+        if (!byBucket.has(k)) byBucket.set(k, 0);
+        const cur = predictedBy.get(k) ?? { total: 0, items: new Map() };
+        cur.total += d.total;
+        for (const it of d.items) {
+          const id = `${it.kind}:${it.name}`;
+          const prev = cur.items.get(id);
+          cur.items.set(id, { name: it.name, kind: it.kind, amount: (prev?.amount ?? 0) + it.amount });
+        }
+        predictedBy.set(k, cur);
+      }
+    }
     return Array.from(byBucket.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([k, v]) => ({ label: bucketLabel(k, gran), key: k, value: Math.round(v) }));
-  }, [inRange, gran]);
+      .map(([k, v]) => {
+        const p = predictedBy.get(k);
+        return {
+          label: bucketLabel(k, gran),
+          key: k,
+          value: Math.round(v),
+          predicted: p ? Math.round(p.total) : 0,
+          predictedItems: p ? Array.from(p.items.values()).sort((a, b) => b.amount - a.amount).slice(0, 4) : [],
+        };
+      });
+  }, [inRange, gran, forecast, showPredicted, start, end]);
 
   // Which bucket (whatever the current granularity) today falls into, so its
   // bar can be visually flagged — only matches something when today is
@@ -280,6 +326,17 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
           <p className="text-xs text-ink-400 mt-0.5">
             {`${valueLabel.charAt(0).toUpperCase() + valueLabel.slice(1)} per period`}
           </p>
+          {forecast && forecastInRange && showPredicted && (
+            <p className="mt-1 text-xs text-ink-400" data-sensitive>
+              Projected for the month{' '}
+              <span className="font-mono font-medium text-ink-600">~{formatCurrency(forecast.projectedMonthTotal)}</span>
+              {' · '}
+              {forecast.subscriptionsRemaining > 0 && <>{formatCurrency(forecast.subscriptionsRemaining)} subscriptions</>}
+              {forecast.subscriptionsRemaining > 0 && forecast.usualRemaining > 0 && ' + '}
+              {forecast.usualRemaining > 0 && <>{formatCurrency(forecast.usualRemaining)} usual spending</>}
+              {' still to come'}
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
           {!controlled && (
@@ -294,6 +351,16 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
           )}
           {/* Granularity + scale toggles */}
           <div className="flex items-center gap-2">
+            {forecast && forecastInRange && (
+              <button
+                type="button"
+                onClick={() => setShowPredicted((v) => !v)}
+                title="Show predicted spending: upcoming subscriptions plus your usual spending"
+                className={`pill px-2.5 py-1 text-xs ${showPredicted ? 'pill-active' : ''}`}
+              >
+                Predicted
+              </button>
+            )}
             <GranDropdown value={gran} onChange={setGran} />
             {autoYAxisCap != null && (
               <button
@@ -371,6 +438,12 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                 onPeriodSelect(pinnedKey ? bucketRange(pinnedKey, gran) : null, { preview: true });
               }}
             >
+              <defs>
+                <pattern id="predicted-hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                  <rect width="6" height="6" fill={color} fillOpacity={0.1} />
+                  <line x1="0" y1="0" x2="0" y2="6" stroke={color} strokeOpacity={0.45} strokeWidth="2" />
+                </pattern>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--sand-200))" vertical={false} />
               {boundaries.map((b) => {
                 const s = BOUNDARY_STYLE[b.kind];
@@ -396,6 +469,7 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
               <Bar
                 dataKey={yAxisCap ? 'displayValue' : 'value'}
                 name="Spending"
+                stackId="spend"
                 radius={[3, 3, 0, 0]}
                 shape={(props: any) => (
                   <g>
@@ -453,6 +527,19 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
                   />
                 )}
               </Bar>
+              {forecast && showPredicted && (
+                <Bar
+                  dataKey="predicted"
+                  name="Predicted"
+                  stackId="spend"
+                  radius={[3, 3, 0, 0]}
+                  fill="url(#predicted-hatch)"
+                  stroke={color}
+                  strokeOpacity={0.55}
+                  strokeDasharray="3 2"
+                  isAnimationActive={false}
+                />
+              )}
             </BarChart>
         </ResponsiveContainer>
       ) : (
@@ -461,6 +548,12 @@ export default function SpendingProgress({ data, onPeriodSelect, label = 'Spendi
         </div>
       )}
       </div>
+      {forecast && forecastInRange && showPredicted && (
+        <p className="px-1 pt-1 text-[11px] text-ink-300">
+          <span aria-hidden>▨</span> Predicted: upcoming subscriptions, plus your usual spending for each category (your
+          budget if set, otherwise the median of the last 3 months).
+        </p>
+      )}
       {onStepPeriod && (
         <div className="flex items-center justify-between pt-1">
           <button

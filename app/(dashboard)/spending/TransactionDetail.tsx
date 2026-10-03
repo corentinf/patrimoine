@@ -208,7 +208,10 @@ export default function TransactionDetail({
       <div className="fixed inset-0 z-50 bg-black/25 backdrop-blur-[2px]" onClick={onClose} />
 
       {/* Panel */}
-      <div className="panel-in glass bg-sand-50/95 fixed inset-y-0 right-0 z-[60] flex w-full max-w-sm flex-col border-l shadow-2xl">
+      <div
+        className="panel-in glass bg-sand-50/95 fixed inset-y-0 right-0 z-[60] flex w-full max-w-sm flex-col border-l shadow-2xl"
+        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
 
         {/* Top bar */}
         <div className="flex flex-none items-center justify-between px-5 pb-3 pt-4">

@@ -224,7 +224,7 @@ export default function TransactionRow({
       )}
       {/* Main row */}
       <div
-        className={`flex items-center gap-4 px-5 py-3.5 transition-colors cursor-pointer group ${
+        className={`flex items-center gap-2.5 px-3 py-3 sm:gap-4 sm:px-5 sm:py-3.5 transition-colors cursor-pointer group ${
           selected ? 'bg-sand-100' : isTransfer ? 'bg-sand-50/60' : 'hover:bg-sand-50'
         }`}
         onClick={selectMode ? onToggleSelect : onRowClick}
@@ -265,6 +265,7 @@ export default function TransactionRow({
             </button>
           </p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span className="text-xs text-ink-300 sm:hidden">{formatShortDate(tx.posted_at)}</span>
             {isTransfer ? (
               <span className="text-xs text-ink-300">↔ Transfer</span>
             ) : (
@@ -313,7 +314,7 @@ export default function TransactionRow({
         </div>
 
         {/* Hover actions */}
-        <div className="flex items-center gap-1.5 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+        <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           {/* Venmo */}
           {!hideVenmo && (venmo ? (
             <div className="relative flex items-center gap-1 group/venmo">
@@ -397,7 +398,7 @@ export default function TransactionRow({
       {/* Category picker dropdown */}
       {showCatPicker && (
         <div
-          className={`absolute left-5 right-5 bg-white border border-sand-200 rounded-xl shadow-lg z-30 flex flex-col max-h-72 ${
+          className={`absolute left-3 right-3 sm:left-5 sm:right-5 bg-white border border-sand-200 rounded-xl shadow-lg z-30 flex flex-col max-h-72 ${
             catPickerUp ? 'bottom-full' : 'top-full'
           }`}
           onClick={(e) => e.stopPropagation()}

@@ -159,7 +159,7 @@ export function MerchantDrawerProvider({ children }: { children: ReactNode }) {
           role="dialog"
           aria-label="Merchant details"
           className={`glass bg-sand-50/90 fixed inset-y-0 right-0 z-[60] flex w-full flex-col border-l shadow-2xl md:w-[400px] transition-transform ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
-          style={{ transitionDuration: `${SLIDE_MS}ms`, paddingTop: 'env(safe-area-inset-top)' }}
+          style={{ transitionDuration: `${SLIDE_MS}ms`, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           <DrawerBody
             data={data}

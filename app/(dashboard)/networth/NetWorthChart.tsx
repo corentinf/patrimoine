@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
   ResponsiveContainer,
@@ -210,6 +210,16 @@ function pctFormatter(v: number) {
 }
 
 export default function NetWorthChart({ data, trackingStartDate, currentNetWorth, accounts = [] }: NetWorthChartProps) {
+  // Phones: two full value axes leave only ~200px for the lines, so hide the secondary
+  // (liabilities) axis labels and slim the primary one. The lines keep their own scales.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
   const { blurred } = usePrivacy();
   const [showProjection, setShowProjection] = useState(false);
   const [mode, setMode] = useState<ChartMode>('overview');
@@ -472,6 +482,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
               yAxisId="left"
               axisLine={false}
               tickLine={false}
+              width={narrow ? 44 : 60}
               domain={['auto', 'auto']}
               tick={(props) => <BlurredYTick {...props} formatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} blurred={blurred} />}
             />
@@ -482,6 +493,7 @@ export default function NetWorthChart({ data, trackingStartDate, currentNetWorth
             <YAxis
               yAxisId="right"
               orientation="right"
+              hide={narrow}
               axisLine={false}
               tickLine={false}
               domain={['auto', 'auto']}

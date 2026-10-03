@@ -18,7 +18,9 @@ function shortNum(rawN: number): string {
   const n = isFakeModeActive() ? fakeifyAmount(rawN) : rawN;
   const abs = Math.abs(n);
   if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
+  // Under $10k keep one decimal ($4.9k, not "$5k") — same as the desktop tabs.
+  if (abs >= 10_000) return `$${Math.round(n / 1_000)}k`;
+  if (abs >= 1_000) return `$${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
   return `$${Math.round(n)}`;
 }
 
