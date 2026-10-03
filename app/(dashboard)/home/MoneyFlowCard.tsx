@@ -100,8 +100,12 @@ function buildGraph(data: FlowData) {
   if (saved > 0) links.push({ source: hub, target: add({ name: 'Savings', kind: 'save', color: PURPLE }), value: saved });
 
   const rightCount = nodes.filter((n) => n.kind === 'spend' || n.kind === 'invest' || n.kind === 'save').length;
-  const predictedTotal = links.filter((l) => nodes[l.source].kind === 'hub').reduce((sum, l) => sum + (l.predicted ?? 0), 0);
-  return { nodes, links, incomeTotal, spendTotal, invested, saved, draw, base, rightCount, predictedTotal };
+  const predOf = (f: (l: FlowLink) => boolean) => links.filter(f).reduce((sum, l) => sum + (l.predicted ?? 0), 0);
+  const incomePred = predOf((l) => nodes[l.target].kind === 'hub');
+  const spendPred = predOf((l) => nodes[l.source].kind === 'hub' && nodes[l.target].kind === 'spend');
+  const investPred = predOf((l) => nodes[l.target].kind === 'invest');
+  const predictedTotal = spendPred + investPred;
+  return { nodes, links, incomeTotal, spendTotal, invested, saved, draw, base, rightCount, predictedTotal, incomePred, spendPred, investPred };
 }
 
 const clip = (name: string, max: number) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
@@ -287,6 +291,11 @@ export default function MoneyFlowCard() {
       graph.links.filter((l) => l.target === p.index).reduce((s, l) => s + l.value, 0),
       graph.links.filter((l) => l.source === p.index).reduce((s, l) => s + l.value, 0),
     );
+    // How much of this node is still expected (flows touching it that carry a predicted part)
+    const predIn = graph.links.filter((l) => l.target === p.index).reduce((s2, l) => s2 + (l.predicted ?? 0), 0);
+    const predOut = graph.links.filter((l) => l.source === p.index).reduce((s2, l) => s2 + (l.predicted ?? 0), 0);
+    const pred = Math.max(predIn, predOut);
+    const pctInc = graph.base > 0 ? Math.round((total / graph.base) * 100) : 0;
     const left = node.kind === 'source' || node.kind === 'draw';
     const mid = node.kind === 'hub';
     const cy = p.y + p.height / 2;
@@ -319,22 +328,28 @@ export default function MoneyFlowCard() {
         ) : (
           <text
             x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)}
-            y={cy}
+            y={cy - (!compact && pred > 0 ? 6 : 0)}
             textAnchor={left ? 'end' : 'start'}
             fontSize={compact ? 10.5 : 12}
             fill="rgb(var(--ink-700))"
           >
             <tspan x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)} dy="-0.35em" fontWeight={500}>{compact ? clip(node.name, 11) : node.name}</tspan>
             <tspan data-sensitive x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)} dy="1.35em" fontSize={compact ? 9.5 : 11} fill="rgb(var(--ink-300))">
-              {compact ? compactMoney(total) : formatCurrency(total)}
+              {compact ? compactMoney(total) : `${formatCurrency(total)} · ${pctInc}%`}
             </tspan>
+            {!compact && pred > 0 && (
+              <tspan data-sensitive x={left ? p.x - 8 : p.x + p.width + 8} dy="1.3em" fontSize={10} fill="rgb(var(--ink-300))" fillOpacity={0.85}>
+                {compactMoney(total - pred)} so far · +{compactMoney(pred)} expected
+              </tspan>
+            )}
           </text>
         )}
       </g>
     );
   };
 
-  const height = graph ? Math.max(320, graph.rightCount * (compact ? 44 : 54) + 56) : 320;
+  const withPred = !!graph && graph.predictedTotal > 0;
+  const height = graph ? Math.max(320, graph.rightCount * (compact ? 44 : withPred ? 64 : 54) + 56) : 320;
 
   return (
     <div className="card px-3 py-4 sm:px-5">
@@ -352,17 +367,34 @@ export default function MoneyFlowCard() {
             </button>
           )}
         </div>
-        {graph && (
-          <p className="text-xs text-ink-400" data-sensitive>
-            <span className="text-ink-500">{formatCurrency(graph.incomeTotal)}</span> in ·{' '}
-            <span className="text-ink-500">{formatCurrency(graph.spendTotal)}</span> spent
-            {graph.invested > 0 && <> · <span className="text-ink-500">{formatCurrency(graph.invested)}</span> invested</>}
-            {graph.saved > 0 && <> · <span className="text-ink-500">{formatCurrency(graph.saved)}</span> saved</>}
-            {graph.draw > 0 && <> · <span className="text-accent-red">{formatCurrency(graph.draw)}</span> from savings</>}
-            {hasPredictions && showPredictions && graph.predictedTotal > 0 && <span className="text-ink-300"> · hatched = still expected</span>}
-          </p>
-        )}
       </div>
+
+      {graph && (() => {
+        const projected = hasPredictions && showPredictions;
+        const pct = (v: number) => (graph.base > 0 ? `${Math.round((v / graph.base) * 100)}% of income` : '');
+        const split = (total: number, pred: number) =>
+          projected && pred > 0 ? `${formatCurrency(total - pred)} so far + ~${formatCurrency(pred)} expected` : null;
+        const tiles = [
+          { label: 'Income', total: graph.incomeTotal, sub: split(graph.incomeTotal, graph.incomePred), color: 'text-ink-800' },
+          { label: 'Spent', total: graph.spendTotal, sub: split(graph.spendTotal, graph.spendPred), extra: pct(graph.spendTotal), color: 'text-ink-800' },
+          { label: 'Invested', total: graph.invested, sub: split(graph.invested, graph.investPred), extra: pct(graph.invested), color: 'text-ink-800' },
+          graph.draw > 0
+            ? { label: 'From savings', total: graph.draw, sub: projected ? 'projected shortfall' : null, extra: pct(graph.draw), color: 'text-accent-red' }
+            : { label: projected ? 'Saved (projected)' : 'Saved', total: graph.saved, sub: null, extra: pct(graph.saved), color: 'text-accent-green' },
+        ];
+        return (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {tiles.map((t) => (
+              <div key={t.label} className="rounded-xl border border-sand-200/70 bg-sand-100/50 px-3 py-2.5">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-400">{t.label}</p>
+                <p className={`stat-value mt-0.5 text-lg ${t.color}`} data-sensitive>{formatCurrency(t.total)}</p>
+                {t.sub && <p className="mt-0.5 text-[11px] leading-snug text-ink-400" data-sensitive>{t.sub}</p>}
+                {t.extra && <p className="text-[11px] text-ink-300">{t.extra}</p>}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       <div
         ref={boxRef}
@@ -387,10 +419,10 @@ export default function MoneyFlowCard() {
                 <Sankey
                   data={{ nodes: graph.nodes, links: graph.links }}
                   nodeWidth={compact ? 8 : 10}
-                  nodePadding={compact ? 22 : 30}
+                  nodePadding={compact ? 22 : withPred ? 38 : 30}
                   linkCurvature={0.5}
                   iterations={64}
-                  margin={compact ? { top: 44, right: 88, bottom: 22, left: 62 } : { top: 44, right: 190, bottom: 26, left: 130 }}
+                  margin={compact ? { top: 44, right: 88, bottom: 22, left: 62 } : { top: 44, right: withPred ? 220 : 190, bottom: 26, left: withPred ? 175 : 130 }}
                   node={renderNode}
                   link={renderLink}
                 />
