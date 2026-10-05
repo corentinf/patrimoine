@@ -238,9 +238,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Monthly budgets, so the chart can flag categories that are over (or heading over) their limit.
+    const { data: budgetRows } = await supabase.from('category_budgets').select('category_id, monthly_amount').eq('user_id', user.id);
+    const budgets = (budgetRows ?? []).map((b) => {
+      const c = catById.get(b.category_id);
+      return { id: b.category_id as string, name: c?.name ?? 'Category', icon: c?.icon ?? null, color: c?.color ?? null, amount: Number(b.monthly_amount) };
+    });
+
     return NextResponse.json({
       start,
       end,
+      budgets,
       income: list(income),
       spending: list(spending),
       investments: round(investments),

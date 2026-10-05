@@ -19,10 +19,26 @@ import { deepLinkHref } from '@/app/lib/deepLinkUrl';
 
 interface FlowItem { id: string; name: string; icon: string | null; color: string | null; amount: number; /** part of `amount` that is still expected rather than already happened */ predicted?: number }
 interface PredictedData { until: string; income: FlowItem[]; spending: FlowItem[]; investments: number }
-interface FlowData { income: FlowItem[]; spending: FlowItem[]; investments: number; investmentsPredicted?: number; predicted?: PredictedData | null }
+interface BudgetItem { id: string; name: string; icon: string | null; color: string | null; amount: number }
+interface FlowData { budgets?: BudgetItem[]; income: FlowItem[]; spending: FlowItem[]; investments: number; investmentsPredicted?: number; predicted?: PredictedData | null }
 
 type Kind = 'source' | 'draw' | 'hub' | 'spend' | 'invest' | 'save';
-interface FlowNode { name: string; kind: Kind; color: string; icon?: string | null; /** category id, for jumping to that category */ catId?: string }
+type BudgetState = 'ok' | 'near' | 'pace' | 'over';
+interface NodeBudget { limit: number; /** spent so far */ actual: number; /** spent + still expected */ total: number; state: BudgetState }
+interface FlowNode { name: string; kind: Kind; color: string; icon?: string | null; /** category id, for jumping to that category */ catId?: string; budget?: NodeBudget; group?: string }
+type Budgets = Record<string, number>
+
+type SortMode = 'size' | 'budget' | 'group' | 'expected' | 'name'
+const SORTS: { id: SortMode; label: string }[] = [
+  { id: 'size', label: 'Largest first' },
+  { id: 'budget', label: 'Budget status' },
+  { id: 'group', label: 'Fixed · Everyday · Investing' },
+  { id: 'expected', label: 'Still to come' },
+  { id: 'name', label: 'A → Z' },
+]
+const GROUPS = ['Fixed costs', 'Everyday spending', 'Saving & investing']
+const FIXED = /rent|hous|mortgage|utilit|insur|subscri|member|health|medic|transport|phone|internet|loan|tax|child|educat/i
+const groupOf = (n: FlowNode) => (n.kind === 'invest' || n.kind === 'save' ? GROUPS[2] : FIXED.test(n.name) ? GROUPS[0] : GROUPS[1])
 interface FlowLink { source: number; target: number; value: number; /** part of `value` that is predicted */ predicted?: number }
 
 const SHARE_MIN = 0.02; // categories / sources under 2% are grouped as "Other"
@@ -35,6 +51,12 @@ const NEUTRAL = '#9CA3AF';
 
 // Session cache: reopening a range (or navigating away and back) is instant.
 const cache = new Map<string, FlowData>();
+// Budgets live outside the per-range cache so an edit shows up in every range straight away.
+let sharedBudgets: Budgets | null = null;
+const toBudgets = (list: BudgetItem[] | undefined): Budgets => Object.fromEntries((list ?? []).map((b) => [b.id, b.amount]));
+
+const budgetState = (limit: number, actual: number, total: number): BudgetState =>
+  actual > limit ? 'over' : total > limit ? 'pace' : total >= limit * 0.85 ? 'near' : 'ok';
 
 /** Actual + expected-for-the-rest-of-the-month, keeping track of which part is predicted. */
 function withPredictions(data: FlowData): FlowData {
@@ -58,7 +80,8 @@ function withPredictions(data: FlowData): FlowData {
   };
 }
 
-function buildGraph(data: FlowData) {
+/** `budgets` is only passed when the range is a single month (budgets are monthly). */
+function buildGraph(data: FlowData, budgets: Budgets = {}, sort: SortMode = 'size') {
   const incomeTotal = data.income.reduce((s, i) => s + i.amount, 0);
   const spendTotal = data.spending.reduce((s, i) => s + i.amount, 0);
   const invested = data.investments;
@@ -88,16 +111,37 @@ function buildGraph(data: FlowData) {
   const hub = add({ name: 'Income', kind: 'hub', color: GREEN });
   for (const s of sources) links.push({ source: add(s.node), target: hub, value: s.value, predicted: s.predicted ?? 0 });
 
-  // Right: spending categories, investments, savings
+  // Right: spending categories, investments, savings — ordered by the chosen sort
   let otherSpend = 0;
   let otherSpendPred = 0;
+  const right: { node: FlowNode; value: number; predicted: number }[] = [];
   for (const c of data.spending) {
-    if (c.amount / base < SHARE_MIN) { otherSpend += c.amount; otherSpendPred += c.predicted ?? 0; }
-    else links.push({ source: hub, target: add({ name: c.name, kind: 'spend', color: c.color ?? NEUTRAL, icon: c.icon, catId: c.id }), value: c.amount, predicted: c.predicted ?? 0 });
+    const limit = budgets[c.id];
+    if (c.amount / base < SHARE_MIN && !limit) { otherSpend += c.amount; otherSpendPred += c.predicted ?? 0; }
+    else {
+      const actual = c.amount - (c.predicted ?? 0);
+      const budget = limit ? { limit, actual, total: c.amount, state: budgetState(limit, actual, c.amount) } : undefined;
+      right.push({ node: { name: c.name, kind: 'spend', color: c.color ?? NEUTRAL, icon: c.icon, catId: c.id, budget }, value: c.amount, predicted: c.predicted ?? 0 });
+    }
   }
-  if (otherSpend > 0) links.push({ source: hub, target: add({ name: 'Other', kind: 'spend', color: NEUTRAL }), value: otherSpend, predicted: otherSpendPred });
-  if (invested > 0) links.push({ source: hub, target: add({ name: 'Investments', kind: 'invest', color: BLUE }), value: invested, predicted: data.investmentsPredicted ?? 0 });
-  if (saved > 0) links.push({ source: hub, target: add({ name: 'Savings', kind: 'save', color: PURPLE }), value: saved });
+  if (otherSpend > 0) right.push({ node: { name: 'Other', kind: 'spend', color: NEUTRAL }, value: otherSpend, predicted: otherSpendPred });
+  if (invested > 0) right.push({ node: { name: 'Investments', kind: 'invest', color: BLUE }, value: invested, predicted: data.investmentsPredicted ?? 0 });
+  if (saved > 0) right.push({ node: { name: 'Savings', kind: 'save', color: PURPLE }, value: saved, predicted: 0 });
+  for (const r of right) r.node.group = groupOf(r.node);
+
+  const isSaving = (n: FlowNode) => n.kind === 'invest' || n.kind === 'save';
+  const usage = (r: { node: FlowNode; value: number }) => (r.node.budget ? r.value / r.node.budget.limit : -1);
+  const bySize = (x: { value: number }, y: { value: number }) => y.value - x.value;
+  const comparators: Record<SortMode, (x: typeof right[number], y: typeof right[number]) => number> = {
+    size: bySize,
+    // most over budget first, then budgeted categories by usage, then the rest by size; saving last
+    budget: (x, y) => Number(isSaving(x.node)) - Number(isSaving(y.node)) || usage(y) - usage(x) || bySize(x, y),
+    group: (x, y) => GROUPS.indexOf(x.node.group!) - GROUPS.indexOf(y.node.group!) || bySize(x, y),
+    expected: (x, y) => y.predicted - x.predicted || bySize(x, y),
+    name: (x, y) => Number(isSaving(x.node)) - Number(isSaving(y.node)) || x.node.name.localeCompare(y.node.name),
+  };
+  right.sort(comparators[sort]);
+  for (const r of right) links.push({ source: hub, target: add(r.node), value: r.value, predicted: r.predicted });
 
   const rightCount = nodes.filter((n) => n.kind === 'spend' || n.kind === 'invest' || n.kind === 'save').length;
   const predOf = (f: (l: FlowLink) => boolean) => links.filter(f).reduce((sum, l) => sum + (l.predicted ?? 0), 0);
@@ -105,7 +149,9 @@ function buildGraph(data: FlowData) {
   const spendPred = predOf((l) => nodes[l.source].kind === 'hub' && nodes[l.target].kind === 'spend');
   const investPred = predOf((l) => nodes[l.target].kind === 'invest');
   const predictedTotal = spendPred + investPred;
-  return { nodes, links, incomeTotal, spendTotal, invested, saved, draw, base, rightCount, predictedTotal, incomePred, spendPred, investPred };
+  const hasBudgets = nodes.some((n) => n.budget);
+  const overBudget = nodes.filter((n) => n.budget && (n.budget.state === 'over' || n.budget.state === 'pace'));
+  return { hasBudgets, overBudget, nodes, links, incomeTotal, spendTotal, invested, saved, draw, base, rightCount, predictedTotal, incomePred, spendPred, investPred };
 }
 
 const clip = (name: string, max: number) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
@@ -152,10 +198,35 @@ export default function MoneyFlowCard() {
     return () => ctrl.abort();
   }, [start, end]);
 
+  const [budgets, setBudgets] = useState<Budgets>(sharedBudgets ?? {});
+  const [editingBudgets, setEditingBudgets] = useState(false);
+  const [sort, setSort] = useState<SortMode>('size');
+  useEffect(() => {
+    if (data && !sharedBudgets) { sharedBudgets = toBudgets(data.budgets); setBudgets(sharedBudgets); }
+  }, [data]);
+  const singleMonth = start.slice(0, 7) === end.slice(0, 7);
+
+  async function saveBudget(id: string, amount: number | null) {
+    const prev = budgets;
+    const next = { ...budgets };
+    if (amount && amount > 0) next[id] = amount; else delete next[id];
+    sharedBudgets = next; setBudgets(next);
+    try {
+      const res = await fetch('/api/budgets', {
+        method: amount && amount > 0 ? 'POST' : 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(amount && amount > 0 ? { category_id: id, monthly_amount: amount } : { category_id: id }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      sharedBudgets = prev; setBudgets(prev);
+    }
+  }
+
   const [showPredictions, setShowPredictions] = useState(true);
   const hasPredictions = !!data?.predicted;
   const effective = useMemo(() => (data ? (showPredictions ? withPredictions(data) : { ...data, predicted: null }) : null), [data, showPredictions]);
-  const graph = useMemo(() => (effective ? buildGraph(effective) : null), [effective]);
+  const graph = useMemo(() => (effective ? buildGraph(effective, singleMonth ? budgets : {}, sort) : null), [effective, budgets, singleMonth, sort]);
   const [hover, setHover] = useState<Hover>(null);
   const [tip, setTip] = useState<Tip | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -221,6 +292,10 @@ export default function MoneyFlowCard() {
         ...(outSum > 0 ? [`Out: ${formatCurrency(outSum)}`] : []),
         `${pctOfIncome(Math.max(inSum, outSum))}% of income`,
       ];
+      const b = graph.nodes[h.index].budget;
+      const g = graph.nodes[h.index].group;
+      if (g) lines.push(g);
+      if (b) lines.push(`Budget ${formatCurrency(b.limit)}/mo · ${b.total > b.limit ? `${formatCurrency(b.total - b.limit)} over` : `${formatCurrency(b.limit - b.total)} left`}`);
       hint = destination(graph.nodes[h.index])?.label;
     }
     setHover(h);
@@ -296,6 +371,16 @@ export default function MoneyFlowCard() {
     const predOut = graph.links.filter((l) => l.source === p.index).reduce((s2, l) => s2 + (l.predicted ?? 0), 0);
     const pred = Math.max(predIn, predOut);
     const pctInc = graph.base > 0 ? Math.round((total / graph.base) * 100) : 0;
+    const bud = node.budget;
+    const over = !!bud && (bud.state === 'over' || bud.state === 'pace') && total > 0;
+    const excess = over && bud ? Math.min(1, (total - bud.limit) / total) : 0;
+    const budgetLine = bud
+      ? bud.state === 'over'
+        ? `▲ ${compactMoney(bud.actual - bud.limit)} over ${compactMoney(bud.limit)} budget`
+        : bud.state === 'pace'
+          ? `▲ on pace ${compactMoney(bud.total - bud.limit)} over ${compactMoney(bud.limit)} budget`
+          : `${compactMoney(bud.limit - bud.total)} left of ${compactMoney(bud.limit)} budget`
+      : null;
     const left = node.kind === 'source' || node.kind === 'draw';
     const mid = node.kind === 'hub';
     const cy = p.y + p.height / 2;
@@ -314,6 +399,13 @@ export default function MoneyFlowCard() {
         {...handlers}
       >
         <rect x={p.x} y={p.y} width={p.width} height={Math.max(p.height, 2)} rx={3} fill={node.color} />
+        {over && (
+          // the part of the bar beyond the budget, in red, with a tick where the budget ends
+          <>
+            <rect x={p.x} y={p.y + p.height * (1 - excess)} width={p.width} height={Math.max(p.height * excess, 2)} rx={3} fill={RED} />
+            <rect x={p.x - 3} y={p.y + p.height * (1 - excess) - 1} width={p.width + 6} height={2} fill={RED} />
+          </>
+        )}
         {/* wider invisible hit area so thin nodes are easy to hover */}
         <rect x={p.x - (compact ? 12 : 6)} y={p.y - (compact ? 4 : 0)} width={p.width + (compact ? 24 : 12)} height={Math.max(p.height, compact ? 16 : 8) + (compact ? 8 : 0)} fill="transparent" />
         {mid ? (
@@ -328,12 +420,12 @@ export default function MoneyFlowCard() {
         ) : (
           <text
             x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)}
-            y={cy - (!compact && pred > 0 ? 6 : 0)}
+            y={cy - (compact ? 0 : (pred > 0 ? 6 : 0) + (budgetLine ? 6 : 0))}
             textAnchor={left ? 'end' : 'start'}
             fontSize={compact ? 10.5 : 12}
             fill="rgb(var(--ink-700))"
           >
-            <tspan x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)} dy="-0.35em" fontWeight={500}>{compact ? clip(node.name, 11) : node.name}</tspan>
+            <tspan x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)} dy="-0.35em" fontWeight={500} fill={over ? 'rgb(var(--accent-red))' : undefined}>{over ? '▲ ' : ''}{compact ? clip(node.name, 11) : node.name}</tspan>
             <tspan data-sensitive x={left ? p.x - (compact ? 5 : 8) : p.x + p.width + (compact ? 5 : 8)} dy="1.35em" fontSize={compact ? 9.5 : 11} fill="rgb(var(--ink-300))">
               {compact ? compactMoney(total) : `${formatCurrency(total)} · ${pctInc}%`}
             </tspan>
@@ -342,13 +434,22 @@ export default function MoneyFlowCard() {
                 {compactMoney(total - pred)} so far · +{compactMoney(pred)} expected
               </tspan>
             )}
+            {!compact && budgetLine && (
+              <tspan
+                data-sensitive x={left ? p.x - 8 : p.x + p.width + 8} dy="1.3em" fontSize={10}
+                fontWeight={over ? 600 : 400}
+                fill={over ? 'rgb(var(--accent-red))' : 'rgb(var(--ink-300))'}
+              >
+                {budgetLine}
+              </tspan>
+            )}
           </text>
         )}
       </g>
     );
   };
 
-  const withPred = !!graph && graph.predictedTotal > 0;
+  const withPred = !!graph && (graph.predictedTotal > 0 || graph.hasBudgets);
   const height = graph ? Math.max(320, graph.rightCount * (compact ? 44 : withPred ? 64 : 54) + 56) : 320;
 
   return (
@@ -366,8 +467,48 @@ export default function MoneyFlowCard() {
               Include predictions
             </button>
           )}
+          <label className="flex items-center gap-1 text-[11px] text-ink-400">
+            Sort
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortMode)}
+              className="rounded-full border border-sand-200 bg-white px-2 py-0.5 text-[11px] text-ink-700 focus:outline-none"
+            >
+              {SORTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setEditingBudgets((v) => !v)}
+            title="Set a monthly budget per category"
+            className={`pill px-2.5 py-0.5 text-[11px] ${editingBudgets ? 'pill-active' : ''}`}
+          >
+            Budgets
+          </button>
         </div>
       </div>
+
+      {graph && singleMonth && graph.overBudget.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-accent-red/30 bg-accent-red/10 px-3 py-2 text-xs text-accent-red">
+          <span className="font-semibold">▲ {graph.overBudget.length} {graph.overBudget.length === 1 ? 'category' : 'categories'} over budget</span>
+          {graph.overBudget.map((n) => (
+            <span key={n.catId} data-sensitive>
+              {n.name} <span className="font-semibold">+{formatCurrency((n.budget!.state === 'over' ? n.budget!.actual : n.budget!.total) - n.budget!.limit)}</span>
+              {n.budget!.state === 'pace' && ' (projected)'}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {graph && editingBudgets && effective && (
+        <BudgetEditor
+          items={effective.spending}
+          saved={data?.budgets ?? []}
+          budgets={budgets}
+          singleMonth={singleMonth}
+          onSave={saveBudget}
+        />
+      )}
 
       {graph && (() => {
         const projected = hasPredictions && showPredictions;
@@ -420,6 +561,7 @@ export default function MoneyFlowCard() {
                   data={{ nodes: graph.nodes, links: graph.links }}
                   nodeWidth={compact ? 8 : 10}
                   nodePadding={compact ? 22 : withPred ? 38 : 30}
+                  sort={false}
                   linkCurvature={0.5}
                   iterations={64}
                   margin={compact ? { top: 44, right: 88, bottom: 22, left: 62 } : { top: 44, right: withPred ? 220 : 190, bottom: 26, left: withPred ? 175 : 130 }}
@@ -447,5 +589,81 @@ export default function MoneyFlowCard() {
         )}
       </div>
     </div>
+  );
+}
+
+function BudgetEditor({ items, saved, budgets, singleMonth, onSave }: {
+  items: FlowItem[];
+  saved: BudgetItem[];
+  budgets: Budgets;
+  singleMonth: boolean;
+  onSave: (id: string, amount: number | null) => void;
+}) {
+  // Every spending category in the range, plus any budgeted category with no spending yet.
+  const rows = new Map<string, { id: string; name: string; icon: string | null; total: number }>();
+  for (const i of items) rows.set(i.id, { id: i.id, name: i.name, icon: i.icon, total: i.amount });
+  for (const b of saved) if (budgets[b.id] && !rows.has(b.id)) rows.set(b.id, { id: b.id, name: b.name, icon: b.icon, total: 0 });
+  const list = Array.from(rows.values())
+    .filter((r) => r.id !== '__uncategorized__')
+    .sort((a, b) => {
+      const ra = budgets[a.id] ? a.total / budgets[a.id] : -1;
+      const rb = budgets[b.id] ? b.total / budgets[b.id] : -1;
+      return rb - ra || b.total - a.total;
+    });
+
+  return (
+    <div className="mt-3 rounded-xl border border-sand-200/70 bg-sand-100/40 px-3 py-2.5">
+      <p className="text-[11px] text-ink-400">
+        Monthly budget per category. Press Enter to save; clear the box to remove it.
+        {!singleMonth && ' Pick a single month to compare spending against these.'}
+      </p>
+      <ul className="mt-2 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+        {list.map((r) => {
+          const limit = budgets[r.id];
+          const ratio = limit ? r.total / limit : 0;
+          const bar = !limit ? '' : ratio > 1 ? 'bg-accent-red' : ratio >= 0.85 ? 'bg-yellow-400' : 'bg-accent-green';
+          return (
+            <li key={r.id} className="flex items-center gap-2">
+              <span aria-hidden className="w-5 text-center text-sm">{r.icon ?? '•'}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="truncate text-ink-700">{r.name}</span>
+                  <span data-sensitive className={`shrink-0 tabular-nums ${ratio > 1 ? 'font-semibold text-accent-red' : 'text-ink-300'}`}>
+                    {formatCurrency(r.total)}{limit ? ` · ${ratio > 1 ? `${formatCurrency(r.total - limit)} over` : `${Math.round(ratio * 100)}%`}` : ''}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-sand-200">
+                  {limit ? <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.min(ratio, 1) * 100}%` }} /> : null}
+                </div>
+              </div>
+              <BudgetInput key={`${r.id}-${limit ?? ''}`} value={limit} onSave={(v) => onSave(r.id, v)} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function BudgetInput({ value, onSave }: { value?: number; onSave: (v: number | null) => void }) {
+  const [draft, setDraft] = useState(value ? String(value) : '');
+  const commit = () => {
+    const n = parseFloat(draft);
+    const next = Number.isFinite(n) && n > 0 ? n : null;
+    if ((next ?? undefined) !== value) onSave(next);
+  };
+  return (
+    <label className="flex w-24 shrink-0 items-center rounded-lg border border-sand-200 bg-white px-2 py-1 text-xs text-ink-500 focus-within:border-ink-400">
+      $
+      <input
+        type="number" inputMode="decimal" min="0" step="10" placeholder="Budget"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        className="ml-1 w-full min-w-0 bg-transparent text-ink-700 placeholder:text-ink-300 focus:outline-none"
+        data-sensitive
+      />
+    </label>
   );
 }
