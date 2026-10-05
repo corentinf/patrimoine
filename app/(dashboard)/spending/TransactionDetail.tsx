@@ -225,10 +225,10 @@ export default function TransactionDetail({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-6">
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 pb-5">
 
           {/* ── Hero: who, how much, when — tinted by type (spending / income / transfer) ── */}
-          <div className={`gradient-card ${TONE} px-5 pb-5 pt-4`}>
+          <div className={`gradient-card ${TONE} px-4 pb-3.5 pt-3.5`}>
             <div className="sheen" />
             <div className="relative">
               <div className="flex items-center gap-3">
@@ -262,8 +262,8 @@ export default function TransactionDetail({
                 </div>
               </div>
 
-              <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">{KIND_LABEL}</p>
-              <p className="stat-value mt-1 text-[2.4rem] leading-none" data-sensitive>
+              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">{KIND_LABEL}</p>
+              <p className="stat-value mt-0.5 text-[2rem] leading-none" data-sensitive>
                 {kind === 'spending' ? '−' : kind === 'income' ? '+' : ''}{formatCurrencyPrecise(Math.abs(tx.amount))}
               </p>
               {sharedEffective && (
@@ -272,7 +272,7 @@ export default function TransactionDetail({
                 </p>
               )}
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/85">
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/85">
                 <span>{formatDate(tx.posted_at)}</span>
                 {relativeDay && <span className="rounded-full bg-[rgb(255_255_255/0.22)] px-2 py-px text-[11px]">{relativeDay}</span>}
                 {tx.account && <span className="text-white/60">·</span>}
@@ -282,28 +282,27 @@ export default function TransactionDetail({
           </div>
 
           {/* ── Category ── */}
-          <div className="card px-4 py-3.5">
-            <p className="stat-label mb-3">Category</p>
+          <div className="card px-3.5 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2.5">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-lg" style={{ backgroundColor: `${catColor}22` }}>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-base" style={{ backgroundColor: `${catColor}22` }}>
                   {effectiveCategory?.icon ?? '❓'}
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-ink-700">{effectiveCategory?.name ?? 'Uncategorized'}</p>
-                  <p className="text-xs text-ink-300">{isPending ? 'Saving…' : applyToAll ? 'Changes apply to every matching transaction' : 'Changes apply to this one only'}</p>
+                  <p className="text-xs text-ink-300">{isPending ? 'Saving…' : applyToAll ? 'Applies to all matching' : 'This one only'}</p>
                 </div>
               </div>
               <button
                 onClick={() => { setShowCategoryPicker((v) => !v); setCatSearch(''); }}
-                className={`pill shrink-0 px-3.5 py-1.5 text-xs ${showCategoryPicker ? 'pill-active' : ''}`}
+                className={`pill shrink-0 px-3 py-1 text-xs ${showCategoryPicker ? 'pill-active' : ''}`}
               >
                 {showCategoryPicker ? 'Cancel' : 'Change'}
               </button>
             </div>
 
             {merchant?.rule && (
-              <p className="mt-3 text-xs text-ink-400">
+              <p className="mt-2 text-xs text-ink-400">
                 <span className="text-accent-green">✓</span> Rule: always categorize as{' '}
                 <span className="font-medium text-ink-600">{merchant.rule.categoryIcon} {merchant.rule.categoryName ?? 'a category'}</span>
                 <span className="text-ink-300"> · matches “{merchant.rule.pattern}”</span>
@@ -377,21 +376,21 @@ export default function TransactionDetail({
           </div>
 
           {/* ── Flags ── */}
-          <div className="card divide-y divide-sand-100 p-0">
-            <FlagRow
+          <div className="flex flex-wrap gap-1.5">
+            <FlagChip
               title="Transfer"
               hint="Moves money between your own accounts — left out of spending and income"
               checked={isTransferLocal}
               onChange={(v) => { setIsTransferLocal(v); saveFlag(() => toggleTransfer(tx.id, v)); }}
             />
-            <FlagRow
-              title="Shared expense"
+            <FlagChip
+              title="Shared"
               hint={tx.account?.is_shared ? 'Already split through this shared account' : 'Count only your share of this charge'}
               checked={sharedEffective}
               disabled={!!tx.account?.is_shared}
               onChange={(v) => { setSharedLocal(v); saveFlag(() => toggleTransactionShared(tx.id, v)); }}
             />
-            <FlagRow
+            <FlagChip
               title="Reimbursable"
               hint="Someone will pay this back — excluded from spending"
               checked={reimbLocal}
@@ -408,7 +407,7 @@ export default function TransactionDetail({
 
           {/* ── Merchant history ── */}
           {(merchantLoading || (merchant && merchant.visits > 0)) && (
-            <section className="space-y-3 px-1 pt-1">
+            <section className="space-y-2.5 px-1 pt-1">
               <p className="stat-label">Merchant history</p>
               {merchantLoading || !merchant
                 ? <MerchantSkeleton />
@@ -449,9 +448,11 @@ export default function TransactionDetail({
           )}
 
           {/* ── Details ── */}
-          <div className="card px-4 py-3.5">
-            <p className="stat-label mb-2">Details</p>
-            <dl className="divide-y divide-sand-100 text-sm">
+          <details className="card group px-3.5 py-2.5">
+            <summary className="stat-label flex cursor-pointer list-none items-center justify-between">
+              Details <span aria-hidden className="text-ink-300 transition-transform group-open:rotate-180">⌄</span>
+            </summary>
+            <dl className="mt-2 divide-y divide-sand-100 text-sm">
               <DetailRow label="Posted">{formatDate(tx.posted_at)}</DetailRow>
               <DetailRow label="Account">
                 {tx.account ? `${tx.account.institution || ''}${tx.account.institution && tx.account.name ? ' · ' : ''}${tx.account.name || ''}` : '—'}
@@ -468,7 +469,7 @@ export default function TransactionDetail({
                 <span className="break-all font-mono text-[11px] text-ink-400">{tx.id}</span>
               </DetailRow>
             </dl>
-          </div>
+          </details>
         </div>
       </div>
     </>
@@ -479,7 +480,7 @@ export default function TransactionDetail({
 
 function DetailRow({ label, children, onCopy, copied }: { label: string; children: ReactNode; onCopy?: () => void; copied?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2">
+    <div className="flex items-start justify-between gap-4 py-1.5">
       <dt className="w-16 shrink-0 pt-px text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-300">{label}</dt>
       <dd className="min-w-0 flex-1 text-right text-ink-700" data-sensitive>{children}</dd>
       {onCopy && (
@@ -491,24 +492,19 @@ function DetailRow({ label, children, onCopy, copied }: { label: string; childre
   );
 }
 
-function FlagRow({ title, hint, checked, onChange, disabled = false }: { title: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+function FlagChip({ title, hint, checked, onChange, disabled = false }: { title: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <div className={`flex items-center justify-between gap-4 px-4 py-3 ${disabled ? 'opacity-60' : ''}`}>
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-ink-700">{title}</p>
-        <p className="text-xs leading-snug text-ink-300">{hint}</p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={title}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${checked ? 'bg-accent-green' : 'bg-sand-300'} ${disabled ? 'cursor-not-allowed' : ''}`}
-      >
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${checked ? 'left-[18px]' : 'left-0.5'}`} />
-      </button>
-    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      title={hint}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`pill gap-1.5 px-3 py-1 text-xs ${checked ? 'pill-active' : ''} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+    >
+      {checked && <span aria-hidden>✓</span>}
+      {title}
+    </button>
   );
 }

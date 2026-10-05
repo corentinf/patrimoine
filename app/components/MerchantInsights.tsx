@@ -96,18 +96,18 @@ export function MerchantSkeleton() {
   );
 }
 
-function StatCard({ label, value, sensitive = true }: { label: string; value: string; sensitive?: boolean }) {
+function Stat({ label, value, sensitive = true }: { label: string; value: string; sensitive?: boolean }) {
   return (
-    <div className="card px-3.5 py-3">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-400">{label}</p>
-      <p className="stat-value mt-1 text-xl" {...(sensitive ? { 'data-sensitive': true } : {})}>{value}</p>
+    <div className="min-w-0 px-2 text-center">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-400">{label}</p>
+      <p className="stat-value mt-0.5 truncate text-base" {...(sensitive ? { 'data-sensitive': true } : {})}>{value}</p>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-2.5">
+    <section className="space-y-2">
       <h3 className="stat-label">{title}</h3>
       {children}
     </section>
@@ -149,33 +149,26 @@ export default function MerchantInsights({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3.5">
       <div>
-        <p className="text-sm text-ink-500">
-          {d.firstDate ? (
-            <>You&apos;ve spent <span data-sensitive className="font-medium text-ink-700">{formatCurrency(d.total)}</span> at {d.name} since {prettyDate(d.firstDate)}.</>
-          ) : (
-            <>History at {d.name}</>
-          )}
-        </p>
         {comparison && (
-          <p className="mt-2 flex items-start gap-2 rounded-lg bg-sand-100/70 px-2.5 py-2 text-xs leading-snug text-ink-600">
+          <p className="flex items-start gap-2 rounded-lg bg-sand-100/70 px-2.5 py-2 text-xs leading-snug text-ink-600">
             <span aria-hidden className="text-accent-green">✦</span>
             <span data-sensitive>{comparison}</span>
           </p>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Total spent" value={formatCurrency(d.total)} />
-        <StatCard label="Avg transaction" value={formatCurrency(d.avgTransaction)} />
-        <StatCard label="Visits" value={String(d.visits)} sensitive={false} />
-        <StatCard label="Avg per month" value={formatCurrency(d.avgMonthly)} />
+      <div className="card grid grid-cols-4 divide-x divide-sand-100 px-0 py-2.5">
+        <Stat label="Total" value={formatCurrency(d.total)} />
+        <Stat label="Avg" value={formatCurrency(d.avgTransaction)} />
+        <Stat label="Visits" value={String(d.visits)} sensitive={false} />
+        <Stat label="Per mo." value={formatCurrency(d.avgMonthly)} />
       </div>
 
-      <Section title={d.dots.length ? 'Each visit' : 'Monthly spend · last 12 months'}>
+      {d.visits > 1 && <Section title={d.dots.length ? 'Each visit' : 'Monthly spend · last 12 months'}>
         <div className="card px-2 pb-2 pt-3" data-sensitive>
-          <div style={{ height: 150 }}>
+          <div style={{ height: 110 }}>
             <ResponsiveContainer width="100%" height="100%">
               {d.dots.length ? (
                 <ScatterChart margin={{ top: 8, right: 14, bottom: 0, left: -6 }}>
@@ -212,13 +205,13 @@ export default function MerchantInsights({
               : <>This month is highlighted · dashed line = your average of <span data-sensitive>{formatCurrency(d.avgMonthly)}</span>/month</>}
           </p>
         </div>
-      </Section>
+      </Section>}
 
       {d.insights.length > 0 && (
         <Section title="Insights">
           <ul className="space-y-2">
             {d.insights.map((t) => (
-              <li key={t} className="card flex gap-2.5 px-3.5 py-2.5 text-[13px] leading-snug text-ink-600">
+              <li key={t} className="card flex gap-2.5 px-3 py-2 text-[13px] leading-snug text-ink-600">
                 <span aria-hidden className="mt-px text-accent-green">✦</span>
                 <span data-sensitive>{t}</span>
               </li>
@@ -229,8 +222,8 @@ export default function MerchantInsights({
 
       <Section title="Recent transactions">
         <div className="card divide-y divide-sand-100 p-0">
-          {d.recent.map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+          {d.recent.slice(0, 4).map((tx) => (
+            <div key={tx.id} className="flex items-center justify-between gap-3 px-3.5 py-1.5">
               <div className="min-w-0">
                 <p className="text-[13px] font-medium text-ink-700">{prettyDate(tx.date)}</p>
                 <p className="truncate text-[11.5px] text-ink-300">{tx.account || '—'}</p>
@@ -239,7 +232,7 @@ export default function MerchantInsights({
             </div>
           ))}
         </div>
-        {d.visits > d.recent.length && seeAll && (
+        {d.visits > 4 && seeAll && (
           <Link
             href={deepLinkHref('/spending', seeAll)}
             onClick={onSeeAll}
