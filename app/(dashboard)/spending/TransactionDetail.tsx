@@ -7,7 +7,7 @@ import { getPersonalAmount, isShared } from '@/app/lib/split';
 import { assignTransactionCategory, updateTransactionPayee, toggleTransfer, toggleTransactionShared, markReimbursable } from './actions';
 import type { Category } from './CategoryManager';
 import VenmoSection from './VenmoSection';
-import { getMerchantData, useMerchantDrawer, type MerchantData } from '@/app/components/MerchantDrawer';
+import MerchantInsights, { MerchantSkeleton, useMerchant, forgetMerchant } from '@/app/components/MerchantInsights';
 import { usePrivacy } from '@/app/lib/privacy';
 
 export interface FullTransaction {
@@ -76,25 +76,14 @@ export default function TransactionDetail({
   const filteredCatGroups = filterCategoryGroups(groupAndSortCategories(allCategories), catSearch);
 
   usePrivacy(); // amounts are formatted at render — keep privacy / demo mode in sync
-  const { openMerchant } = useMerchantDrawer();
 
   // Quick flags (saved straight away; the lists refresh behind the panel)
   const [isTransferLocal, setIsTransferLocal] = useState(tx.is_transfer);
   const [reimbLocal, setReimbLocal] = useState(tx.is_reimbursable);
   const [sharedLocal, setSharedLocal] = useState(!!tx.is_shared);
 
-  // How this compares with your usual at the merchant (cached for the session)
-  const [merchant, setMerchant] = useState<MerchantData | null>(null);
-  const [merchantLoading, setMerchantLoading] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    setMerchantLoading(true);
-    getMerchantData(localPayee ?? tx.payee ?? tx.description ?? '')
-      .then((d) => { if (alive) setMerchant(d); })
-      .catch(() => { if (alive) setMerchant(null); })
-      .finally(() => { if (alive) setMerchantLoading(false); });
-    return () => { alive = false; };
-  }, [localPayee, tx.payee, tx.description]);
+  // Everything we know about this merchant (cached for the session, loaded when the panel opens)
+  const { data: merchant, loading: merchantLoading } = useMerchant(localPayee ?? tx.payee ?? tx.description ?? '');
 
   // ESC closes the panel (unless a text field is being edited)
   useEffect(() => {
@@ -169,6 +158,7 @@ export default function TransactionDetail({
 
   function handleCategorySelect(cat: Category) {
     setLocalCategory(cat);
+    forgetMerchant(displayPayee);
     onCategoryChange(tx.id, cat, applyToAll);
     setShowCategoryPicker(false);
     setCatSearch('');
@@ -291,45 +281,6 @@ export default function TransactionDetail({
             </div>
           </div>
 
-          {/* ── At this merchant ── */}
-          {(merchantLoading || (merchant && merchant.visits > 0)) && (
-            <div className="card space-y-3 px-4 py-3.5">
-              <div className="flex items-center justify-between">
-                <p className="stat-label">At this merchant</p>
-                <button
-                  onClick={() => { onClose(); openMerchant(displayPayee); }}
-                  className="text-xs font-medium text-accent-green hover:underline underline-offset-2"
-                >
-                  Full history →
-                </button>
-              </div>
-              {merchantLoading || !merchant ? (
-                <div className="h-12 animate-pulse rounded-lg bg-sand-100" />
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: 'Visits', value: String(merchant.visits), sensitive: false },
-                      { label: 'Average', value: formatCurrencyPrecise(merchant.avgTransaction), sensitive: true },
-                      { label: 'All-time', value: formatCurrencyPrecise(merchant.total), sensitive: true },
-                    ].map((m) => (
-                      <div key={m.label} className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-300">{m.label}</p>
-                        <p className="mt-0.5 truncate font-mono text-[13px] font-medium text-ink-700" {...(m.sensitive ? { 'data-sensitive': true } : {})}>{m.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {versusUsual && (
-                    <p className="flex items-start gap-2 rounded-lg bg-sand-100/70 px-2.5 py-2 text-xs leading-snug text-ink-600">
-                      <span aria-hidden className="text-accent-green">✦</span>
-                      <span data-sensitive>{versusUsual}</span>
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
           {/* ── Category ── */}
           <div className="card px-4 py-3.5">
             <p className="stat-label mb-3">Category</p>
@@ -350,6 +301,19 @@ export default function TransactionDetail({
                 {showCategoryPicker ? 'Cancel' : 'Change'}
               </button>
             </div>
+
+            {merchant?.rule && (
+              <p className="mt-3 text-xs text-ink-400">
+                <span className="text-accent-green">✓</span> Rule: always categorize as{' '}
+                <span className="font-medium text-ink-600">{merchant.rule.categoryIcon} {merchant.rule.categoryName ?? 'a category'}</span>
+                <span className="text-ink-300"> · matches “{merchant.rule.pattern}”</span>
+              </p>
+            )}
+            {merchant && merchant.otherCategories > 0 && (
+              <p className="mt-1 text-xs text-ink-300">
+                This merchant is also filed under {merchant.otherCategories} other categor{merchant.otherCategories === 1 ? 'y' : 'ies'}.
+              </p>
+            )}
 
             {/* Inline picker — grouped by parent, sorted A→Z */}
             {showCategoryPicker && (
@@ -440,6 +404,16 @@ export default function TransactionDetail({
             <div className="card overflow-hidden p-0 [&>*]:border-b-0">
               <VenmoSection transactionId={tx.id} transactionAmount={tx.amount} />
             </div>
+          )}
+
+          {/* ── Merchant history ── */}
+          {(merchantLoading || (merchant && merchant.visits > 0)) && (
+            <section className="space-y-3 px-1 pt-1">
+              <p className="stat-label">Merchant history</p>
+              {merchantLoading || !merchant
+                ? <MerchantSkeleton />
+                : <MerchantInsights data={merchant} comparison={versusUsual} onNavigate={onClose} />}
+            </section>
           )}
 
           {/* ── AI lookup result ── */}

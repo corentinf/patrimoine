@@ -27,6 +27,14 @@ export function useDeepLink() {
     return () => window.clearTimeout(t);
   }, []);
 
+  // A link to the page you're already on (query-only) doesn't remount it, so components can hand
+  // the target over directly: window.dispatchEvent(new CustomEvent('patrimoine:deeplink', { detail })).
+  useEffect(() => {
+    const onEvent = (e: Event) => setLink({ ...((e as CustomEvent<DeepLink>).detail ?? {}) });
+    window.addEventListener('patrimoine:deeplink', onEvent);
+    return () => window.removeEventListener('patrimoine:deeplink', onEvent);
+  }, []);
+
   /** Mark the link as handled and drop the params from the address bar. */
   const consume = useCallback(() => {
     setLink(null);

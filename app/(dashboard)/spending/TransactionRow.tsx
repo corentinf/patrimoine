@@ -1,6 +1,5 @@
 'use client';
 
-import { useMerchantDrawer } from '@/app/components/MerchantDrawer';
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrencyPrecise, formatShortDate, amountColor, groupAndSortCategories, filterCategoryGroups } from '@/app/lib/utils';
@@ -82,7 +81,6 @@ export default function TransactionRow({
   const catName = effectiveCategory?.name ?? 'Uncategorized';
   const catColor = effectiveCategory?.color ?? '#D1D5DB';
   const displayName = tx.payee ?? tx.description ?? 'Unknown';
-  const { openMerchant } = useMerchantDrawer();
   const isTransfer = localIsTransfer;
   // Reflects the optimistic override for the split helpers below, so the
   // badge/amount line and the toggle button itself update instantly.
@@ -253,16 +251,7 @@ export default function TransactionRow({
         {/* Name + subtitle */}
         <div className="flex-1 min-w-0">
           <p data-sensitive className={`text-sm font-medium truncate ${isTransfer ? 'text-ink-400' : 'text-ink-700'}`}>
-            {/* Opens the merchant drawer (stats, trend, rule) without opening the row's detail view. */}
-            <button
-              type="button"
-              data-merchant-trigger
-              onClick={(e) => { e.stopPropagation(); openMerchant(displayName); }}
-              title="Merchant details"
-              className="block max-w-full truncate text-left underline-offset-2 decoration-ink-300 hover:underline"
-            >
-              {displayName}
-            </button>
+            {displayName}
           </p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-xs text-ink-300 sm:hidden">{formatShortDate(tx.posted_at)}</span>

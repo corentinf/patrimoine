@@ -3,7 +3,6 @@ import MobileTopBar from '../components/MobileTopBar';
 import Sidebar from '../components/Sidebar';
 import Chat from '../components/Chat';
 import Footer from '../components/Footer';
-import { MerchantDrawerProvider } from '../components/MerchantDrawer';
 import { KeyboardShortcutsProvider } from '../components/KeyboardShortcuts';
 import { PrivacyProvider } from '../lib/privacy';
 import { SyncStatusProvider } from '../lib/syncStatus';
@@ -78,7 +77,6 @@ export default async function DashboardLayout({
         <GlobalFilterProvider>
           <PageFilterSlotProvider>
             <KeyboardShortcutsProvider>
-              <MerchantDrawerProvider>
               <div className="min-h-screen flex flex-col">
                 <Header
                   accounts={accounts}
@@ -104,7 +102,6 @@ export default async function DashboardLayout({
                   investmentTotal={investmentTotal}
                 />
               </div>
-              </MerchantDrawerProvider>
             </KeyboardShortcutsProvider>
           </PageFilterSlotProvider>
         </GlobalFilterProvider>
