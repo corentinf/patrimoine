@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import Anthropic from '@anthropic-ai/sdk';
+import { normalizeMerchant } from '@/app/lib/merchant';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { transactionId } = await req.json();
+  const { transactionId, refresh } = await req.json();
   if (!transactionId) return NextResponse.json({ error: 'Missing transactionId' }, { status: 400 });
 
   const { data: tx, error } = await supabase
@@ -36,6 +37,30 @@ export async function POST(req: NextRequest) {
   if (error || !tx) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
 
   const name = tx.payee || tx.description || 'Unknown';
+
+  // One lookup per merchant: "Trader Joe's #123" and "Trader Joe's #456" share a key, so a stored
+  // result is reused (no web search, no cost) unless the user explicitly refreshes it.
+  const merchantKey = normalizeMerchant(name) || name.toLowerCase();
+  if (!refresh) {
+    const { data: cached } = await supabase
+      .from('merchant_enrichments')
+      .select('business_name, description, category, website')
+      .eq('user_id', user.id)
+      .eq('merchant_key', merchantKey)
+      .maybeSingle();
+    if (cached) {
+      return NextResponse.json({
+        cached: true,
+        enrichment: {
+          businessName: cached.business_name,
+          description: cached.description ?? '',
+          category: cached.category ?? '',
+          website: cached.website,
+        },
+      });
+    }
+  }
+
   const amount = Math.abs(tx.amount).toFixed(2);
   const date = new Date(tx.posted_at).toLocaleDateString('en-US', {
     month: 'long', day: 'numeric', year: 'numeric',
@@ -103,7 +128,20 @@ Search the web to find what this business is, then return ONLY a JSON object (no
 
   try {
     const enrichment = JSON.parse(match[0]);
-    return NextResponse.json({ enrichment });
+    // Best effort: a failed save must not hide a result we already paid for.
+    await supabase.from('merchant_enrichments').upsert(
+      {
+        user_id: user.id,
+        merchant_key: merchantKey,
+        business_name: enrichment.businessName ?? name,
+        description: enrichment.description ?? null,
+        category: enrichment.category ?? null,
+        website: enrichment.website ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,merchant_key' },
+    );
+    return NextResponse.json({ cached: false, enrichment });
   } catch {
     return NextResponse.json({ error: 'Invalid AI response format' }, { status: 500 });
   }

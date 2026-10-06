@@ -168,14 +168,16 @@ export default function TransactionDetail({
     });
   }
 
-  async function handleEnrich() {
+  // `refresh` skips the stored result and re-runs the web search (the button); on open the server
+  // returns the stored lookup for this merchant, so the AI only runs the first time.
+  async function handleEnrich(refresh = false) {
     setEnriching(true);
     setEnrichError('');
     try {
       const res = await fetch('/api/transactions/enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionId: tx.id }),
+        body: JSON.stringify({ transactionId: tx.id, refresh }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -189,6 +191,12 @@ export default function TransactionDetail({
       setEnriching(false);
     }
   }
+
+  // Identify the merchant as soon as the panel opens
+  useEffect(() => {
+    if (kind !== 'transfer') handleEnrich();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tx.id]);
 
   const catColor = effectiveCategory?.color ?? '#9CA3AF';
 
@@ -208,12 +216,12 @@ export default function TransactionDetail({
           <p className="stat-label">Transaction</p>
           <div className="flex items-center gap-1.5">
             <button
-              onClick={handleEnrich}
+              onClick={() => handleEnrich(true)}
               disabled={enriching}
-              title="Look up this merchant with AI"
+              title="Re-run the AI merchant lookup"
               className="pill gap-1.5 px-3 py-1 text-xs disabled:opacity-50"
             >
-              <span aria-hidden>{enriching ? '…' : '✦'}</span> {enriching ? 'Looking up' : 'AI lookup'}
+              <span aria-hidden>{enriching ? '…' : '✦'}</span> {enriching ? 'Looking up' : enrichment ? 'Refresh' : 'AI lookup'}
             </button>
             <button
               onClick={onClose}
@@ -416,9 +424,15 @@ export default function TransactionDetail({
           )}
 
           {/* ── AI lookup result ── */}
-          {(enrichment || enrichError) && (
+          {(enriching || enrichment || enrichError) && (
             <div className="card space-y-2 px-4 py-3.5">
-              {enrichError ? (
+              {enriching && !enrichment ? (
+                <div className="animate-pulse space-y-2" aria-label="Identifying merchant">
+                  <div className="h-3 w-24 rounded bg-sand-200" />
+                  <div className="h-4 w-40 rounded bg-sand-200" />
+                  <div className="h-3 w-full rounded bg-sand-100" />
+                </div>
+              ) : enrichError ? (
                 <p className="text-xs text-accent-red">{enrichError}</p>
               ) : enrichment && (
                 <>
